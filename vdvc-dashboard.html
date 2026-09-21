@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VDVC Enterprise Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <div class="sidebar-logo">
+          <img src="vdvc_logo.png" alt="VDVC" />
+        </div>
+        <nav aria-label="Sidebar">
+          <button class="nav-item active" type="button" data-page="dashboard">
+  <svg aria-hidden="true" focusable="false" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+  Dashboard
+</button>
+        
+          <button class="nav-item" type="button" data-page="users">
+            <svg aria-hidden="true" focusable="false" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.87"/></svg>
+            User Management
+          </button>
+          
+          <button class="nav-item" type="button" data-page="reports" data-section="reports-filters">
+            <svg aria-hidden="true" focusable="false" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            Report Filters
+          </button>
+          <button class="nav-item" type="button" data-page="profile">
+            <svg aria-hidden="true" focusable="false" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+            Profile
+          </button>
+        </nav>
+      </aside>
+
+      <div class="sidebar-overlay hidden"></div>
+
+      <main class="main" id="main-content">
+        <header class="topbar">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <button class="sidebar-toggle" type="button" aria-label="Toggle navigation">
+              <svg aria-hidden="true" focusable="false" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
+            <span class="topbar-title">VDVC Enterprise Dashboard • Owner Access</span>
+          </div>
+          <div class="topbar-right">
+            <button class="notif-btn" type="button" aria-label="Notifications">
+              <svg aria-hidden="true" focusable="false" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              <span class="badge" id="notif-badge" aria-live="polite">0</span>
+            </button>
+            <div class="avatar-area">
+              <div class="avatar">A</div>
+              <div class="avatar-info">
+                <div class="avatar-name">Admin</div>
+                <div class="avatar-role">Owner access</div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div id="page-dashboard" class="page active">
+  <div class="dashboard-page">
+    <section class="dashboard-hero" aria-labelledby="dashboard-heading">
+      <div>
+        <div class="eyebrow">BUSINESS ANALYTICS</div>
+        <h1 id="dashboard-heading">Operational Overview</h1>
+        <p>Monitor reservations, deliveries, inventory, demand, and operational activity from one place.</p>
+      </div>
+      <div class="dashboard-hero-meta">
+        <div class="live-status"><span class="live-dot"></span><span id="dashboard-live-status">Live operational data</span></div>
+        <div class="hero-scope">Retained data: 90 days</div>
+      </div>
+    </section>
+
+    <section class="dashboard-kpis" id="dashboard-stats" aria-label="Key performance indicators"></section>
+
+    <section class="dashboard-grid dashboard-main-grid">
+      <article class="dashboard-card chart-card reservation-performance-card">
+        <div class="card-heading">
+          <div>
+            <span class="card-kicker">DEMAND ACTIVITY</span>
+            <h2>Reservation &amp; Delivery Performance</h2>
+            <p>Daily activity across the last 7 days.</p>
+          </div>
+          <div class="chart-legend" aria-label="Chart legend">
+            <span><i class="legend-line reservation"></i>Reservations</span>
+            <span><i class="legend-line delivery"></i>Completed deliveries</span>
+          </div>
+        </div>
+        <div class="performance-summary">
+          <div class="summary-metric"><span>Total reservations</span><strong id="reservation-kpi">0</strong></div>
+          <div class="summary-metric"><span>7-day trend</span><strong class="trend-value" id="reservation-trend-value">Stable</strong></div>
+          <div class="summary-metric"><span>Top channel</span><strong id="reservation-top-channel">—</strong></div>
+        </div>
+        <div class="large-chart" id="reservation-trend-chart"></div>
+        <div class="chart-axis" id="reservation-axis-labels"></div>
+        <div class="channel-breakdown" id="reservation-source-bars"></div>
+        <p class="chart-insight" id="reservation-insight">Booking activity insights will appear here.</p>
+        <div class="card-foot"><span>Reservation records</span><span>Last 7 days</span></div>
+      </article>
+
+      <aside class="dashboard-card alerts-card" aria-labelledby="alerts-title">
+        <div class="card-heading compact">
+          <div>
+            <span class="card-kicker">ACTION CENTER</span>
+            <h2 id="alerts-title">Attention Required</h2>
+          </div>
+          <span class="alert-count" id="alert-count">0</span>
+        </div>
+        <div id="alerts-list" class="alerts-list"></div>
+      </aside>
+    </section>
+
+    <section class="dashboard-grid dashboard-secondary-grid">
+      <article class="dashboard-card inventory-card">
+        <div class="card-heading">
+          <div>
+            <span class="card-kicker">INVENTORY HEALTH</span>
+            <h2>Egg Stock Position</h2>
+            <p>Current stock compared with reservations and 30-day movement.</p>
+          </div>
+          <div class="health-badge" id="inventory-health-badge">Healthy</div>
+        </div>
+        <div class="inventory-metrics">
+          <div><span>Total stock</span><strong id="inventory-kpi">0</strong><small>eggs</small></div>
+          <div><span>Available</span><strong id="inventory-available">0</strong><small>after reservations</small></div>
+          <div><span>Reserved</span><strong id="inventory-reserved">0</strong><small>allocated</small></div>
+        </div>
+        <div class="inventory-flow" id="inventory-flow-chart"></div>
+        <div class="flow-labels" id="inventory-flow-labels"></div>
+        <p class="chart-insight" id="inventory-insight">Inventory movement insights will appear here.</p>
+        <div class="card-foot"><span>Inventory movement</span><span>Last 30 days</span></div>
+      </article>
+
+      <article class="dashboard-card product-card">
+        <div class="card-heading">
+          <div>
+            <span class="card-kicker">PRODUCT MIX</span>
+            <h2>Best-selling Egg Sizes</h2>
+            <p>Share of completed delivery volume.</p>
+          </div>
+          <div class="product-leader" id="product-leader">—</div>
+        </div>
+        <div class="product-highlight">
+          <div class="product-share"><strong id="product-kpi">0%</strong><span>top product share</span></div>
+          <div class="product-trend" id="product-trend"><span id="product-trend-icon">→</span><span id="product-trend-value">No data</span></div>
+        </div>
+        <div id="product-insight-gauge" class="product-gauge"></div>
+        <div id="product-insight-bars" class="product-bars"></div>
+        <p class="chart-insight" id="product-insight-note">Product insights will appear once deliveries are completed.</p>
+        <div class="card-foot"><span>Completed deliveries</span><span>Top 6 sizes</span></div>
+      </article>
+    </section>
+
+    <section class="dashboard-card forecast-card">
+      <div class="card-heading forecast-heading">
+        <div>
+          <span class="card-kicker">FORECASTING</span>
+          <h2>Demand Forecast &amp; Inventory Readiness</h2>
+          <p>Historical reservation demand with a forward-looking trend estimate.</p>
+        </div>
+        <div class="forecast-headline"><span>Next forecast</span><strong id="forecast-kpi">0</strong><small>units</small></div>
+      </div>
+      <div class="forecast-layout">
+        <div class="forecast-visual">
+          <div class="forecast-chart-wrap" id="forecast-summary-chart">
+            <svg id="forecast-summary-svg" viewBox="0 0 760 240" preserveAspectRatio="none" aria-hidden="true" focusable="false"></svg>
+            <div class="empty-state hidden" id="forecast-summary-empty">Forecasting data is unavailable until reservations are recorded.</div>
+          </div>
+          <div class="chart-axis forecast-axis" id="forecast-axis-labels"></div>
+          <div class="forecast-legend"><span><i class="legend-line actual"></i>Historical demand</span><span><i class="legend-line forecast"></i>Trend estimate</span></div>
+          <div class="forecast-note" id="forecast-predictions"></div>
+        </div>
+        <div class="forecast-readiness" id="forecast-inventory-section"></div>
+      </div>
+      <p class="chart-insight" id="forecast-insight">Demand forecasting is based on historical reservation patterns.</p>
+      <div class="card-foot"><span>Forecast horizon</span><span>6 months</span></div>
+    </section>
+
+    <section class="dashboard-grid dashboard-bottom-grid">
+      <article class="dashboard-card activity-card">
+        <div class="card-heading compact">
+          <div><span class="card-kicker">OPERATIONS</span><h2>Recent Activity</h2></div>
+          <div class="live-metric-pill" id="live-metric">0 active reservations</div>
+        </div>
+        <div id="activity-log-list" class="timeline-list"></div>
+      </article>
+
+      <article class="dashboard-card notifications-card">
+        <div class="card-heading compact">
+          <div><span class="card-kicker">COMMUNICATIONS</span><h2>Notification Center</h2></div>
+          <button class="btn-secondary dashboard-action-btn" id="mark-all-read" type="button">Mark all read</button>
+        </div>
+        <div id="notification-list" class="notification-list-modern"></div>
+      </article>
+    </section>
+
+    <section class="dashboard-grid dashboard-operations-grid">
+      <article class="dashboard-card supplies-card">
+        <div class="card-heading compact">
+          <div><span class="card-kicker">SUPPLIES</span><h2>Supply Inventory</h2><p>Current supply position from the inventory ledger.</p></div>
+        </div>
+        <div id="supplies-overview" class="supplies-modern"></div>
+      </article>
+
+      <article class="dashboard-card sms-card">
+        <div class="card-heading compact">
+          <div><span class="card-kicker">ALERT MONITORING</span><h2>SMS &amp; Alert Status</h2><p>Operational signals that may require notification.</p></div>
+        </div>
+        <div id="sms-monitoring-content" class="sms-modern-grid"></div>
+      </article>
+    </section>
+  </div>
+</div>
+
+        <div id="page-profile" class="page">
+          <div class="page-shell">
+            <div class="page-subtitle">Profile &amp; Security Center</div>
+            <div class="profile-grid">
+              <div class="panel">
+                <div class="panel-title">Update Profile</div>
+                <p style="font-size:11.5px;color:var(--text-soft);margin-bottom:16px;line-height:1.5;">Keep your profile details current for approvals, reports, and dashboards.</p>
+                <form id="profile-form">
+                  <div class="profile-avatar-row">
+                    <div class="profile-avatar-img" id="profile-avatar-preview">A</div>
+                    <div class="profile-avatar-info">
+                      <div class="name">Admin</div>
+                      <div class="role">Owner access</div>
+                    </div>
+                    <label class="edit-photo-btn" for="profile-photo">
+                      <svg aria-hidden="true" focusable="false" width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg> Edit Photo
+                    </label>
+                    <input id="profile-photo" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="profile-full-name">Full Name</label>
+                    <div class="input-wrap">
+                      <span class="input-icon"><svg aria-hidden="true" focusable="false" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+                      <input class="form-input with-icon" id="profile-full-name" name="fullName" type="text" />
+                    </div>
+                    <span class="field-error" id="profile-full-name-error"></span>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="profile-email">Email Address</label>
+                    <div class="input-wrap">
+                      <span class="input-icon"><svg aria-hidden="true" focusable="false" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
+                      <input class="form-input with-icon" id="profile-email" name="email" type="email" />
+                    </div>
+                    <span class="field-error" id="profile-email-error"></span>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="profile-phone">Phone Number</label>
+                    <div class="input-wrap">
+                      <span class="input-icon"><svg aria-hidden="true" focusable="false" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span>
+                      <input class="form-input with-icon" id="profile-phone" name="phone" type="tel" />
+                    </div>
+                    <span class="field-error" id="profile-phone-error"></span>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="profile-job-title">Job Title</label>
+                    <div class="input-wrap">
+                      <span class="input-icon"><svg aria-hidden="true" focusable="false" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M20 7h-4V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v3H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zM10 4h4v3h-4V4z"/></svg></span>
+                      <input class="form-input with-icon" id="profile-job-title" name="jobTitle" type="text" />
+                    </div>
+                  </div>
+                  <div class="form-actions">
+                    <button class="btn-primary" type="submit">Save Changes</button>
+                  </div>
+                </form>
+              </div>
+
+              <div class="panel">
+                <div class="panel-title">Change Password</div>
+                <p style="font-size:11.5px;color:var(--text-soft);margin-bottom:16px;line-height:1.5;">Use a strong password and keep your account secure.</p>
+                <form id="password-form">
+                  <div class="form-group">
+                    <div class="input-wrap">
+                      <span class="input-icon"><svg aria-hidden="true" focusable="false" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+                      <input class="form-input with-icon" id="current-password" name="currentPassword" type="password" placeholder="Current Password" />
+                      <button class="input-toggle" id="password-visibility" type="button" aria-label="Show password">
+                        <svg aria-hidden="true" focusable="false" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                          <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                      </button>
+                    </div>
+                    <span class="field-error" id="current-password-error"></span>
+                  </div>
+                  <div class="form-group">
+                    <div class="input-wrap">
+                      <span class="input-icon"><svg aria-hidden="true" focusable="false" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+                      <input class="form-input with-icon" id="new-password" name="newPassword" type="password" placeholder="New Password" />
+                      <button class="input-toggle" id="new-password-visibility" type="button" aria-label="Show password">
+                        <svg aria-hidden="true" focusable="false" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                          <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                      </button>
+                    </div>
+                    <span class="field-error" id="new-password-error"></span>
+                    <div class="pwd-hint">Minimum 8 characters with one special character.</div>
+                  </div>
+                  <div class="form-group">
+                    <div class="input-wrap">
+                      <span class="input-icon"><svg aria-hidden="true" focusable="false" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+                      <input class="form-input with-icon" id="confirm-password" name="confirmPassword" type="password" placeholder="Confirm New Password" />
+                      <button class="input-toggle" id="confirm-password-visibility" type="button" aria-label="Show password">
+                        <svg aria-hidden="true" focusable="false" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                          <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                      </button>
+                    </div>
+                    <span class="field-error" id="confirm-password-error"></span>
+                  </div>
+                  <div class="form-actions">
+                    <button class="btn-primary" type="submit">Update Password</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="page-reports" class="page">
+          <div class="page-shell">
+            <div class="page-subtitle">Reports Management</div>
+            <div style="font-size:13px;font-weight:700;color:var(--sidebar);margin-bottom:12px;">Enterprise Reports Center</div>
+            <div class="reports-cards">
+              <div class="report-card"><div class="report-card-icon"><svg aria-hidden="true" focusable="false" width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></div><div><div class="report-card-title">Inventory Reports</div><div class="report-card-desc">Analyse inventory sections and current stock health.</div><ul class="report-card-bullets"><li>Track current stock levels across egg sizes</li><li>Monitor low stock alerts and reorder thresholds</li></ul></div></div>
+              <div class="report-card"><div class="report-card-icon"><svg aria-hidden="true" focusable="false" width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><div><div class="report-card-title">Reservation Reports</div><div class="report-card-desc">Booking details and reservation summaries.</div><ul class="report-card-bullets"><li>View confirmed and pending reservations by date</li><li>Analyze booking patterns and customer preferences</li></ul></div></div>
+              <div class="report-card"><div class="report-card-icon"><svg aria-hidden="true" focusable="false" width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg></div><div><div class="report-card-title">Delivery Reports</div><div class="report-card-desc">Track delivery information across routes.</div><ul class="report-card-bullets"><li>Monitor completed and scheduled deliveries</li><li>Review route efficiency and delivery times</li></ul></div></div>
+              <div class="report-card"><div class="report-card-icon"><svg aria-hidden="true" focusable="false" width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><div><div class="report-card-title">Customer Reports</div><div class="report-card-desc">Profiles and customer demographics.</div><ul class="report-card-bullets"><li>Access customer contact and preference data</li><li>Track customer purchase history and frequency</li></ul></div></div>
+              <div class="report-card"><div class="report-card-icon"><svg aria-hidden="true" focusable="false" width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M23 6l-9.5 9.5-5-5L1 18"/><path d="M17 6h6v6"/></svg></div><div><div class="report-card-title">Forecasting Reports</div><div class="report-card-desc">Trend forecasting and projection analysis.</div><ul class="report-card-bullets"><li>Review demand projections by region and grade</li><li>Identify seasonal trends and growth opportunities</li></ul></div></div>
+              <div class="report-card"><div class="report-card-icon"><svg aria-hidden="true" focusable="false" width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></div><div><div class="report-card-title">Analytics Reports</div><div class="report-card-desc">Deep-dive analysis and report previews.</div></div></div>
+            </div>
+
+            <div class="recent-reports-panel" id="reports-filters">
+              <div class="rr-header">
+                <div class="rr-title">Reservation Reports &amp; Analytics</div>
+                <select class="rr-select" id="report-category-filter">
+                  <option value="all">All</option>
+                </select>
+                <input class="rr-date" id="report-date-filter" type="date" aria-label="Filter reports by date" />
+                <select class="rr-select" id="report-period-filter">
+                  <option value="all">All Time</option>
+                  <option value="month">This Month</option>
+                  <option value="3months">Last 3 Months</option>
+                  <option value="6months">Last 6 Months</option>
+                  <option value="year">This Year</option>
+                  <option value="lastyear">Last Year</option>
+                </select>
+                <select class="rr-select" id="report-status-filter">
+                  <option value="all">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+                <select class="rr-select" id="report-size-filter">
+                  <option value="all">All Sizes</option>
+                  <option value="XS">XS</option>
+                  <option value="Small">Small</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Large">Large</option>
+                  <option value="XL">XL</option>
+                  <option value="Jumbo">Jumbo</option>
+                  <option value="Super Jumbo">Super Jumbo</option>
+                  <option value="Double Yolk">Double Yolk</option>
+                </select>
+                <input class="rr-search" id="report-search" type="text" placeholder="Search reservations" aria-label="Search reservations" />
+                <button class="btn-secondary" id="generate-sample-data" type="button" title="Generate sample test data (Developer Only)">Generate Sample Data</button>
+                <button class="btn-export" id="export-csv" type="button" title="Export a CSV file with summary metrics and detailed reservations">Export CSV</button>
+                <button class="btn-secondary" id="print-reports" type="button">Print</button>
+                <button class="btn-secondary" id="export-pdf-btn" type="button">Export PDF</button>
+              </div>
+              <table class="rr-table">
+                <thead>
+                  <tr>
+                    <th><button class="btn-secondary" type="button" data-sort-report="createdAt">Date</button></th>
+                    <th><button class="btn-secondary" type="button" data-sort-report="customerName">Customer</button></th>
+                    <th><button class="btn-secondary" type="button" data-sort-report="product">Egg Size</button></th>
+                    <th><button class="btn-secondary" type="button" data-sort-report="quantity">Quantity</button></th>
+                    <th><button class="btn-secondary" type="button" data-sort-report="amount">Amount</button></th>
+                    <th><button class="btn-secondary" type="button" data-sort-report="status">Status</button></th>
+                    <th>Channel</th>
+                  </tr>
+                </thead>
+                <tbody id="reports-table-body"></tbody>
+              </table>
+              <div id="reports-pagination" class="pagination"></div>
+            </div>
+          </div>
+        </div>
+
+        <div id="page-users" class="page">
+          <div class="page-shell">
+            <div class="page-subtitle">Owner's User Management Center</div>
+            <div class="um-grid">
+              <div class="um-panel">
+                <div class="um-panel-title">Manager Accounts</div>
+                <button class="btn-add" id="add-user-btn" type="button">+ Add Manager Account</button>
+                <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+                  <input class="customer-search" id="user-search" type="text" placeholder="Search users" aria-label="Search users" />
+                  <select class="filter-select" id="user-status-filter">
+                    <option value="all">All status</option>
+                    <option value="active">Active</option>
+                    <option value="deactivated">Deactivated</option>
+                  </select>
+                  <select class="filter-select" id="user-role-filter">
+                    <option value="all">All roles</option>
+                    <option value="Manager">Manager</option>
+                  </select>
+                </div>
+                <div style="font-size:12px;color:var(--text-soft);margin-bottom:8px;" id="users-count">0 results</div>
+                <table class="um-table">
+                  <thead>
+                    <tr>
+                      <th><button class="btn-secondary" type="button" data-sort-user="name">Name</button></th>
+                      <th><button class="btn-secondary" type="button" data-sort-user="department">Department</button></th>
+                      <th><button class="btn-secondary" type="button" data-sort-user="role">Role</button></th>
+                      <th><button class="btn-secondary" type="button" data-sort-user="status">Status</button></th>
+                      <th>Active</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="users-table-body"></tbody>
+                </table>
+                <div id="users-pagination" class="pagination"></div>
+              </div>
+
+              <div>
+                <div class="global-controls">
+                  <div class="gc-title">Manager Account Controls</div>
+                  <div class="gc-row">
+                    <div class="gc-label">Activate All<button class="toggle-sm off" data-action="global-activate-all" type="button" aria-label="Activate all manager accounts"></button></div>
+                    <div class="gc-label"><svg aria-hidden="true" focusable="false" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="color:var(--warning);"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Deactivate All<button class="toggle-sm off" data-action="global-deactivate-all" type="button" aria-label="Deactivate all manager accounts"></button></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="um-panel">
+                <div class="um-panel-title">Customer Accounts</div>
+                <div id="customer-accounts-content" class="customer-readonly-table"></div>
+                <p style="font-size:11px;color:var(--text-soft);margin-top:12px;font-style:italic;">Customer accounts are self-managed and cannot be modified by administrators.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div id="toast-stack" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
+
+    <div id="user-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title" id="user-modal-title">Add User</div>
+          <button class="modal-close" type="button" aria-label="Close">&times;</button>
+        </div>
+        <form id="user-form">
+          <div class="form-group">
+            <label class="form-label" for="user-name">Full Name</label>
+            <input class="form-input" id="user-name" name="name" type="text" />
+            <span class="field-error" id="user-name-error"></span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="user-email">Email</label>
+            <input class="form-input" id="user-email" name="email" type="email" />
+            <span class="field-error" id="user-email-error"></span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="user-department">Department</label>
+            <input class="form-input" id="user-department" name="department" type="text" />
+            <span class="field-error" id="user-department-error"></span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="user-role">Role</label>
+            <select class="form-input" id="user-role" name="role">
+              <option value="">Select role</option>
+              <option value="Manager">Manager</option>
+              <option value="Customer">Customer</option>
+            </select>
+            <span class="field-error" id="user-role-error"></span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="user-status">Status</label>
+            <select class="form-input" id="user-status" name="status">
+              <option value="active">Active</option>
+              <option value="deactivated">Deactivated</option>
+            </select>
+          </div>
+          <div class="form-actions">
+            <button class="btn-secondary" type="button" data-close-modal>Cancel</button>
+            <button class="btn-primary" type="submit">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div id="report-preview-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="report-preview-title">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title" id="report-preview-title">Report Preview</div>
+          <button class="modal-close" type="button" aria-label="Close">&times;</button>
+        </div>
+        <div class="panel">
+          <div class="panel-title" id="preview-title"></div>
+          <p><strong>Category:</strong> <span id="preview-category"></span></p>
+          <p><strong>Date:</strong> <span id="preview-date"></span></p>
+          <p><strong>Status:</strong> <span id="preview-status"></span></p>
+        </div>
+      </div>
+    </div>
+
+    <div id="loading-overlay" class="loading-overlay" role="status" aria-live="polite">
+      <div class="panel">
+        <span class="spinner"></span>
+        <div>Loading dashboard…</div>
+      </div>
+    </div>
+
+    <script src="app_analytics.js"></script>
+  </body>
+</html>
