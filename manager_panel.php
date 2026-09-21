@@ -1,9 +1,9 @@
 <?php 
-if (!isset($_SESSION)) { 
-    session_start(); 
-} 
- 
-if (!isset($_SESSION['role']) || $_SESSION['role'] != 'manager') { 
+// Include standardized session configuration FIRST
+require_once 'session_config.php';
+
+// Allow both manager and owner roles
+if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['manager', 'owner'])) { 
     header("Location: login.php"); 
     exit(); 
 } 

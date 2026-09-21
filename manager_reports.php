@@ -9,7 +9,9 @@
 */
 
 ob_start();
-session_start();
+
+// Include standardized session configuration FIRST
+require_once 'session_config.php';
 
 include 'db.php';
 
@@ -211,6 +213,23 @@ function icon_svg($name, $size)
         return '<svg ' . $common . '><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"></path><path d="M10 21h4"></path></svg>';
     }
     return '';
+}
+
+/*
+|--------------------------------------------------------------------------
+| SECURITY - MANAGER/OWNER ACCESS
+|--------------------------------------------------------------------------
+*/
+
+if (!isset($_SESSION['user_id'])) {
+    header("Location: login.php");
+    exit();
+}
+
+// Allow both manager and owner roles
+if (isset($_SESSION['role']) && !in_array($_SESSION['role'], ['manager', 'owner'])) {
+    header("Location: login.php");
+    exit();
 }
 
 /*

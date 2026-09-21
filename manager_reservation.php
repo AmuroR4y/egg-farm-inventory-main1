@@ -1,5 +1,7 @@
 <?php
-session_start();
+// Include standardized session configuration FIRST
+require_once 'session_config.php';
+
 require 'db.php';
 // Helper function to insert notifications
 function add_notification($conn, $user_id, $title, $description, $type = 'info') {
@@ -32,7 +34,8 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-if (isset($_SESSION['role']) && $_SESSION['role'] !== 'manager') {
+// Allow both manager and owner roles
+if (isset($_SESSION['role']) && !in_array($_SESSION['role'], ['manager', 'owner'])) {
     header("Location: login.php");
     exit();
 }
