@@ -36,6 +36,15 @@ if (
 ========================================================= */
 
 $manager_name = 'Manager';
+$manager_unread_notifications = 0;
+
+$manager_notification_result = mysqli_query(
+    $conn,
+    "SELECT COUNT(*) AS total FROM notifications WHERE user_id = " . (int)$_SESSION['user_id'] . " AND is_read = 0"
+);
+if ($manager_notification_result && ($manager_notification_row = mysqli_fetch_assoc($manager_notification_result))) {
+    $manager_unread_notifications = (int)$manager_notification_row['total'];
+}
 
 
 if (
@@ -621,13 +630,16 @@ if (
                 $conn,
 
                 "
-                SELECT
-                    COALESCE(
-                        SUM($stock_column),
-                        0
-                    ) AS total
-
-                FROM egg_inventory
+                SELECT COALESCE(SUM(latest_stock), 0) AS total
+                FROM (
+                    SELECT e.$stock_column AS latest_stock
+                    FROM egg_inventory e
+                    WHERE e.id = (
+                        SELECT MAX(e2.id)
+                        FROM egg_inventory e2
+                        WHERE e2.$size_column = e.$size_column
+                    )
+                ) latest_rows
                 "
 
             );
@@ -649,17 +661,22 @@ if (
 
             SELECT
 
-                $size_column
+                e.$size_column
                     AS egg_size,
 
-                COALESCE(
-                    SUM($stock_column),
-                    0
-                ) AS available_stock
+                e.$stock_column AS available_stock
 
-            FROM egg_inventory
+            FROM egg_inventory e
 
-            GROUP BY $size_column
+            INNER JOIN (
+
+                SELECT e2.$size_column, MAX(e2.id) AS id
+
+                FROM egg_inventory e2
+
+                GROUP BY e2.$size_column
+
+            ) latest ON latest.id = e.id
 
         ";
 
@@ -828,14 +845,17 @@ if (
                 $conn,
 
                 "
-                SELECT
-
-                    COALESCE(
-                        SUM($supply_stock_column),
-                        0
-                    ) AS total
-
-                FROM supply_inventory
+                SELECT COALESCE(SUM(latest_stock), 0) AS total
+                FROM (
+                    SELECT $supply_stock_column AS latest_stock
+                    FROM supply_inventory s
+                    WHERE s.id = (
+                        SELECT MAX(s2.id)
+                        FROM supply_inventory s2
+                        WHERE s2.item_category = s.item_category
+                          AND s2.item_name = s.item_name
+                    )
+                ) latest_rows
                 "
 
             );
@@ -974,7 +994,7 @@ if (
         column_exists(
             $conn,
             'reservations',
-            'delivery_date'
+            'reservation_date'
         )
     ) {
 
@@ -995,7 +1015,7 @@ if (
 
                 WHERE
 
-                    DATE(delivery_date)
+                    DATE(reservation_date)
                     = CURDATE()
 
                     AND delivery_method
@@ -2978,30 +2998,27 @@ white-space: nowrap;
         <!-- NOTIFICATION -->
 
         <a
-            href="manager_reservation.php"
+            href="manager_notifications.php"
             class="top-notification"
-            title="Pending Reservations"
+            title="Notifications"
         >
 
             <i class="fa-regular fa-bell"></i>
 
 
-            <?php if ($pending_reservations > 0) { ?>
+            <?php if ($manager_unread_notifications > 0) { ?>
 
                 <span class="notification-badge">
 
                     <?php
 
-                    if (
-                        $pending_reservations > 9
-                    ) {
+                    if ($manager_unread_notifications > 9) {
 
                         echo '9+';
 
                     } else {
 
-                        echo
-                            $pending_reservations;
+                        echo $manager_unread_notifications;
 
                     }
 

@@ -4,33 +4,41 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>VDVC Enterprise Dashboard</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link rel="stylesheet" href="vdvc/styles.css" />
   </head>
   <body>
     <div class="app">
       <aside class="sidebar" aria-label="Primary navigation">
         <div class="sidebar-logo">
-          <img src="vdvc_logo.png" alt="VDVC" />
+          <img src="vdvclogoo.png" alt="VDVC" />
         </div>
         <nav aria-label="Sidebar">
           <button class="nav-item active" type="button" data-page="dashboard">
-  <svg aria-hidden="true" focusable="false" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+            <i class="fa-solid fa-chart-pie" aria-hidden="true"></i>
   Dashboard
 </button>
         
           <button class="nav-item" type="button" data-page="users">
-            <svg aria-hidden="true" focusable="false" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0-3-3.87"/></svg>
+            <i class="fa-solid fa-users" aria-hidden="true"></i>
             User Management
           </button>
           
           <button class="nav-item" type="button" data-page="reports" data-section="reports-filters">
-            <svg aria-hidden="true" focusable="false" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            <i class="fa-solid fa-filter" aria-hidden="true"></i>
             Report Filters
           </button>
           <button class="nav-item" type="button" data-page="profile">
-            <svg aria-hidden="true" focusable="false" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+            <i class="fa-solid fa-user-gear" aria-hidden="true"></i>
             Profile
           </button>
+          <div class="logout-section">
+            <a href="logout.php" class="nav-item btn-logout">
+              <i class="fa-solid fa-right-from-bracket" aria-hidden="true"></i>
+              Log Out
+            </a>
+          </div>
         </nav>
       </aside>
 
@@ -40,13 +48,13 @@
         <header class="topbar">
           <div style="display:flex;align-items:center;gap:10px;">
             <button class="sidebar-toggle" type="button" aria-label="Toggle navigation">
-              <svg aria-hidden="true" focusable="false" width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+              <i class="fa-solid fa-bars" aria-hidden="true"></i>
             </button>
             <span class="topbar-title">VDVC Enterprise Dashboard • Owner Access</span>
           </div>
           <div class="topbar-right">
             <button class="notif-btn" type="button" aria-label="Notifications">
-              <svg aria-hidden="true" focusable="false" width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+              <i class="fa-regular fa-bell" aria-hidden="true"></i>
               <span class="badge" id="notif-badge" aria-live="polite">0</span>
             </button>
             <div class="avatar-area">
@@ -228,8 +236,8 @@
                       <div class="name">Admin</div>
                       <div class="role">Owner access</div>
                     </div>
-                    <label class="edit-photo-btn" for="profile-photo">
-                      <svg aria-hidden="true" focusable="false" width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg> Edit Photo
+                      <label class="edit-photo-btn" for="profile-photo">
+                        <i class="fa-solid fa-pen" aria-hidden="true"></i> Edit Photo
                     </label>
                     <input id="profile-photo" class="hidden" type="file" accept="image/png,image/jpeg,image/webp,image/gif" />
                   </div>
@@ -245,7 +253,8 @@
                     <label class="form-label" for="profile-email">Email Address</label>
                     <div class="input-wrap">
                       <span class="input-icon"><svg aria-hidden="true" focusable="false" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></span>
-                      <input class="form-input with-icon" id="profile-email" name="email" type="email" />
+                        <span class="input-icon"><i class="fa-solid fa-envelope" aria-hidden="true"></i></span>
+                        <input class="form-input with-icon" id="profile-email" name="email" type="email" />
                     </div>
                     <span class="field-error" id="profile-email-error"></span>
                   </div>
@@ -253,7 +262,8 @@
                     <label class="form-label" for="profile-phone">Phone Number</label>
                     <div class="input-wrap">
                       <span class="input-icon"><svg aria-hidden="true" focusable="false" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg></span>
-                      <input class="form-input with-icon" id="profile-phone" name="phone" type="tel" />
+                        <span class="input-icon"><i class="fa-solid fa-phone" aria-hidden="true"></i></span>
+                        <input class="form-input with-icon" id="profile-phone" name="phone" type="tel" />
                     </div>
                     <span class="field-error" id="profile-phone-error"></span>
                   </div>
@@ -370,7 +380,6 @@
                   <option value="Double Yolk">Double Yolk</option>
                 </select>
                 <input class="rr-search" id="report-search" type="text" placeholder="Search reservations" aria-label="Search reservations" />
-                <button class="btn-secondary" id="generate-sample-data" type="button" title="Generate sample test data (Developer Only)">Generate Sample Data</button>
                 <button class="btn-export" id="export-csv" type="button" title="Export a CSV file with summary metrics and detailed reservations">Export CSV</button>
                 <button class="btn-secondary" id="print-reports" type="button">Print</button>
                 <button class="btn-secondary" id="export-pdf-btn" type="button">Export PDF</button>
@@ -491,6 +500,10 @@
               <option value="deactivated">Deactivated</option>
             </select>
           </div>
+          <div class="form-group" id="user-password-group">
+            <label class="form-label" for="user-password">Password for new account</label>
+            <input class="form-input" id="user-password" name="password" type="password" minlength="8" />
+          </div>
           <div class="form-actions">
             <button class="btn-secondary" type="button" data-close-modal>Cancel</button>
             <button class="btn-primary" type="submit">Save</button>
@@ -521,6 +534,6 @@
       </div>
     </div>
 
-    <script src="app_analytics.js"></script>
+    <script src="vdvc/app_analytics.js"></script>
   </body>
 </html>

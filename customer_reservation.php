@@ -15,6 +15,18 @@ function getManagerUsers($conn) {
     $stmt->close();
     return $managers;
 }
+
+function getOwnerUsers($conn) {
+    $owners = array();
+    $stmt = $conn->prepare("SELECT id FROM users WHERE role = 'owner' AND status = 'active'");
+    $stmt->execute();
+    $result = $stmt->get_result();
+    while ($row = $result->fetch_assoc()) {
+        $owners[] = $row['id'];
+    }
+    $stmt->close();
+    return $owners;
+}
 // Start session to store submission status safely across redirect
 if (session_id() == '') {
     session_start();
@@ -238,6 +250,17 @@ foreach ($managers as $manager_id) {
         "New Reservation Received",
         "Customer {$customer_name} submitted reservation {$reservation_code}. Please review and confirm.",
         "alert"
+    );
+}
+
+$owners = getOwnerUsers($conn);
+foreach ($owners as $owner_id) {
+    add_notification(
+        $conn,
+        $owner_id,
+        "New Reservation Received",
+        "Customer {$customer_name} submitted reservation {$reservation_code}.",
+        "info"
     );
 }
 
@@ -1813,68 +1836,7 @@ body {
                                 <input type="number" id="quantity_input" min="1" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
                             </div>
 
-                            
-
-                          
-
-                          <!-- =====================================================
-     PICKUP DATE
-     Only visible when Pickup is selected
-     ===================================================== -->
-
-<div id="pickup_date_section" class="hidden">
-
-    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
-        Preferred Pickup Date
-    </label>
-
-    <input
-        type="date"
-        id="reservation_date_input"
-        name="reservation_date"
-        min="<?= $today ?>"
-        onchange="updateLiveSummary()"
-        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-    >
-
-    <p class="text-[10px] text-gray-400 mt-1">
-        Select the date when you prefer to pick up your order at the farm.
-    </p>
-
-</div>
-
-<!-- =====================================================
-     DELIVERY INFORMATION
-     Only visible when Delivery is selected
-     ===================================================== -->
-
-<div
-    id="delivery_schedule_info"
-    class="hidden border border-blue-100 bg-blue-50 rounded-lg p-3"
->
-
-    <div class="flex items-start gap-2">
-
-        <i class="fa-solid fa-truck text-blue-500 mt-0.5"></i>
-
-        <div>
-
-            <p class="text-xs font-bold text-blue-700">
-                Delivery Schedule
-            </p>
-
-            <p class="text-[10px] text-blue-600 mt-1 leading-relaxed">
-                No date is required at this time.
-                The farm manager will assign the delivery date
-                based on availability.
-            </p>
-
-        </div>
-
-    </div>
-
-</div>
-<div>
+                            <div>
 
     <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
         Delivery Method
@@ -1937,6 +1899,64 @@ body {
         <i class="fa-solid fa-plus"></i>
         <span>Add To Cart</span>
     </button>
+
+</div>
+
+<!-- =====================================================
+     PICKUP DATE
+     Only visible when Pickup is selected
+     ===================================================== -->
+
+<div id="pickup_date_section" class="hidden">
+
+    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+        Preferred Pickup Date
+    </label>
+
+    <input
+        type="date"
+        id="reservation_date_input"
+        name="reservation_date"
+        min="<?= $today ?>"
+        onchange="updateLiveSummary()"
+        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+    >
+
+    <p class="text-[10px] text-gray-400 mt-1">
+        Select the date when you prefer to pick up your order at the farm.
+    </p>
+
+</div>
+
+<!-- =====================================================
+     DELIVERY INFORMATION
+     Only visible when Delivery is selected
+     ===================================================== -->
+
+<div
+    id="delivery_schedule_info"
+    class="hidden border border-blue-100 bg-blue-50 rounded-lg p-3"
+>
+
+    <div class="flex items-start gap-2">
+
+        <i class="fa-solid fa-truck text-blue-500 mt-0.5"></i>
+
+        <div>
+
+            <p class="text-xs font-bold text-blue-700">
+                Delivery Schedule
+            </p>
+
+            <p class="text-[10px] text-blue-600 mt-1 leading-relaxed">
+                No date is required at this time.
+                The farm manager will assign the delivery date
+                based on availability.
+            </p>
+
+        </div>
+
+    </div>
 
 </div>
                         </div>
@@ -2690,9 +2710,6 @@ else {
         method === 'Pickup'
         ? "p-3 border rounded-lg flex flex-col items-center justify-center space-y-1 border-blue-500 bg-blue-50 text-blue-600"
         : "p-3 border rounded-lg flex flex-col items-center justify-center space-y-1 border-gray-200 text-gray-500";
-
-
-    updateLiveSummary();
 }
 
       function validateForm() {

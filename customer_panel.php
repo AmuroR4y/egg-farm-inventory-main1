@@ -191,7 +191,7 @@ $current = basename($_SERVER['PHP_SELF']);
 <!-- LOGO SECTION -->
 <div class="logo-section">
 
-    <img src="/EggFarm/vdvclogoo.png" class="logo-img">
+    <img src="/egg-farm-inventory-main1/vdvclogoo.png" class="logo-img">
 
     <div class="panel-title">
         Customer Panel
@@ -248,7 +248,7 @@ $current = basename($_SERVER['PHP_SELF']);
     <div class="logout-section">
 
         <a href="logout.php" class="menu-item btn-logout">
-
+        <img src="/egg-farm-inventory-main1/vdvclogoo.png" class="logo-img">
             <i class="fa-solid fa-right-from-bracket"></i>
             Log Out
 

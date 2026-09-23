@@ -35,7 +35,7 @@ if (!isset($_SESSION['user_id'])) {
 }
 
 // Allow both manager and owner roles
-if (isset($_SESSION['role']) && !in_array($_SESSION['role'], ['manager', 'owner'])) {
+if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['manager', 'owner'])) {
     header("Location: login.php");
     exit();
 }
@@ -57,41 +57,343 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
      if ($action === 'confirm') {
 
-    // Get customer user_id before updating
-    $customer_id = getCustomerUserId($conn, $reservation_code);
+    // Start transaction
+    $conn->autocommit(false);
 
-    $stmt = $conn->prepare(
-        "UPDATE reservations
-         SET status = 'Confirmed'
-         WHERE reservation_code = ?
-         AND status = 'Pending'"
-    );
+    // Initialize diagnostic variables for exception handler
+    $diagnostic_egg_type = null;
+    $diagnostic_egg_size = null;
+    $diagnostic_quantity = null;
+    $diagnostic_new_stock = null;
 
-    if (!$stmt) {
-        die("Confirm query prepare failed: " . $conn->error);
-    }
+    try {
+        // Get customer user_id before updating
+        $customer_id = getCustomerUserId($conn, $reservation_code);
 
-    $stmt->bind_param("s", $reservation_code);
-    $stmt->execute();
-    $stmt->close();
-
-    // Notify customer
-    if ($customer_id) {
-        add_notification(
-            $conn,
-            $customer_id,
-            "Reservation Confirmed! ✅",
-            "Your reservation {$reservation_code} has been confirmed by the farm manager.",
-            "success"
+        // Lock and check reservation row to prevent concurrent confirmations
+        $lock_stmt = $conn->prepare(
+            "SELECT status FROM reservations
+             WHERE reservation_code = ?
+             LIMIT 1
+             FOR UPDATE"
         );
-    }
 
-    header(
-        "Location: manager_reservation.php?view=" .
-        urlencode($reservation_code) .
-        "&updated=confirmed"
-    );
-    exit();
+        if (!$lock_stmt) {
+            throw new Exception("Lock query prepare failed: " . $conn->error);
+        }
+
+        $lock_stmt->bind_param("s", $reservation_code);
+        $lock_stmt->execute();
+        $lock_result = $lock_stmt->get_result();
+        $lock_row = $lock_result->fetch_assoc();
+        $lock_stmt->close();
+
+        // Verify reservation exists and is Pending
+        if (!$lock_row) {
+            throw new Exception("Reservation not found.");
+        }
+
+        if ($lock_row['status'] !== 'Pending') {
+            throw new Exception("Reservation is not in Pending status. Current status: " . $lock_row['status']);
+        }
+
+        // Get all reservation items (egg_type, quantity)
+        $items_stmt = $conn->prepare(
+            "SELECT egg_type, quantity
+             FROM reservations
+             WHERE reservation_code = ?"
+        );
+
+        if (!$items_stmt) {
+            throw new Exception("Items query prepare failed: " . $conn->error);
+        }
+
+        $items_stmt->bind_param("s", $reservation_code);
+        $items_stmt->execute();
+        $items_result = $items_stmt->get_result();
+
+        $reservation_items = array();
+        while ($item_row = $items_result->fetch_assoc()) {
+            $reservation_items[] = $item_row;
+        }
+        $items_stmt->close();
+
+        // Process each item: validate stock and deduct
+        $current_date = date('Y-m-d H:i:s');
+        $today_str = date('Ymd');
+        $batch_prefix = "EG" . $today_str . "-";
+
+        // Get next batch number for today
+        $seq_stmt = $conn->prepare(
+            "SELECT batch_id FROM egg_inventory
+             WHERE batch_id LIKE ?
+             ORDER BY id DESC
+             LIMIT 1"
+        );
+
+        if (!$seq_stmt) {
+            throw new Exception("Batch sequence query prepare failed: " . $conn->error);
+        }
+
+        $seq_prefix = $batch_prefix . "%";
+        $seq_stmt->bind_param("s", $seq_prefix);
+        $seq_stmt->execute();
+        $seq_result = $seq_stmt->get_result();
+        $seq_row = $seq_result->fetch_assoc();
+        $seq_stmt->close();
+
+        if ($seq_row) {
+            $last_num = (int)substr($seq_row['batch_id'], -3);
+            $next_num = str_pad($last_num + 1, 3, '0', STR_PAD_LEFT);
+        } else {
+            $next_num = "001";
+        }
+
+        foreach ($reservation_items as $item) {
+            $egg_type = trim($item['egg_type']); // Trim any whitespace
+            $quantity = intval($item['quantity']);
+
+            // Store for diagnostic display
+            $diagnostic_egg_type = $egg_type;
+            $diagnostic_quantity = $quantity;
+
+            // CRITICAL DEBUG: Log original egg_type with full details
+            error_log("CRITICAL: Original egg_type from reservation: " . var_export($egg_type, true));
+            error_log("CRITICAL: Original egg_type strlen: " . strlen($egg_type));
+            error_log("CRITICAL: Original egg_type hex: " . bin2hex($egg_type));
+
+            // Map reservation egg_type names to inventory enum values
+            $egg_size_map = array(
+                'Extra Small' => 'XS',
+                'Small' => 'Small',
+                'Medium' => 'Medium',
+                'Large' => 'Large',
+                'Extra Large' => 'XL',
+                'Jumbo' => 'Jumbo',
+                'Super Jumbo' => 'Super Jumbo',
+                'Double Yolk' => 'Double Yolk'
+            );
+
+            // Check if the egg_type exists in the mapping
+            if (!isset($egg_size_map[$egg_type])) {
+                error_log("CRITICAL: Egg type not found in mapping: " . var_export($egg_type, true));
+                throw new Exception("Invalid egg type: '" . $egg_type . "'. Valid types are: " . implode(', ', array_keys($egg_size_map)));
+            }
+
+            $egg_size = $egg_size_map[$egg_type];
+
+            // Store for diagnostic display
+            $diagnostic_egg_size = $egg_size;
+
+            // CRITICAL DEBUG: Log mapped egg_size with full details
+            error_log("CRITICAL: Mapped egg_size for inventory: " . var_export($egg_size, true));
+            error_log("CRITICAL: Mapped egg_size strlen: " . strlen($egg_size));
+            error_log("CRITICAL: Mapped egg_size hex: " . bin2hex($egg_size));
+
+            // Lock and get latest current stock for this egg size
+            $stock_stmt = $conn->prepare(
+                "SELECT current_stock FROM egg_inventory
+                 WHERE egg_size = ?
+                 ORDER BY id DESC
+                 LIMIT 1
+                 FOR UPDATE"
+            );
+
+            if (!$stock_stmt) {
+                throw new Exception("Stock query prepare failed: " . $conn->error);
+            }
+
+            // DEBUG: Log stock query with mapped value
+            error_log("DEBUG: Stock query with egg_size: '" . $egg_size . "'");
+
+            $stock_stmt->bind_param("s", $egg_size);
+            $stock_stmt->execute();
+            $stock_result = $stock_stmt->get_result();
+            $stock_row = $stock_result->fetch_assoc();
+            $stock_stmt->close();
+
+            $current_stock = $stock_row ? intval($stock_row['current_stock']) : 0;
+
+            // DEBUG: Log current stock found
+            error_log("DEBUG: Current stock found: " . $current_stock);
+
+            // Validate sufficient stock
+            if ($current_stock < $quantity) {
+                throw new Exception(
+                    "Insufficient stock for {$egg_type} ({$egg_size}). Available: {$current_stock}, Required: {$quantity}"
+                );
+            }
+
+            // Calculate new stock
+            $new_stock = $current_stock - $quantity;
+
+            // Store for diagnostic display
+            $diagnostic_new_stock = $new_stock;
+
+            // Generate batch ID for this deduction
+            $batch_id = $batch_prefix . $next_num;
+            $next_num = str_pad(intval($next_num) + 1, 3, '0', STR_PAD_LEFT);
+
+            // Insert Stock Out ledger record
+            $insert_stmt = $conn->prepare(
+                "INSERT INTO egg_inventory
+                 (batch_id, harvest_date, harvest_time, egg_size, quantity, current_stock, movement_type, reason, date_logged)
+                 VALUES (?, ?, ?, ?, ?, ?, 'Stock Out', 'Reservation', ?)"
+            );
+
+            // DEBUG: Log the exact prepared statement
+            error_log("CRITICAL: Prepared statement: INSERT INTO egg_inventory (batch_id, harvest_date, harvest_time, egg_size, quantity, current_stock, movement_type, reason, date_logged) VALUES (?, ?, ?, ?, ?, ?, 'Stock Out', 'Reservation', ?)");
+            error_log("CRITICAL: Expected bind_param types: s(s) for batch_id, s(s) for harvest_date, s(s) for harvest_time, s(s) for egg_size, i(i) for quantity, i(i) for current_stock, s(s) for date_logged");
+            error_log("CRITICAL: Total placeholders: 7");
+            error_log("CRITICAL: Current bind_param string: 'sssiiss'");
+
+            if (!$insert_stmt) {
+                throw new Exception("Inventory insert prepare failed: " . $conn->error);
+            }
+
+            // DEBUG: Log values before bind_param
+            error_log("DEBUG: Before bind_param - batch_id: '" . $batch_id . "', egg_size: '" . $egg_size . "', quantity: " . $quantity . ", new_stock: " . $new_stock . ", current_date: '" . $current_date . "'");
+
+            // EXPLICIT TYPE CHECKING
+            error_log("DEBUG: Type check - batch_id type: " . gettype($batch_id));
+            error_log("DEBUG: Type check - egg_size type: " . gettype($egg_size));
+            error_log("DEBUG: Type check - quantity type: " . gettype($quantity));
+            error_log("DEBUG: Type check - new_stock type: " . gettype($new_stock));
+            error_log("DEBUG: Type check - current_date type: " . gettype($current_date));
+
+            // Assign date values to variables to avoid "Only variables should be passed by reference" notice
+            $harvest_date = date('Y-m-d');
+            $harvest_time = date('H:i:s');
+
+            // CREATE EXPLICIT DEBUG VARIABLES FOR bind_param
+            $debug_batch_id = $batch_id;
+            $debug_harvest_date = $harvest_date;
+            $debug_harvest_time = $harvest_time;
+            $debug_egg_size = $egg_size;
+            $debug_quantity = $quantity;
+            $debug_current_stock = $new_stock;
+            $debug_date_logged = $current_date;
+
+            // LOG ALL DEBUG VALUES WITH FULL DETAILS
+            error_log("CRITICAL: DEBUG bind_param values:");
+            error_log("CRITICAL: Parameter 1 (batch_id): " . var_export($debug_batch_id, true) . " - Type: " . gettype($debug_batch_id));
+            error_log("CRITICAL: Parameter 2 (harvest_date): " . var_export($debug_harvest_date, true) . " - Type: " . gettype($debug_harvest_date));
+            error_log("CRITICAL: Parameter 3 (harvest_time): " . var_export($debug_harvest_time, true) . " - Type: " . gettype($debug_harvest_time));
+            error_log("CRITICAL: Parameter 4 (egg_size): " . var_export($debug_egg_size, true) . " - Type: " . gettype($debug_egg_size));
+            error_log("CRITICAL: Parameter 5 (quantity): " . var_export($debug_quantity, true) . " - Type: " . gettype($debug_quantity));
+            error_log("CRITICAL: Parameter 6 (current_stock): " . var_export($debug_current_stock, true) . " - Type: " . gettype($debug_current_stock));
+            error_log("CRITICAL: Parameter 7 (date_logged): " . var_export($debug_date_logged, true) . " - Type: " . gettype($debug_date_logged));
+
+            // CRITICAL: Verify the bind_param type string matches the 7 placeholders
+            error_log("CRITICAL: INSERT has 7 placeholders: batch_id, harvest_date, harvest_time, egg_size, quantity, current_stock, date_logged");
+            error_log("CRITICAL: Expected bind_param type string: 'ssssiis' (7 characters)");
+            error_log("CRITICAL: Type breakdown: s=string(batch_id), s=string(harvest_date), s=string(harvest_time), s=string(egg_size), i=integer(quantity), i=integer(current_stock), s=string(date_logged)");
+            error_log("CRITICAL: Actual bind_param type string being used: 'ssssiis'");
+
+            $insert_stmt->bind_param(
+                "ssssiis",
+                $debug_batch_id,
+                $debug_harvest_date,
+                $debug_harvest_time,
+                $debug_egg_size,
+                $debug_quantity,
+                $debug_current_stock,
+                $debug_date_logged
+            );
+
+            // DEBUG: Log bind_param result
+            error_log("DEBUG: bind_param completed successfully");
+
+            // EXPLICIT VALIDATION BEFORE INSERT
+            $valid_egg_sizes = [
+                'XS',
+                'Small',
+                'Medium',
+                'Large',
+                'XL',
+                'Jumbo',
+                'Super Jumbo',
+                'Double Yolk'
+            ];
+
+            if (!in_array($egg_size, $valid_egg_sizes, true)) {
+                error_log("CRITICAL: INVALID MAPPED EGG SIZE BEFORE INSERT: " . var_export($egg_size, true));
+                error_log("CRITICAL: strlen: " . strlen($egg_size));
+                error_log("CRITICAL: hex: " . bin2hex($egg_size));
+                throw new Exception(
+                    "INVALID MAPPED EGG SIZE: " . var_export($egg_size, true) . 
+                    ". Valid sizes are: " . implode(', ', $valid_egg_sizes)
+                );
+            }
+
+            error_log("CRITICAL: VALIDATION PASSED - egg_size: " . var_export($egg_size, true));
+
+            // DEBUG: Log before execute
+            error_log("DEBUG: About to execute INSERT statement");
+
+            if (!$insert_stmt->execute()) {
+                // DEBUG: Log the actual MySQL error
+                error_log("DEBUG: INSERT failed. MySQL error: " . $insert_stmt->error);
+                throw new Exception("Inventory insert failed: " . $insert_stmt->error);
+            }
+
+            // DEBUG: Log successful execution
+            error_log("DEBUG: INSERT statement executed successfully");
+
+            $insert_stmt->close();
+        }
+
+        // Update reservation status to Confirmed
+        $update_stmt = $conn->prepare(
+            "UPDATE reservations
+             SET status = 'Confirmed'
+             WHERE reservation_code = ?
+             AND status = 'Pending'"
+        );
+
+        if (!$update_stmt) {
+            throw new Exception("Status update prepare failed: " . $conn->error);
+        }
+
+        $update_stmt->bind_param("s", $reservation_code);
+        $update_stmt->execute();
+        $update_stmt->close();
+
+        // Notify customer
+        if ($customer_id) {
+            add_notification(
+                $conn,
+                $customer_id,
+                "Reservation Confirmed!",
+                "Your reservation {$reservation_code} has been confirmed by the farm manager.",
+                "success"
+            );
+        }
+
+        // Commit transaction
+        $conn->commit();
+
+        header(
+            "Location: manager_reservation.php?view=" .
+            urlencode($reservation_code) .
+            "&updated=confirmed"
+        );
+        exit();
+
+    } catch (Exception $e) {
+        // Rollback on any error
+        $conn->rollback();
+
+        // Store error message in session for display
+        $_SESSION['error_message'] = $e->getMessage();
+
+        header(
+            "Location: manager_reservation.php?view=" .
+            urlencode($reservation_code) .
+            "&error=confirm_failed"
+        );
+        exit();
+    }
 }
 
      elseif ($action === 'cancel') {
@@ -119,7 +421,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         add_notification(
             $conn,
             $customer_id,
-            "Reservation Cancelled ❌",
+            "Reservation Cancelled",
             "Your reservation {$reservation_code} has been cancelled by the farm manager.",
             "alert"
         );
@@ -244,7 +546,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             add_notification(
                 $conn,
                 $customer_id,
-                "Delivery Date Scheduled 📦",
+                "Delivery Date Scheduled",
                 "Your delivery for reservation {$reservation_code} has been scheduled on {$formatted_date}.",
                 "success"
             );
@@ -1261,6 +1563,16 @@ function deliveryIcon($method)
 
 <div class="main-content">
 
+<?php
+// Display error message if confirmation failed
+if (isset($_SESSION['error_message'])) {
+    echo '<div style="background: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin-bottom: 20px; color: #991b1b;">';
+    echo '<strong>Error:</strong> ' . htmlspecialchars($_SESSION['error_message']);
+    echo '</div>';
+    unset($_SESSION['error_message']);
+}
+?>
+
 <div class="reservation-page-wrapper">
 
     <div class="reservation-outer-card">
@@ -1496,7 +1808,7 @@ function deliveryIcon($method)
 
                                                     <?php
                                                     echo htmlspecialchars(
-                                                        $notification['reservation_code']
+                                                        $notification['reservation_code'] ?? 'No Code'
                                                     );
                                                     ?>
 
@@ -2031,7 +2343,7 @@ function deliveryIcon($method)
 
                                                     <?php
                                                     echo htmlspecialchars(
-                                                        $reservation['reservation_code']
+                                                        $reservation['reservation_code'] ?? 'No Code'
                                                     );
                                                     ?>
 
@@ -2050,7 +2362,7 @@ function deliveryIcon($method)
                                                 >
                                                     <?php
                                                     echo htmlspecialchars(
-                                                        $reservation['customer_name']
+                                                        $reservation['customer_name'] ?? 'Unknown Customer'
                                                     );
                                                     ?>
                                                 </p>
@@ -2066,7 +2378,7 @@ function deliveryIcon($method)
 
                                                     <?php
                                                     echo htmlspecialchars(
-                                                        $reservation['contact_number']
+                                                        $reservation['contact_number'] ?? 'Not provided'
                                                     );
                                                     ?>
 
@@ -2179,7 +2491,7 @@ function deliveryIcon($method)
 
                                                     <?php
                                                     echo htmlspecialchars(
-                                                        $reservation['delivery_method']
+                                                        $reservation['delivery_method'] ?? 'Not specified'
                                                     );
                                                     ?>
 
@@ -2293,13 +2605,13 @@ function deliveryIcon($method)
                                                         onclick="openStatusModal(
                                                             '<?php
                                                             echo htmlspecialchars(
-                                                                $reservation['reservation_code'],
+                                                                $reservation['reservation_code'] ?? 'No Code',
                                                                 ENT_QUOTES
                                                             );
                                                             ?>',
                                                             '<?php
                                                             echo htmlspecialchars(
-                                                                $reservation['status'],
+                                                                $reservation['status'] ?? 'Pending',
                                                                 ENT_QUOTES
                                                             );
                                                             ?>'
@@ -2461,7 +2773,7 @@ function deliveryIcon($method)
 
                                 <?php
                                 echo htmlspecialchars(
-                                    $selected_reservation['reservation_code']
+                                    $selected_reservation['reservation_code'] ?? 'No Code'
                                 );
                                 ?>
 
@@ -2640,7 +2952,7 @@ function deliveryIcon($method)
 
                                         <?php
                                         echo htmlspecialchars(
-                                            $selected_reservation['delivery_method']
+                                            $selected_reservation['delivery_method'] ?? 'Not specified'
                                         );
                                         ?>
 
@@ -2999,7 +3311,7 @@ function deliveryIcon($method)
                                             name="reservation_code"
                                             value="<?php
                                             echo htmlspecialchars(
-                                                $selected_reservation['reservation_code']
+                                                $selected_reservation['reservation_code'] ?? ''
                                             );
                                             ?>"
                                         >
@@ -3073,7 +3385,7 @@ function deliveryIcon($method)
                                         name="reservation_code"
                                         value="<?php
                                         echo htmlspecialchars(
-                                            $selected_reservation['reservation_code']
+                                            $selected_reservation['reservation_code'] ?? ''
                                         );
                                         ?>"
                                     >
@@ -3109,13 +3421,13 @@ function deliveryIcon($method)
                                 onclick="openStatusModal(
                                     '<?php
                                     echo htmlspecialchars(
-                                        $selected_reservation['reservation_code'],
+                                        $selected_reservation['reservation_code'] ?? 'No Code',
                                         ENT_QUOTES
                                     );
                                     ?>',
                                     '<?php
                                     echo htmlspecialchars(
-                                        $selected_reservation['status'],
+                                        $selected_reservation['status'] ?? 'Pending',
                                         ENT_QUOTES
                                     );
                                     ?>'
@@ -3153,7 +3465,7 @@ function deliveryIcon($method)
                                         name="reservation_code"
                                         value="<?php
                                         echo htmlspecialchars(
-                                            $selected_reservation['reservation_code']
+                                            $selected_reservation['reservation_code'] ?? ''
                                         );
                                         ?>"
                                     >

@@ -37,6 +37,7 @@ const RETAINED_SCOPE_LABEL = `Last ${DATA_RETENTION_DAYS} days`;
 const INVENTORY_FLOW_WINDOW_DAYS = 30;
 const INVENTORY_API_URL = window.VDVC_INVENTORY_API_URL
   || '../egg-farm-inventory-main/egg-farm-inventory-main/inventory_api.php';
+const OWNER_API_URL = window.VDVC_OWNER_API_URL || 'owner_api.php';
 
 // Config fallback thresholds — no minimum_level column exists in MySQL today.
 const EGG_SIZE_MINIMUM_LEVELS = {
@@ -99,15 +100,6 @@ function normalizeProfile(profile = {}) {
   return nextProfile;
 }
 
-function saveProfileData(profile) {
-  const payload = {
-    ...profile,
-    passwordHash: profile.passwordHash || '',
-  };
-  delete payload.password;
-  return saveData(STORAGE_KEYS.profile, payload);
-}
-
 async function hashPassword(value) {
   if (!window.crypto?.subtle) {
     return `${LEGACY_PASSWORD_PREFIX}${hashLegacyValue(value)}`;
@@ -142,29 +134,6 @@ async function verifyPassword(value, profile) {
     return true;
   }
   return (await hashPasswordWithoutSalt(value)) === profile.passwordHash;
-}
-
-function loadData(key, fallback) {
-  try {
-    const data = localStorage.getItem(key);
-    if (!data) {
-      return key === STORAGE_KEYS.profile ? normalizeProfile(fallback) : cloneData(fallback);
-    }
-    const parsed = JSON.parse(data);
-    return key === STORAGE_KEYS.profile ? normalizeProfile(parsed) : parsed;
-  } catch {
-    return key === STORAGE_KEYS.profile ? normalizeProfile(fallback) : cloneData(fallback);
-  }
-}
-
-function saveData(key, data) {
-  try {
-    localStorage.setItem(key, JSON.stringify(data));
-    return true;
-  } catch (error) {
-    console.error(`Unable to persist "${key}" to localStorage.`, error);
-    return false;
-  }
 }
 
 function showToast(message, type = 'info') {
@@ -734,14 +703,14 @@ const initialActivityLog = [
 // State management with _stateVersion for cache
 let state = {
   activePage: 'dashboard',
-  users: loadData(STORAGE_KEYS.users, initialUsers),
-  notifications: loadData(STORAGE_KEYS.notifications, initialNotifications),
-  reports: loadData(STORAGE_KEYS.reports, initialReports),
-  profile: normalizeProfile(loadData(STORAGE_KEYS.profile, initialProfile)),
-  inventory: normalizeInventoryState(loadData(STORAGE_KEYS.inventory, initialInventoryState)),
-  reservations: prepareReservationRecords(loadData(STORAGE_KEYS.reservations, initialReservations)),
-  deliveries: prepareDeliveryRecords(loadData(STORAGE_KEYS.deliveries, initialDeliveries)),
-  activityLog: loadData(STORAGE_KEYS.activityLog, initialActivityLog),
+  users: [],
+  notifications: [],
+  reports: [],
+  profile: normalizeProfile({}),
+  inventory: normalizeInventoryState({}),
+  reservations: [],
+  deliveries: [],
+  activityLog: [],
   userFilters: { query: '', status: 'all', role: 'all' },
   reportFilters: { query: '', category: 'all', date: '', period: 'all', status: 'all', size: 'all' },
   userPage: 1,
@@ -759,21 +728,18 @@ function invalidateDashboardAnalytics() {
   state._stateVersion++;
 }
 
-function setCollection(key, storageKey, nextValue) {
-  const previousValue = state[key];
-  const preparedValue = key === 'reservations'
-    ? prepareReservationRecords(nextValue)
-    : key === 'deliveries'
-      ? prepareDeliveryRecords(nextValue)
-      : nextValue;
-  state[key] = preparedValue;
-  if (!saveData(storageKey, preparedValue)) {
-    state[key] = previousValue;
-    showToast('Unable to save changes locally. Please free browser storage and try again.', 'error');
-    return false;
+async function requestOwnerEndpoint(url, values) {
+  const response = await fetch(url, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(values),
+  });
+  const payload = await response.json();
+  if (!response.ok || payload.status !== 'success') {
+    throw new Error(payload.message || 'The database request failed.');
   }
-  invalidateDashboardAnalytics();
-  return true;
+  return payload;
 }
 
 function addActivity(entity, action, detail) {
@@ -785,7 +751,6 @@ function addActivity(entity, action, detail) {
     createdAt: toDateTimeKey(new Date()),
   };
   state.activityLog = [activity, ...state.activityLog].slice(0, 30);
-  saveData(STORAGE_KEYS.activityLog, state.activityLog);
   invalidateDashboardAnalytics();
 }
 
@@ -1165,15 +1130,15 @@ function getDashboardAnalytics() {
 
 function getStatIcon(key) {
   if (key === 'customers') {
-    return '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>';
+    return 'fa-solid fa-users';
   }
   if (key === 'reservations') {
-    return '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>';
+    return 'fa-regular fa-calendar-days';
   }
   if (key === 'deliveries') {
-    return '<rect x="1" y="3" width="15" height="13" rx="1"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>';
+    return 'fa-solid fa-truck-ramp-box';
   }
-  return '<ellipse cx="12" cy="9" rx="9" ry="5"/><path d="M3 9v7c0 2.76 4.03 5 9 5s9-2.24 9-5V9"/><path d="M3 13c0 2.76 4.03 5 9 5s9-2.24 9-5"/>';
+  return 'fa-solid fa-boxes-stacked';
 }
 
 // Render functions
@@ -1219,15 +1184,9 @@ function renderDashboardStats(analytics) {
   const statsContainer = document.getElementById('dashboard-stats');
   if (!statsContainer) return;
   const metrics = analytics.dashboardMetrics;
-  const iconMap = {
-    customers: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
-    reservations: '<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
-    deliveries: '<path d="M3 6h11v10H3z"/><path d="M14 9h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/>',
-    inventory: '<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>'
-  };
   statsContainer.innerHTML = metrics.map(item => `
     <article class="dashboard-kpi-card kpi-${item.key}">
-      <div class="kpi-topline"><span class="kpi-icon"><svg width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">${iconMap[item.key] || iconMap.inventory}</svg></span><span class="kpi-label">${escapeHtml(item.label)}</span></div>
+      <div class="kpi-topline"><span class="kpi-icon"><i class="${getStatIcon(item.key)}" aria-hidden="true"></i></span><span class="kpi-label">${escapeHtml(item.label)}</span></div>
       <div class="kpi-value">${item.value}</div>
       <div class="kpi-status">${escapeHtml(item.badge)}</div>
       <div class="kpi-sub">${escapeHtml(item.sub)}</div>
@@ -1243,13 +1202,13 @@ function renderAlerts(analytics) {
   const total = groups.reduce((sum, group) => sum + group.items.length, 0);
   if (alertCount) alertCount.textContent = total;
   if (!groups.length) {
-    alertsList.innerHTML = `<div class="all-clear"><div class="all-clear-icon">✓</div><strong>Everything looks good</strong><span>No active operational alerts were detected.</span></div>`;
+    alertsList.innerHTML = `<div class="all-clear"><div class="all-clear-icon"><i class="fa-solid fa-check" aria-hidden="true"></i></div><strong>Everything looks good</strong><span>No active operational alerts were detected.</span></div>`;
     return;
   }
-  const iconFor = title => title.includes('Stock') ? '!' : title.includes('Delivery') ? '↗' : '•';
+  const iconFor = title => title.includes('Stock') ? 'fa-solid fa-triangle-exclamation' : title.includes('Delivery') ? 'fa-solid fa-arrow-up-right-dots' : 'fa-solid fa-circle-info';
   alertsList.innerHTML = groups.map(group => `
     <div class="alert-block">
-      <div class="alert-block-head"><span class="alert-icon">${iconFor(group.title)}</span><strong>${escapeHtml(group.title)}</strong><span class="alert-mini-badge">${escapeHtml(group.badge)}</span></div>
+      <div class="alert-block-head"><span class="alert-icon"><i class="${iconFor(group.title)}" aria-hidden="true"></i></span><strong>${escapeHtml(group.title)}</strong><span class="alert-mini-badge">${escapeHtml(group.badge)}</span></div>
       <div class="alert-items">${group.items.map(item => `<div class="alert-modern-item">${escapeHtml(item)}</div>`).join('')}</div>
     </div>
   `).join('');
@@ -1366,7 +1325,9 @@ function renderProductInsights(analytics) {
   if (kpi) kpi.textContent = formatPercent(leader.share);
   if (leaderLabel) leaderLabel.textContent = leader.label;
   if (trendIcon && trendValue) {
-    trendIcon.textContent = leader.share > 30 ? '↑' : '→';
+    trendIcon.innerHTML = leader.share > 30
+      ? '<i class="fa-solid fa-arrow-trend-up" aria-hidden="true"></i>'
+      : '<i class="fa-solid fa-arrow-right" aria-hidden="true"></i>';
     trendValue.textContent = leader.share > 30 ? 'Dominant' : leader.share > 15 ? 'Leading' : 'Competitive';
   }
   gauge.innerHTML = `<div class="leader-callout"><span>Top product</span><strong>${escapeHtml(leader.label)}</strong><b>${formatNumber(leader.value)} eggs</b></div>`;
@@ -1435,7 +1396,7 @@ function renderNotifications(analytics) {
   }
   list.innerHTML = notifications.map(notification => `
     <div class="notification-modern ${notification.read ? 'read' : 'unread'}" data-notification-id="${notification.id}">
-      <div class="notification-marker">${notification.read ? '✓' : '!'}</div>
+      <div class="notification-marker"><i class="fa-solid ${notification.read ? 'fa-check' : 'fa-exclamation'}" aria-hidden="true"></i></div>
       <div class="notification-body"><strong>${escapeHtml(notification.title)}</strong><span>${escapeHtml(notification.message || '')}</span><small>${getRelativeTimeLabel(notification.createdAt)}</small></div>
     </div>
   `).join('');
@@ -2214,13 +2175,13 @@ function handleAction(event) {
       if (user && user.role === 'Manager') {
         const newStatus = user.status === 'active' ? 'deactivated' : 'active';
         if (confirmAction(`Are you sure you want to ${newStatus === 'active' ? 'activate' : 'deactivate'} ${user.name}?`)) {
-          const updatedUsers = state.users.map(u => u.id === userId ? { ...u, status: newStatus } : u);
-          if (setCollection('users', STORAGE_KEYS.users, updatedUsers)) {
+          requestOwnerEndpoint('owner_users_api.php', {
+            action: 'status', user_id: userId, status: newStatus === 'active' ? 'active' : 'inactive',
+          }).then(() => loadOwnerData()).then(() => {
             showToast(`User ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully.`, 'success');
-            addActivity('user', newStatus === 'active' ? 'activated' : 'deactivated', `${user.name} was ${newStatus}.`);
             renderUsersTable();
             renderDashboard();
-          }
+          }).catch(error => showToast(error.message, 'error'));
         }
       }
       break;
@@ -2231,13 +2192,12 @@ function handleAction(event) {
       const user = state.users.find(u => u.id === userId);
       if (user && user.role === 'Manager') {
         if (confirmAction(`Are you sure you want to delete ${user.name}?`)) {
-          const updatedUsers = state.users.filter(u => u.id !== userId);
-          if (setCollection('users', STORAGE_KEYS.users, updatedUsers)) {
-            showToast('User deleted successfully.', 'success');
-            addActivity('user', 'deleted', `${user.name} was deleted.`);
-            renderUsersTable();
-            renderDashboard();
-          }
+          requestOwnerEndpoint('owner_users_api.php', { action: 'delete', user_id: userId })
+            .then(() => loadOwnerData()).then(() => {
+              showToast('User deleted successfully.', 'success');
+              renderUsersTable();
+              renderDashboard();
+            }).catch(error => showToast(error.message, 'error'));
         }
       }
       break;
@@ -2253,7 +2213,9 @@ function handleAction(event) {
         document.getElementById('user-email').value = user.email;
         document.getElementById('user-department').value = user.department;
         document.getElementById('user-role').value = user.role;
-        document.getElementById('user-status').value = user.status;
+        document.getElementById('user-status').value = user.status === 'active' ? 'active' : 'deactivated';
+        document.getElementById('user-password').value = '';
+        document.getElementById('user-password-group').classList.add('hidden');
         document.getElementById('user-form').dataset.editId = userId;
         document.getElementById('user-modal').classList.add('open');
       }
@@ -2267,13 +2229,9 @@ function handleAction(event) {
         return;
       }
       if (confirmAction(`Are you sure you want to activate all ${managerUsers.length} manager accounts?`)) {
-        const updatedUsers = state.users.map(u => u.role === 'Manager' ? { ...u, status: 'active' } : u);
-        if (setCollection('users', STORAGE_KEYS.users, updatedUsers)) {
-          showToast('All manager accounts activated.', 'success');
-          addActivity('user', 'bulk-activated', `All ${managerUsers.length} manager accounts activated.`);
-          renderUsersTable();
-          renderDashboard();
-        }
+        Promise.all(managerUsers.map(user => requestOwnerEndpoint('owner_users_api.php', { action: 'status', user_id: user.id, status: 'active' })))
+          .then(() => loadOwnerData()).then(() => { showToast('All manager accounts activated.', 'success'); renderUsersTable(); renderDashboard(); })
+          .catch(error => showToast(error.message, 'error'));
       }
       break;
     }
@@ -2285,13 +2243,9 @@ function handleAction(event) {
         return;
       }
       if (confirmAction(`Are you sure you want to deactivate all ${managerUsers.length} manager accounts?`)) {
-        const updatedUsers = state.users.map(u => u.role === 'Manager' ? { ...u, status: 'deactivated' } : u);
-        if (setCollection('users', STORAGE_KEYS.users, updatedUsers)) {
-          showToast('All manager accounts deactivated.', 'success');
-          addActivity('user', 'bulk-deactivated', `All ${managerUsers.length} manager accounts deactivated.`);
-          renderUsersTable();
-          renderDashboard();
-        }
+        Promise.all(managerUsers.map(user => requestOwnerEndpoint('owner_users_api.php', { action: 'status', user_id: user.id, status: 'inactive' })))
+          .then(() => loadOwnerData()).then(() => { showToast('All manager accounts deactivated.', 'success'); renderUsersTable(); renderDashboard(); })
+          .catch(error => showToast(error.message, 'error'));
       }
       break;
     }
@@ -2485,24 +2439,52 @@ function initNotificationBadge() {
   badge.style.display = unreadCount > 0 ? 'flex' : 'none';
 }
 
-// Mark all notifications as read (localStorage + DB)
-function markAllNotificationsRead() {
-  const updatedNotifications = state.notifications.map(n => ({ ...n, read: true }));
-  if (setCollection('notifications', STORAGE_KEYS.notifications, updatedNotifications)) {
-    showToast('All notifications marked as read.', 'success');
-    addActivity('notification', 'marked-read', 'Marked all notifications as read.');
-    const analytics = getDashboardAnalytics();
-    renderNotifications(analytics);
-    initNotificationBadge();
-    renderDashboard();
-  }
-  // Persist to database via owner_api.php
-  fetch('owner_api.php', {
+// Mark all notifications as read
+async function markAllNotificationsRead() {
+  const body = new URLSearchParams({ mark_all_read: '1' });
+  const response = await fetch(OWNER_API_URL, {
     method: 'POST',
     credentials: 'same-origin',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'mark_all_read=1',
-  }).catch(() => {});
+    body,
+  });
+  const payload = await response.json();
+  if (!response.ok || payload.status !== 'success') {
+    showToast('Unable to update notifications.', 'error');
+    return;
+  }
+  state.notifications = state.notifications.map(notification => ({ ...notification, read: true }));
+  invalidateDashboardAnalytics();
+  showToast('All notifications marked as read.', 'success');
+  renderNotifications(getDashboardAnalytics());
+  initNotificationBadge();
+  renderDashboard();
+}
+
+// Mark single notification as read
+async function markNotificationRead(id) {
+  const body = new URLSearchParams({ notification_id: id });
+  const response = await fetch(OWNER_API_URL, {
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  const payload = await response.json();
+  if (!response.ok || payload.status !== 'success') {
+    showToast('Unable to mark notification as read.', 'error');
+    return;
+  }
+  
+  // Update state locally
+  state.notifications = state.notifications.map(notification => 
+    notification.id === id ? { ...notification, read: true } : notification
+  );
+  
+  invalidateDashboardAnalytics();
+  renderNotifications(getDashboardAnalytics());
+  initNotificationBadge();
+  renderDashboard();
 }
 
 // Setup event listeners
@@ -2543,6 +2525,7 @@ function setupEventListeners() {
       document.getElementById('user-modal-title').textContent = 'Add Manager Account';
       document.getElementById('user-form').reset();
       delete document.getElementById('user-form').dataset.editId;
+      document.getElementById('user-password-group').classList.remove('hidden');
       document.getElementById('user-modal').classList.add('open');
     });
   }
@@ -2550,7 +2533,7 @@ function setupEventListeners() {
   // User form submit
   const userForm = document.getElementById('user-form');
   if (userForm) {
-    userForm.addEventListener('submit', (e) => {
+    userForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       
       const formData = new FormData(userForm);
@@ -2562,31 +2545,27 @@ function setupEventListeners() {
         department: formData.get('department'),
         role: formData.get('role'),
         status: formData.get('status'),
+        password: formData.get('password'),
       };
       
-      if (editId) {
-        // Edit existing user
-        const userId = parseInt(editId, 10);
-        const updatedUsers = state.users.map(u => u.id === userId ? { ...u, ...userData } : u);
-        if (setCollection('users', STORAGE_KEYS.users, updatedUsers)) {
-          showToast('User updated successfully.', 'success');
-          addActivity('user', 'updated', `Updated user: ${userData.name}`);
-          document.getElementById('user-modal').classList.remove('open');
-          renderUsersTable();
-          renderDashboard();
-        }
-      } else {
-        // Create new user
-        const newId = Math.max(...state.users.map(u => u.id), 0) + 1;
-        const newUser = { id: newId, ...userData };
-        const updatedUsers = [...state.users, newUser];
-        if (setCollection('users', STORAGE_KEYS.users, updatedUsers)) {
-          showToast('User created successfully.', 'success');
-          addActivity('user', 'created', `Created user: ${userData.name}`);
-          document.getElementById('user-modal').classList.remove('open');
-          renderUsersTable();
-          renderDashboard();
-        }
+      try {
+        const action = editId ? 'update' : 'create';
+        await requestOwnerEndpoint('owner_users_api.php', {
+          action,
+          user_id: editId || '',
+          name: userData.name,
+          email: userData.email,
+          role: String(userData.role || '').toLowerCase(),
+          status: userData.status === 'active' ? 'active' : 'inactive',
+          password: userData.password || '',
+        });
+        await loadOwnerData();
+        showToast(editId ? 'User updated successfully.' : 'User created successfully.', 'success');
+        document.getElementById('user-modal').classList.remove('open');
+        renderUsersTable();
+        renderDashboard();
+      } catch (error) {
+        showToast(error.message, 'error');
       }
     });
   }
@@ -2697,12 +2676,6 @@ function setupEventListeners() {
     });
   });
   
-  // Generate Sample Data button (Developer Only)
-  const generateSampleDataBtn = document.getElementById('generate-sample-data');
-  if (generateSampleDataBtn) {
-    generateSampleDataBtn.addEventListener('click', generateSampleData);
-  }
-
   // Export CSV button
   const exportCsvBtn = document.getElementById('export-csv');
   if (exportCsvBtn) {
@@ -2727,10 +2700,24 @@ function setupEventListeners() {
     markAllReadBtn.addEventListener('click', markAllNotificationsRead);
   }
   
+  // Mark single notification as read
+  const notificationList = document.getElementById('notification-list');
+  if (notificationList) {
+    notificationList.addEventListener('click', (e) => {
+      const item = e.target.closest('.notification-modern');
+      if (item && item.classList.contains('unread')) {
+        const id = parseInt(item.dataset.notificationId, 10);
+        if (id) {
+          markNotificationRead(id);
+        }
+      }
+    });
+  }
+  
   // Profile form submit
   const profileForm = document.getElementById('profile-form');
   if (profileForm) {
-    profileForm.addEventListener('submit', (e) => {
+    profileForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       
       const formData = new FormData(profileForm);
@@ -2742,11 +2729,17 @@ function setupEventListeners() {
         jobTitle: formData.get('jobTitle'),
       };
       
-      if (saveProfileData(updatedProfile)) {
-        state.profile = normalizeProfile(updatedProfile);
+      try {
+        await requestOwnerEndpoint('owner_profile_api.php', {
+          action: 'profile',
+          fullname: updatedProfile.fullName,
+          email: updatedProfile.email,
+        });
+        await loadOwnerData();
         showToast('Profile updated successfully.', 'success');
-        addActivity('profile', 'updated', 'Profile information updated.');
         renderProfilePage();
+      } catch (error) {
+        showToast(error.message, 'error');
       }
     });
   }
@@ -2760,17 +2753,8 @@ function setupEventListeners() {
       
       try {
         const optimizedImage = await optimizeAvatarFile(file);
-        const updatedProfile = {
-          ...state.profile,
-          avatar: optimizedImage,
-        };
-        
-        if (saveProfileData(updatedProfile)) {
-          state.profile = normalizeProfile(updatedProfile);
-          showToast('Profile photo updated.', 'success');
-          addActivity('profile', 'photo-updated', 'Profile photo updated.');
-          renderProfilePage();
-        }
+        void optimizedImage;
+        showToast('Profile photos are not supported by the current database schema.', 'info');
       } catch (error) {
         showToast(error.message, 'error');
       }
@@ -2820,18 +2804,16 @@ function setupEventListeners() {
         return;
       }
       
-      // Hash and save new password
-      const newPasswordHash = await hashPassword(newPassword);
-      const updatedProfile = {
-        ...state.profile,
-        passwordHash: newPasswordHash,
-      };
-      
-      if (saveProfileData(updatedProfile)) {
-        state.profile = normalizeProfile(updatedProfile);
+      try {
+        await requestOwnerEndpoint('owner_profile_api.php', {
+          action: 'password',
+          current_password: currentPassword,
+          new_password: newPassword,
+        });
         passwordForm.reset();
         showToast('Password updated successfully.', 'success');
-        addActivity('profile', 'password-changed', 'Password was changed.');
+      } catch (error) {
+        document.getElementById('current-password-error').textContent = error.message;
       }
     });
   }
@@ -2865,9 +2847,40 @@ async function loadInventoryData() {
   }
 }
 
-function init() {
-  saveData(STORAGE_KEYS.reservations, state.reservations);
-  saveData(STORAGE_KEYS.deliveries, state.deliveries);
+async function loadOwnerData() {
+  try {
+    const response = await fetch(OWNER_API_URL, { credentials: 'same-origin' });
+    if (!response.ok) throw new Error(`Owner data request failed (${response.status}).`);
+    const payload = await response.json();
+    if (payload.status !== 'success') throw new Error(payload.message || 'Owner data request failed.');
+
+    state.users = Array.isArray(payload.users) ? payload.users : [];
+    state.profile = normalizeProfile(payload.profile || {});
+    state.notifications = Array.isArray(payload.notifications) ? payload.notifications : [];
+    state.reports = Array.isArray(payload.reports) ? payload.reports : [];
+    state.reservations = prepareReservationRecords(Array.isArray(payload.reservations) ? payload.reservations : []);
+    state.deliveries = prepareDeliveryRecords(Array.isArray(payload.deliveries) ? payload.deliveries : []);
+    state.activityLog = Array.isArray(payload.activityLog) ? payload.activityLog : [];
+    state.inventory = normalizeInventoryState(payload.inventory || {});
+    invalidateDashboardAnalytics();
+    return true;
+  } catch (error) {
+    console.error('Owner database data unavailable.', error);
+    state.users = [];
+    state.profile = normalizeProfile({});
+    state.notifications = [];
+    state.reports = [];
+    state.reservations = [];
+    state.deliveries = [];
+    state.activityLog = [];
+    state.inventory = normalizeInventoryState({ source: 'database', error: error.message || 'Owner database data unavailable.' });
+    invalidateDashboardAnalytics();
+    return false;
+  }
+}
+
+async function init() {
+  await loadOwnerData();
 
   const loadingOverlay = document.getElementById('loading-overlay');
   if (loadingOverlay) {
@@ -2880,13 +2893,7 @@ function init() {
   setupEventListeners();
   navigateToPage('dashboard');
   initNotificationBadge();
-
-  loadInventoryData().finally(() => {
-    if (state.activePage === 'dashboard') {
-      renderDashboard();
-      initNotificationBadge();
-    }
-  });
+  renderDashboard();
 
   state._liveMetricInterval = setInterval(() => {
     const analytics = getDashboardAnalytics();

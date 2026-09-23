@@ -59,11 +59,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         } elseif ($movement == "Stock Out") {
 
-            $reason = "Stock Out";
+            $reason = "Adjustment";
 
         } else {
 
-            $reason = "Stock Adjustment";
+            $reason = "Adjustment";
 
         }
 
@@ -285,8 +285,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             '$egg_size',
                             '$adjustment',
                             '$new_stock',
-                            'Stock Adjustment',
-                            'Stock Adjustment',
+                            'Adjustment',
+                            'Adjustment',
                             '$current_date'
                         )
                         "
@@ -694,8 +694,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             '$item_name',
                             '$adjustment',
                             '$new_stock',
-                            'Stock Adjustment',
-                            'Stock Adjustment',
+                            'Adjustment',
+                            'Adjustment',
                             '$current_date'
                         )
                         "

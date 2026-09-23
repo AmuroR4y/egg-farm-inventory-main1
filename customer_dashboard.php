@@ -28,6 +28,11 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] != 'customer') {
 ========================================================= */
 
 $customer_id = $_SESSION['user_id'];
+$unread_notifications = 0;
+$notification_count_result = $conn->query("SELECT COUNT(*) AS total FROM notifications WHERE user_id = " . (int)$customer_id . " AND is_read = 0");
+if ($notification_count_result && ($notification_count_row = $notification_count_result->fetch_assoc())) {
+    $unread_notifications = (int)$notification_count_row['total'];
+}
 
 $customer_name = isset($_SESSION['customer_name'])
     ? $_SESSION['customer_name']
@@ -43,7 +48,7 @@ $total_reservations = 0;
 $reservation_count_sql = "
     SELECT COUNT(DISTINCT reservation_code) AS total
     FROM reservations
-    WHERE customer_id = ?
+    WHERE user_id = ?
 ";
 
 $stmt = $conn->prepare($reservation_count_sql);
@@ -71,7 +76,7 @@ $total_trays = 0;
 $total_trays_sql = "
     SELECT SUM(quantity) AS total
     FROM reservations
-    WHERE customer_id = ?
+    WHERE user_id = ?
 ";
 
 $stmt = $conn->prepare($total_trays_sql);
@@ -97,13 +102,18 @@ if ($stmt) {
 $egg_stocks = array();
 
 $stock_sql = "
-    SELECT 
-        egg_size,
-        available_stock
-    FROM egg_inventory
+    SELECT
+        e.egg_size,
+        e.current_stock AS available_stock
+    FROM egg_inventory e
+    INNER JOIN (
+        SELECT egg_size, MAX(id) AS id
+        FROM egg_inventory
+        GROUP BY egg_size
+    ) latest ON latest.id = e.id
     ORDER BY 
         FIELD(
-            egg_size,
+                e.egg_size,
             'XS',
             'Small',
             'Medium',
@@ -133,12 +143,12 @@ $recent_activities = array();
 $activity_sql = "
     SELECT
         reservation_code,
-        egg_size,
+        egg_type AS egg_size,
         quantity,
         status,
         reserved_at
     FROM reservations
-    WHERE customer_id = ?
+    WHERE user_id = ?
     ORDER BY reserved_at DESC
     LIMIT 5
 ";
@@ -2036,6 +2046,9 @@ body {
         >
 
             <i class="fa-regular fa-bell"></i>
+            <?php if ($unread_notifications > 0): ?>
+                <span class="customer-notification-badge"><?php echo $unread_notifications > 99 ? '99+' : $unread_notifications; ?></span>
+            <?php endif; ?>
 
         </a>
 
@@ -2784,8 +2797,8 @@ body {
 
             <div class="support-content">
 
-                <h3>
-                    Thank you for supporting local farms!
+            <div class="farm-decoration">
+                <img src="/egg-farm-inventory-main1/dashboard_footer.png" alt="Egg Farm Landscape">
                 </h3>
 
                 <p>

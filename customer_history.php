@@ -24,6 +24,11 @@ if (!isset($_SESSION['user_id'])) {
 $user_id = $_SESSION['user_id'];
 $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : 'customer';
 
+if ($user_role !== 'customer') {
+    header("Location: login.php");
+    exit;
+}
+
 // =========================================================
 // GET CURRENT USER INFORMATION
 // =========================================================
@@ -132,14 +137,10 @@ $query = "
 $params = array();
 $types = "";
 
-// Customer can only see own reservation records
-if (strtolower($user_role) === 'customer') {
-
-    $query .= " AND user_id = ?";
-
-    $params[] = $user_id;
-    $types .= "i";
-}
+// Customer history is always restricted to the authenticated customer.
+$query .= " AND user_id = ?";
+$params[] = $user_id;
+$types .= "i";
 
 // =========================================================
 // SEARCH
