@@ -348,10 +348,7 @@ body {
 }
 
 
-/* =========================================================
-   CUSTOMER DASHBOARD HEADER
-   SAME STYLE AS RESERVATION / MANAGER HEADER
-========================================================= */
+
 
 .customer-dashboard-topbar {
 
@@ -451,7 +448,10 @@ body {
     justify-content:
         center;
 
-    text-decoration:
+    background:
+        transparent;
+
+    border:
         none;
 
     color:
@@ -462,6 +462,9 @@ body {
 
     transition:
         0.2s ease;
+
+    cursor:
+        pointer;
 }
 
 
@@ -522,6 +525,190 @@ body {
 
     border:
         2px solid #f7f6f2;
+}
+
+
+/* =========================================================
+   CUSTOMER NOTIFICATION DROPDOWN
+========================================================= */
+
+.customer-notification-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 360px;
+    background: #ffffff;
+    border: 1px solid #e2dfd7;
+    border-radius: 10px;
+    box-shadow: 0 3px 10px rgba(70, 65, 55, 0.05);
+    z-index: 1000;
+}
+
+.customer-notification-dropdown.hidden {
+    display: none;
+}
+
+.customer-notification-dropdown-header {
+    min-height: 50px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #e9e6df;
+}
+
+.customer-panel-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.customer-panel-title-icon {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #eef3ed;
+    color: #527d59;
+    font-size: 14px;
+}
+
+.customer-dashboard-panel-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #3f4b45;
+}
+
+.customer-mark-all-link {
+    font-size: 11px;
+    font-weight: 700;
+    color: #527d59;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.customer-mark-all-link:hover {
+    text-decoration: underline;
+}
+
+.customer-notification-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.customer-notification-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #f0eee8;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.customer-notification-item:hover {
+    background: #faf9f7;
+}
+
+.customer-notification-item.unread {
+    background: #f0f5f1;
+}
+
+.customer-notification-item.unread:hover {
+    background: #e8f0e9;
+}
+
+.customer-notification-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 14px;
+}
+
+.customer-notification-icon.success {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.customer-notification-icon.alert {
+    background: #fff3e0;
+    color: #e65100;
+}
+
+.customer-notification-icon.info {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.customer-notification-icon.warning {
+    background: #fff8e1;
+    color: #f57f17;
+}
+
+.customer-notification-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.customer-notification-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: #1a2e1c;
+    margin-bottom: 4px;
+}
+
+.customer-notification-item.unread .customer-notification-title {
+    color: #214f2c;
+}
+
+.customer-notification-description {
+    font-size: 12px;
+    color: #5a6b60;
+    line-height: 1.4;
+}
+
+.customer-notification-time {
+    font-size: 11px;
+    color: #9aaa9a;
+    margin-top: 4px;
+}
+
+.customer-notification-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: #9aaa9a;
+}
+
+.customer-notification-empty i {
+    font-size: 32px;
+    margin-bottom: 12px;
+    color: #c8d4c4;
+}
+
+.customer-notification-empty p {
+    font-size: 13px;
+    margin: 0;
+}
+
+.customer-mark-read-btn {
+    background: none;
+    border: none;
+    color: #527d59;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 8px;
+    margin-top: 8px;
+}
+
+.customer-mark-read-btn:hover {
+    text-decoration: underline;
 }
 
 
@@ -2039,18 +2226,45 @@ body {
 
         <!-- NOTIFICATION -->
 
-        <a
-            href="customer_notifications.php"
-            class="customer-top-notification"
-            title="Notifications"
-        >
+        <div style="position: relative;">
+            <button
+                type="button"
+                class="customer-top-notification"
+                title="Notifications"
+                onclick="event.stopPropagation(); toggleCustomerNotificationDropdown()"
+            >
 
-            <i class="fa-regular fa-bell"></i>
-            <?php if ($unread_notifications > 0): ?>
-                <span class="customer-notification-badge"><?php echo $unread_notifications > 99 ? '99+' : $unread_notifications; ?></span>
-            <?php endif; ?>
+                <i class="fa-regular fa-bell"></i>
+                <?php if ($unread_notifications > 0): ?>
+                    <span class="customer-notification-badge"><?php echo $unread_notifications > 99 ? '99+' : $unread_notifications; ?></span>
+                <?php endif; ?>
 
-        </a>
+            </button>
+
+            <!-- NOTIFICATION DROPDOWN -->
+            <div
+                class="customer-notification-dropdown hidden"
+                id="customerNotificationDropdown"
+            >
+                <div class="customer-notification-dropdown-header">
+                    <div class="customer-panel-title-group">
+                        <div class="customer-panel-title-icon">
+                            <i class="fa-solid fa-bell"></i>
+                        </div>
+                        <div class="customer-dashboard-panel-title">
+                            Notifications
+                        </div>
+                    </div>
+                    <a class="customer-mark-all-link" onclick="markAllCustomerAsRead(event)">
+                        Mark All as Read
+                    </a>
+                </div>
+
+                <div class="customer-notification-list" id="customerNotificationList">
+                    <!-- Notifications will be loaded here via JavaScript -->
+                </div>
+            </div>
+        </div>
 
 
         <!-- DIVIDER -->
@@ -2875,6 +3089,194 @@ setInterval(
     updateCustomerDateTime,
     1000
 );
+
+/* =========================================================
+   CUSTOMER NOTIFICATION DROPDOWN
+========================================================= */
+
+var customerNotificationDropdown = null;
+var isCustomerDropdownOpen = false;
+
+function toggleCustomerNotificationDropdown()
+{
+    if (!customerNotificationDropdown) {
+        customerNotificationDropdown = document.getElementById('customerNotificationDropdown');
+    }
+
+    if (customerNotificationDropdown) {
+        isCustomerDropdownOpen = !isCustomerDropdownOpen;
+
+        if (isCustomerDropdownOpen) {
+            customerNotificationDropdown.classList.remove('hidden');
+            loadCustomerNotifications();
+        } else {
+            customerNotificationDropdown.classList.add('hidden');
+        }
+    }
+}
+
+function closeCustomerNotificationDropdown()
+{
+    if (customerNotificationDropdown && isCustomerDropdownOpen) {
+        customerNotificationDropdown.classList.add('hidden');
+        isCustomerDropdownOpen = false;
+    }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(event) {
+    if (customerNotificationDropdown && isCustomerDropdownOpen) {
+        var notificationButton = document.querySelector('.customer-top-notification');
+        var notificationContainer = customerNotificationDropdown.parentElement;
+        if (!notificationContainer.contains(event.target)) {
+            closeCustomerNotificationDropdown();
+        }
+    }
+});
+
+function loadCustomerNotifications()
+{
+    var notificationList = document.getElementById('customerNotificationList');
+    if (!notificationList) return;
+
+    // Show loading state
+    notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading notifications...</p></div>';
+
+    // Fetch notifications from the dedicated notifications page
+    fetch('customer_notifications.php')
+        .then(function(response) {
+            return response.text();
+        })
+        .then(function(html) {
+            // Parse the HTML to extract notification data
+            var parser = new DOMParser();
+            var doc = parser.parseFromString(html, 'text/html');
+
+            // Extract notification items from the dedicated page
+            var notificationItems = doc.querySelectorAll('.notification-item');
+
+            if (notificationItems.length > 0) {
+                var notificationsHtml = '';
+                notificationItems.forEach(function(item) {
+                    var isUnread = item.classList.contains('unread');
+                    var iconElement = item.querySelector('.notification-icon');
+                    var iconClass = 'info';
+                    var iconHtml = '<div class="customer-notification-icon info"><i class="fa-solid fa-bell"></i></div>';
+
+                    if (iconElement) {
+                        if (iconElement.classList.contains('success')) {
+                            iconClass = 'success';
+                            iconHtml = '<div class="customer-notification-icon success"><i class="fa-solid fa-check"></i></div>';
+                        } else if (iconElement.classList.contains('alert')) {
+                            iconClass = 'alert';
+                            iconHtml = '<div class="customer-notification-icon alert"><i class="fa-solid fa-exclamation"></i></div>';
+                        } else if (iconElement.classList.contains('warning')) {
+                            iconClass = 'warning';
+                            iconHtml = '<div class="customer-notification-icon warning"><i class="fa-solid fa-circle-exclamation"></i></div>';
+                        } else {
+                            iconHtml = iconElement.outerHTML;
+                        }
+                    }
+
+                    var titleElement = item.querySelector('.notification-title');
+                    var title = titleElement ? titleElement.textContent : 'Notification';
+
+                    var descElement = item.querySelector('.notification-desc');
+                    var description = descElement ? descElement.textContent : '';
+
+                    var timeElement = item.querySelector('.notification-time');
+                    var time = timeElement ? timeElement.textContent : '';
+
+                    var notificationId = item.getAttribute('onclick') ? item.getAttribute('onclick').match(/\d+/) : null;
+
+                    notificationsHtml += '<div class="customer-notification-item ' + (isUnread ? 'unread' : 'read') + '">';
+                    notificationsHtml += iconHtml;
+                    notificationsHtml += '<div class="customer-notification-content">';
+                    notificationsHtml += '<div class="customer-notification-title">' + title + '</div>';
+                    notificationsHtml += '<div class="customer-notification-description">' + description + '</div>';
+                    notificationsHtml += '<div class="customer-notification-time">' + time + '</div>';
+                    notificationsHtml += '</div>';
+                    if (notificationId && isUnread) {
+                        notificationsHtml += '<button class="customer-mark-read-btn" onclick="markCustomerAsRead(' + notificationId + ', this)">Mark as Read</button>';
+                    }
+                    notificationsHtml += '</div>';
+                });
+
+                notificationList.innerHTML = notificationsHtml;
+            } else {
+                notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-regular fa-bell-slash"></i><p>No notifications</p></div>';
+            }
+        })
+        .catch(function(error) {
+            notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-solid fa-exclamation-circle"></i><p>Failed to load notifications</p></div>';
+        });
+}
+
+function markCustomerAsRead(notificationId, buttonElement)
+{
+    var formData = new FormData();
+    formData.append('mark_read', '1');
+    formData.append('notification_id', notificationId);
+
+    fetch('customer_notifications.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.success) {
+            // Update UI
+            var notificationItem = buttonElement.closest('.customer-notification-item');
+            if (notificationItem) {
+                notificationItem.classList.remove('unread');
+                notificationItem.classList.add('read');
+                buttonElement.remove();
+
+                // Update badge
+                var badge = document.querySelector('.customer-notification-badge');
+                if (badge) {
+                    var currentBadge = parseInt(badge.textContent);
+                    if (!isNaN(currentBadge) && currentBadge > 0) {
+                        if (currentBadge > 1) {
+                            badge.textContent = currentBadge - 1;
+                        } else {
+                            badge.remove();
+                        }
+                    }
+                }
+            }
+        }
+    })
+    .catch(function(error) {
+        console.error('Failed to mark notification as read:', error);
+    });
+}
+
+function markAllCustomerAsRead(event)
+{
+    event.preventDefault();
+    event.stopPropagation();
+
+    var formData = new FormData();
+    formData.append('mark_all_read', '1');
+
+    fetch('customer_notifications.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) {
+        return response.text();
+    })
+    .then(function() {
+        // Reload page to update all notification states
+        window.location.reload();
+    })
+    .catch(function(error) {
+        console.error('Failed to mark all notifications as read:', error);
+    });
+}
 </script>
 
 </body>

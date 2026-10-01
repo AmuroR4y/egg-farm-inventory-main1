@@ -182,6 +182,7 @@ CREATE TABLE IF NOT EXISTS `users` (
   `fullname` varchar(100) NOT NULL,
   `username` varchar(50) NOT NULL,
   `email` varchar(100) DEFAULT NULL,
+  `phone` varchar(20) DEFAULT NULL,
   `password` varchar(255) NOT NULL,
   `role` enum('owner','manager','customer') NOT NULL,
   `status` enum('active','inactive') DEFAULT 'active',
@@ -206,6 +207,25 @@ INSERT INTO `users` (`id`, `fullname`, `username`, `email`, `password`, `role`, 
 (6, 'Alliana Diokno', 'Alliana', 'alliana@gmail.com', 'e3060f60499a74d0b50098cdc5fed050', 'customer', 'active', '2026-08-06 17:48:24'),
 (7, 'Sherly Diokno', 'Sherly', 'sherly@gmail.com', 'd993ce8bd6e8dbdc152f3283dee6a472', 'customer', 'active', '2026-08-19 10:09:16');
 
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `password_reset_tokens`
+--
+
+CREATE TABLE IF NOT EXISTS `password_reset_tokens` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `user_id` int(11) NOT NULL,
+  `token_hash` varchar(255) NOT NULL,
+  `expires_at` datetime NOT NULL,
+  `used` tinyint(1) NOT NULL DEFAULT '0',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`),
+  KEY `token_hash` (`token_hash`),
+  KEY `expires_at` (`expires_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 --
 -- Constraints for dumped tables
 --
@@ -221,3 +241,9 @@ ALTER TABLE `notifications`
 --
 ALTER TABLE `reservations`
   ADD CONSTRAINT `reservations_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `password_reset_tokens`
+--
+ALTER TABLE `password_reset_tokens`
+  ADD CONSTRAINT `password_reset_tokens_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE;

@@ -4,9 +4,10 @@
 // FULL REPLACEMENT
 // =========================================================
 
-if (!isset($_SESSION)) {
-    session_start();
-}
+// Include standardized session configuration FIRST
+require_once 'session_config.php';
+
+date_default_timezone_set('Asia/Manila');
 
 date_default_timezone_set('Asia/Manila');
 
@@ -65,13 +66,31 @@ if ($user_stmt) {
 // FILTERS
 // =========================================================
 
-$search = isset($_GET['search']) ? trim($_GET['search']) : '';
-$filter_egg = isset($_GET['egg_type']) ? trim($_GET['egg_type']) : '';
-$filter_method = isset($_GET['delivery_method']) ? trim($_GET['delivery_method']) : '';
+$search = isset($_GET['search'])
+    ? trim($_GET['search'])
+    : '';
 
-$page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
+$filter_egg = isset($_GET['egg_type'])
+    ? trim($_GET['egg_type'])
+    : '';
 
-$limit = 5;
+$filter_method = isset($_GET['delivery_method'])
+    ? trim($_GET['delivery_method'])
+    : '';
+
+$filter_status = isset($_GET['status'])
+    ? trim($_GET['status'])
+    : '';
+
+$filter_date = isset($_GET['date_range'])
+    ? trim($_GET['date_range'])
+    : '';
+
+$page = isset($_GET['page'])
+    ? max(1, (int)$_GET['page'])
+    : 1;
+
+$limit = 7;
 
 // =========================================================
 // EGG OPTIONS
@@ -188,6 +207,54 @@ if ($filter_method !== '') {
     $params[] = $filter_method;
     $types .= "s";
 }
+
+
+// =========================================================
+// STATUS FILTER
+// =========================================================
+
+if ($filter_status !== '') {
+
+    $query .= " AND status = ?";
+
+    $params[] = $filter_status;
+    $types .= "s";
+}
+
+
+// =========================================================
+// DATE RANGE FILTER
+// =========================================================
+
+if ($filter_date !== '') {
+
+    if ($filter_date === 'today') {
+
+        $query .= "
+            AND DATE(created_at) = CURDATE()
+        ";
+
+    } elseif ($filter_date === '7days') {
+
+        $query .= "
+            AND created_at >= DATE_SUB(
+                CURDATE(),
+                INTERVAL 7 DAY
+            )
+        ";
+
+    } elseif ($filter_date === '30days') {
+
+        $query .= "
+            AND created_at >= DATE_SUB(
+                CURDATE(),
+                INTERVAL 30 DAY
+            )
+        ";
+
+    }
+}
+
 
 // =========================================================
 // ORDER
@@ -490,220 +557,834 @@ function getPaginationUrl($page_num)
         /* =====================================================
            PAGE CARD
         ===================================================== */
+.history-card {
+    background: linear-gradient(
+        135deg,
+        #eeece6 0%,
+        #f5f3ed 100%
+    );
 
-        .history-card {
-            background: linear-gradient(
-                135deg,
-                #eeece6 0%,
-                #f5f3ed 100%
-            );
+    border: 1px solid #e2e0d9;
+    border-radius: 22px;
 
-            border: 1px solid #e2e0d9;
-            border-radius: 14px;
+    box-shadow:
+        0 3px 12px rgba(55, 70, 60, 0.08);
 
-            box-shadow:
-                0 3px 12px rgba(55, 70, 60, 0.08);
+    overflow: hidden;
+}
 
-            overflow: visible;
-        }
+     .customer-dashboard-topbar {
 
-        /* =====================================================
-           HEADER
-        ===================================================== */
+    min-height:
+        86px;
 
-        .history-header {
-            min-height: 82px;
+    width:
+        100%;
 
-            padding: 0 28px;
+    display:
+        flex;
 
-            background: #f7f6f2;
+    align-items:
+        center;
 
-            border-bottom: 1px solid #e2e0d9;
+    justify-content:
+        space-between;
 
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
+    padding:
+        0 28px;
 
-            border-radius: 14px 14px 0 0;
-        }
+    background:
+        #f7f6f2;
 
-        .history-title-wrap {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
+    border-bottom:
+        1px solid #dddcd6;
 
-        .history-title-icon {
-            width: 43px;
-            height: 43px;
+    box-sizing:
+        border-box;
 
-            border-radius: 50%;
+    border-radius:
+        22px 22px 0 0;
+}
 
-            background: #edf1e9;
 
-            border: 1px solid #dfe5dc;
+/* =========================================================
+   HEADER TITLE
+========================================================= */
 
-            display: flex;
-            align-items: center;
-            justify-content: center;
+.customer-page-title {
 
-            color: #214f2c;
+    margin:
+        0;
 
-            font-size: 21px;
-        }
+    font-size:
+        1.35rem;
 
-        .history-title {
-            margin: 0;
+    font-weight:
+        700;
 
-            font-size: 27px;
-            line-height: 1;
+    color:
+        #3f4b45;
 
-            font-weight: 700;
+    letter-spacing:
+        -0.3px;
+}
 
-            color: #214f2c;
 
-            letter-spacing: -0.4px;
-        }
+/* =========================================================
+   HEADER RIGHT
+========================================================= */
 
-        /* =====================================================
-           HEADER RIGHT
-        ===================================================== */
+.customer-topbar-right {
 
-        .header-right {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-        }
+    display:
+        flex;
 
-        .notification-area {
-            position: relative;
-        }
+    align-items:
+        center;
 
-        .notification-button {
-            position: relative;
+    gap:
+        18px;
 
-            width: 38px;
-            height: 38px;
+    height:
+        100%;
+}
 
-            border: none;
-            background: transparent;
 
-            color: #557066;
+/* =========================================================
+   NOTIFICATION
+========================================================= */
 
-            cursor: pointer;
+.customer-top-notification {
 
-            display: flex;
-            align-items: center;
-            justify-content: center;
+    position:
+        relative;
 
-            border-radius: 50%;
+    width:
+        40px;
 
-            transition: 0.2s ease;
-        }
+    height:
+        40px;
 
-        .notification-button:hover {
-            background: #edf0eb;
-        }
+    display:
+        flex;
 
-        .notification-button i {
-            font-size: 18px;
-        }
+    align-items:
+        center;
 
-        .notification-badge {
-            position: absolute;
+    justify-content:
+        center;
 
-            top: 2px;
-            right: 1px;
+    text-decoration:
+        none;
 
-            min-width: 14px;
-            height: 14px;
+    color:
+        #65716b;
 
-            padding: 0 3px;
+    font-size:
+        1.2rem;
 
-            border-radius: 20px;
+    transition:
+        0.2s ease;
+}
 
-            background: #4d8258;
 
-            color: white;
+.customer-top-notification:hover {
 
-            font-size: 8px;
-            font-weight: 700;
+    color:
+        #527d59;
+}
 
-            display: flex;
-            align-items: center;
-            justify-content: center;
 
-            border: 2px solid #f7f6f2;
-        }
+/* =========================================================
+   NOTIFICATION BADGE
+========================================================= */
 
-        /* =====================================================
-           USER AREA
-           ===================================================== */
+.customer-notification-badge {
 
-        .user-area {
-            display: flex;
-            align-items: center;
-            gap: 10px;
+    position:
+        absolute;
 
-            cursor: default;
-        }
+    top:
+        1px;
 
-        /* IMPORTANT:
-           NO vertical divider here.
-        */
+    right:
+        0;
 
-        .user-avatar {
-            width: 46px;
-            height: 46px;
+    min-width:
+        17px;
 
-            border-radius: 50%;
+    height:
+        17px;
 
-            background: #edf1eb;
+    padding:
+        0 4px;
 
-            border: 1px solid #dce3dc;
+    border-radius:
+        50%;
 
-            display: flex;
-            align-items: center;
-            justify-content: center;
+    display:
+        flex;
 
-            color: #52715f;
+    align-items:
+        center;
 
-            font-size: 18px;
-        }
+    justify-content:
+        center;
 
-        .user-info {
-            min-width: 108px;
-        }
+    background:
+        #527d59;
 
-        .user-name {
-            color: #34483e;
-            font-size: 15px;
-            font-weight: 700;
+    color:
+        #ffffff;
 
-            line-height: 1.2;
-        }
+    font-size:
+        0.58rem;
 
-        .current-date {
-            color: #89978f;
-            font-size: 10px;
+    font-weight:
+        700;
 
-            margin-top: 3px;
-        }
+    border:
+        2px solid #f7f6f2;
+}
 
-        .current-time {
-            color: #447354;
-            font-size: 10px;
 
-            font-weight: 700;
+/* =========================================================
+   CUSTOMER NOTIFICATION DROPDOWN
+========================================================= */
 
-            margin-top: 2px;
-        }
+.customer-notification-dropdown {
 
-        .user-chevron {
-            color: #65756c;
-            font-size: 11px;
-            margin-left: 3px;
-        }
+    position:
+        absolute;
+
+    top:
+        100%;
+
+    right:
+        0;
+
+    margin-top:
+        10px;
+
+    width:
+        380px;
+
+    max-height:
+        500px;
+
+    background:
+        #ffffff;
+
+    border:
+        1px solid #e0e4e0;
+
+    border-radius:
+        12px;
+
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.12);
+
+    z-index:
+        1000;
+
+    overflow:
+        hidden;
+}
+
+.customer-notification-dropdown.hidden {
+
+    display:
+        none;
+}
+
+.customer-notification-dropdown-header {
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        space-between;
+
+    padding:
+        16px 20px;
+
+    border-bottom:
+        1px solid #e8ebe7;
+
+    background:
+        #f7f6f2;
+}
+
+.customer-panel-title-group {
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    gap:
+        10px;
+}
+
+.customer-panel-title-icon {
+
+    width:
+        32px;
+
+    height:
+        32px;
+
+    border-radius:
+        8px;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    background:
+        #527d59;
+
+    color:
+        #ffffff;
+
+    font-size:
+        0.9rem;
+}
+
+.customer-dashboard-panel-title {
+
+    font-size:
+        0.95rem;
+
+    font-weight:
+        700;
+
+    color:
+        #214f2c;
+}
+
+.customer-mark-all-link {
+
+    font-size:
+        0.8rem;
+
+    font-weight:
+        600;
+
+    color:
+        #527d59;
+
+    cursor:
+        pointer;
+
+    text-decoration:
+        none;
+
+    transition:
+        0.2s ease;
+}
+
+.customer-mark-all-link:hover {
+
+    color:
+        #214f2c;
+
+    text-decoration:
+        underline;
+}
+
+.customer-notification-list {
+
+    max-height:
+        420px;
+
+    overflow-y:
+        auto;
+
+    overflow-x:
+        hidden;
+}
+
+.customer-notification-item {
+
+    display:
+        flex;
+
+    align-items:
+        flex-start;
+
+    gap:
+        12px;
+
+    padding:
+        16px 20px;
+
+    border-bottom:
+        1px solid #f0f2ef;
+
+    transition:
+        0.2s ease;
+
+    cursor:
+        default;
+}
+
+.customer-notification-item:hover {
+
+    background:
+        #f9faf8;
+}
+
+.customer-notification-item.unread {
+
+    background:
+        #f0f5e9;
+}
+
+.customer-notification-item.unread:hover {
+
+    background:
+        #e9f0df;
+}
+
+.customer-notification-icon {
+
+    width:
+        36px;
+
+    height:
+        36px;
+
+    min-width:
+        36px;
+
+    border-radius:
+        10px;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    font-size:
+        0.95rem;
+}
+
+.customer-notification-icon.success {
+
+    background:
+        #dcfce7;
+
+    color:
+        #166534;
+}
+
+.customer-notification-icon.alert {
+
+    background:
+        #fee2e2;
+
+    color:
+        #991b1b;
+}
+
+.customer-notification-icon.info {
+
+    background:
+        #dbeafe;
+
+    color:
+        #1e40af;
+}
+
+.customer-notification-icon.warning {
+
+    background:
+        #fef3c7;
+
+    color:
+        #92400e;
+}
+
+.customer-notification-content {
+
+    flex:
+        1;
+
+    min-width:
+        0;
+}
+
+.customer-notification-title {
+
+    font-size:
+        0.85rem;
+
+    font-weight:
+        700;
+
+    color:
+        #214f2c;
+
+    margin-bottom:
+        4px;
+
+    line-height:
+        1.3;
+}
+
+.customer-notification-item.unread .customer-notification-title {
+
+    color:
+        #1a4023;
+}
+
+.customer-notification-description {
+
+    font-size:
+        0.8rem;
+
+    color:
+        #5c665f;
+
+    line-height:
+        1.4;
+
+    margin-bottom:
+        6px;
+}
+
+.customer-notification-time {
+
+    font-size:
+        0.72rem;
+
+    color:
+        #8b968f;
+
+    font-weight:
+        500;
+}
+
+.customer-notification-empty {
+
+    display:
+        flex;
+
+    flex-direction:
+        column;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    padding:
+        40px 20px;
+
+    color:
+        #8b968f;
+}
+
+.customer-notification-empty i {
+
+    font-size:
+        2rem;
+
+    margin-bottom:
+        12px;
+
+    opacity:
+        0.6;
+}
+
+.customer-notification-empty p {
+
+    font-size:
+        0.85rem;
+
+    margin:
+        0;
+}
+
+.customer-mark-read-btn {
+
+    padding:
+        6px 12px;
+
+    font-size:
+        0.75rem;
+
+    font-weight:
+        600;
+
+    color:
+        #527d59;
+
+    background:
+        #f0f5e9;
+
+    border:
+        1px solid #dce4d5;
+
+    border-radius:
+        6px;
+
+    cursor:
+        pointer;
+
+    transition:
+        0.2s ease;
+
+    margin-left:
+        auto;
+}
+
+.customer-mark-read-btn:hover {
+
+    background:
+        #e9f0df;
+
+    border-color:
+        #cdd6c5;
+}
+
+
+/* =========================================================
+   HEADER DIVIDER
+========================================================= */
+
+.customer-topbar-divider {
+
+    width:
+        1px;
+
+    height:
+        42px;
+
+    background:
+        #deded8;
+}
+
+
+/* =========================================================
+   CUSTOMER PROFILE
+========================================================= */
+
+.customer-top-profile {
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    gap:
+        11px;
+
+    min-width:
+        190px;
+
+    text-decoration:
+        none;
+
+    color:
+        #3f4b45;
+}
+
+
+/* =========================================================
+   CUSTOMER AVATAR
+========================================================= */
+
+.customer-avatar {
+
+    width:
+        54px;
+
+    height:
+        54px;
+
+    min-width:
+        54px;
+
+    border-radius:
+        50%;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    background:
+        #e8ebe7;
+
+    border:
+        1px solid #d9ddd8;
+
+    color:
+        #527d59;
+
+    font-size:
+        1.25rem;
+
+    box-shadow:
+        0 2px 6px
+        rgba(
+            0,
+            0,
+            0,
+            0.04
+        );
+}
+
+
+/* =========================================================
+   CUSTOMER ACCOUNT DETAILS
+========================================================= */
+
+.customer-account-details {
+
+    display:
+        flex;
+
+    flex-direction:
+        column;
+
+    justify-content:
+        center;
+
+    min-width:
+        100px;
+}
+
+
+/* =========================================================
+   CUSTOMER NAME
+========================================================= */
+
+.customer-top-name {
+
+    display:
+        block;
+
+    margin:
+        0;
+
+    color:
+        #3f4b45;
+
+    font-size:
+        0.88rem;
+
+    font-weight:
+        700;
+
+    line-height:
+        1.2;
+}
+
+
+/* =========================================================
+   DATE AND LIVE TIME
+========================================================= */
+
+.customer-date-time {
+
+    display:
+        flex;
+
+    flex-direction:
+        column;
+
+    align-items:
+        flex-start;
+
+    gap:
+        2px;
+
+    margin-top:
+        5px;
+
+    white-space:
+        nowrap;
+}
+
+
+.customer-date {
+
+    font-size:
+        0.63rem;
+
+    color:
+        #8a9590;
+
+    line-height:
+        1.2;
+}
+
+
+.customer-time {
+
+    font-size:
+        0.63rem;
+
+    color:
+        #527d59;
+
+    font-weight:
+        600;
+
+    line-height:
+        1.2;
+
+    white-space:
+        nowrap;
+}
+
+
+/* =========================================================
+   DROPDOWN ICON
+========================================================= */
+
+.customer-dropdown-icon {
+
+    width:
+        28px;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    color:
+        #65716b;
+
+    font-size:
+        0.7rem;
+}
 
         /* =====================================================
            NOTIFICATION DROPDOWN
@@ -810,10 +1491,12 @@ function getPaginationUrl($page_num)
         ===================================================== */
 
         .history-body {
-            padding: 26px 28px 30px;
-            background-color: #ffffff;
-        }
+    padding: 26px 28px 30px;
+    background-color: #ffffff;
 
+    border-radius:
+        0 0 22px 22px;
+}
         /* =====================================================
            STAT CARDS
         ===================================================== */
@@ -933,576 +1616,632 @@ function getPaginationUrl($page_num)
             font-size: 17px;
             color: #315d68;
         }
+/* =====================================================
+   SEARCH / FILTER TOOLBAR
+===================================================== */
 
-        /* =====================================================
-           TOOLBAR
-        ===================================================== */
+.history-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    margin: 0 0 10px 0;
+    padding: 0;
+}
 
-        .history-toolbar {
-            min-height: 64px;
 
-            border-top: 1px solid #e7e5df;
-            border-bottom: 1px solid #e7e5df;
+/* =====================================================
+   SEARCH BOX
+===================================================== */
 
-            display: flex;
-            align-items: center;
+.search-box {
+    position: relative;
+     flex: 0 0 50%;
+    min-width: 180px;
+}
 
-            gap: 12px;
+.search-box i {
+    position: absolute;
+    left: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #718279;
+    font-size: 10px;
+    pointer-events: none;
+}
 
-            margin-top: 5px;
+.search-box input {
+    width: 100%;
+    height: 35px;
 
-            padding: 11px 0;
-        }
+    padding: 0 10px 0 30px;
 
-        /* List button from your reference image */
+    border: 1px solid #d9ded9;
+    border-radius: 8px;
 
-        .list-button {
-            width: 57px;
-            height: 45px;
+    background: #ffffff;
+    color: #52645a;
 
-            flex-shrink: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
 
-            background: #fafaf7;
+    outline: none;
+}
 
-            border: 1px solid #e2e2dc;
+.search-box input::placeholder {
+    color: #8a9790;
+}
 
-            border-radius: 10px;
+.search-box input:focus {
+    border-color: #8aa995;
 
-            color: #4b7561;
+    box-shadow:
+        0 0 0 2px rgba(82, 125, 89, 0.08);
+}
 
-            display: flex;
-            align-items: center;
-            justify-content: center;
 
-            cursor: pointer;
+/* =====================================================
+   FILTER SELECT
+===================================================== */
 
-            transition: 0.2s ease;
-        }
+.filter-select {
+    height: 35px;
 
-        .list-button:hover {
-            background: #eef3eb;
-            border-color: #ccd8ce;
-        }
+    width: 117px;
 
-        .list-button i {
-            font-size: 19px;
-        }
+    flex: 0 0 117px;
 
-        /* =====================================================
-           SEARCH
-        ===================================================== */
+    padding: 0 24px 0 10px;
 
-        .search-box {
-            position: relative;
+    border: 1px solid #d9ded9;
+    border-radius: 8px;
 
-            flex: 1;
+    background-color: #ffffff;
 
-            min-width: 180px;
-            max-width: 455px;
-        }
+    color: #53665c;
 
-        .search-box i {
-            position: absolute;
+    font-family: Arial, Helvetica, sans-serif;
 
-            left: 14px;
-            top: 50%;
+    font-size: 10px;
+    font-weight: 600;
 
-            transform: translateY(-50%);
+    outline: none;
 
-            color: #8b9991;
+    cursor: pointer;
+}
 
-            font-size: 14px;
-        }
+.filter-select:focus {
+    border-color: #8aa995;
 
-        .search-box input {
-            width: 100%;
+    box-shadow:
+        0 0 0 2px rgba(82, 125, 89, 0.08);
+}
+/* =====================================================
+   CLEAR FILTER BUTTON
+===================================================== */
 
-            height: 45px;
+.clear-filter-button {
+    height: 35px;
 
-            border: 1px solid #dedfd9;
+    width: 68px;
 
-            background: #fbfbf9;
+    flex: 0 0 68px;
 
-            border-radius: 10px;
+    border: 1px solid #cfd8d1;
 
-            padding:
-                0 14px 0 39px;
+    border-radius: 8px;
 
-            color: #4b5d54;
+    background: #ffffff;
 
-            font-size: 12px;
+    color: #52705f;
 
-            outline: none;
-        }
+    font-family: Arial, Helvetica, sans-serif;
 
-        .search-box input::placeholder {
-            color: #9aa39e;
-        }
+    font-size: 10px;
 
-        .search-box input:focus {
-            border-color: #9db6a3;
+    font-weight: 700;
 
-            background: #ffffff;
+    cursor: pointer;
 
-            box-shadow:
-                0 0 0 3px rgba(83, 121, 94, 0.08);
-        }
+    display: inline-flex;
 
-        /* =====================================================
-           SELECT FILTERS
-        ===================================================== */
+    align-items: center;
 
-        .filter-select {
-            width: 145px;
-            height: 45px;
+    justify-content: center;
 
-            border: 1px solid #dedfd9;
+    gap: 5px;
 
-            background: #fbfbf9;
+    transition: 0.15s ease;
+}
 
-            border-radius: 10px;
+.clear-filter-button i {
+    font-size: 10px;
+}
 
-            padding: 0 35px 0 13px;
+.clear-filter-button:hover {
+    background: #edf4ee;
 
-            color: #52645a;
+    border-color: #9eb4a4;
 
-            font-size: 12px;
-            font-weight: 600;
+    color: #315f49;
+}
 
-            outline: none;
+/* =====================================================
+   TABLE CARD
+===================================================== */
 
-            cursor: pointer;
-        }
+.table-card {
+    width: 100%;
 
-        .filter-select:focus {
-            border-color: #9db6a3;
+    background: #ffffff;
 
-            box-shadow:
-                0 0 0 3px rgba(83, 121, 94, 0.08);
-        }
+    border: 1px solid #dfe4df;
 
-        /* =====================================================
-           TABLE CARD
-        ===================================================== */
+    border-radius: 10px;
 
-        .table-card {
-            margin-top: 17px;
+    overflow: hidden;
 
-            background: #ffffff;
+    box-shadow:
+        0 1px 5px rgba(40, 60, 45, 0.035);
+}
 
-            border: 1px solid #e4e4df;
+.table-scroll {
+    width: 100%;
+    overflow-x: auto;
+}
 
-            border-radius: 12px;
 
-            overflow: hidden;
+/* =====================================================
+   TABLE
+===================================================== */
 
-            box-shadow:
-                0 2px 8px rgba(60, 70, 62, 0.04);
-        }
+table {
+    width: 100%;
 
-        .table-scroll {
-            width: 100%;
-            overflow-x: auto;
-        }
+    min-width: 760px;
 
-        table {
-            width: 100%;
+    border-collapse: collapse;
 
-            border-collapse: collapse;
+    table-layout: fixed;
+}
 
-            min-width: 900px;
-        }
 
-        /* =====================================================
-           TABLE HEADER
-        ===================================================== */
+/* =====================================================
+   TABLE HEADER
+===================================================== */
 
-        thead {
-            background: #edf3e7;
-        }
+thead {
+    background: #e8eee8;
+}
 
-        thead th {
-            padding: 13px 15px;
+thead th {
+    height: 34px;
 
-            color: #4d6659;
+    padding: 7px 10px;
 
-            font-size: 10px;
+    color: #42594d;
 
-            font-weight: 800;
+    font-size: 13px;
 
-            text-align: left;
+    font-weight: 800;
 
-            white-space: nowrap;
+    text-align: left;
 
-            border-bottom: 1px solid #dfe6dc;
-        }
+    white-space: nowrap;
 
-        /* =====================================================
-           TABLE BODY
-        ===================================================== */
+    border-bottom: 1px solid #d9e0da;
+}
 
-        tbody tr {
-            background: #ffffff;
 
-            transition: 0.15s ease;
-        }
+/* =====================================================
+   COLUMN WIDTHS
+===================================================== */
 
-        tbody tr:hover {
-            background: #fafcf9;
-        }
+thead th:nth-child(1) {
+    width: 22%;
+}
 
-        tbody td {
-            padding: 13px 15px;
+thead th:nth-child(2) {
+    width: 13%;
+}
 
-            border-bottom: 1px solid #eeeeea;
+thead th:nth-child(3) {
+    width: 13%;
+}
 
-            color: #607069;
+thead th:nth-child(4) {
+    width: 14%;
+}
 
-            font-size: 11px;
+thead th:nth-child(5) {
+    width: 14%;
+}
 
-            vertical-align: middle;
-        }
+thead th:nth-child(6) {
+    width: 10%;
+}
 
-        tbody tr:last-child td {
-            border-bottom: none;
-        }
+thead th:nth-child(7) {
+    width: 9%;
+}
 
-        .reservation-code {
-            color: #416957;
+thead th:nth-child(8) {
+    width: 11%;
+}
 
-            font-weight: 800;
 
-            font-size: 10px;
+/* =====================================================
+   TABLE BODY
+===================================================== */
 
-            white-space: nowrap;
-        }
+tbody tr {
+    background: #ffffff;
 
-        .date-main {
-            color: #52675d;
+    transition: background 0.15s ease;
+}
 
-            font-size: 11px;
+tbody tr:hover {
+    background: #fafcf9;
+}
 
-            font-weight: 700;
+tbody td {
+    height: 39px;
 
-            white-space: nowrap;
-        }
+    padding: 5px 10px;
 
-        .date-time {
-            color: #89948f;
+    color: #65746d;
 
-            font-size: 9px;
+    font-size: 13px;
 
-            margin-top: 3px;
+    vertical-align: middle;
 
-            white-space: nowrap;
-        }
+    border-bottom: 1px solid #ecefea;
+}
 
-        .egg-size-list {
-            display: flex;
+tbody tr:last-child td {
+    border-bottom: none;
+}
 
-            flex-direction: column;
 
-            gap: 5px;
+/* =====================================================
+   RESERVATION CODE
+===================================================== */
 
-            min-width: 105px;
-        }
+.reservation-code {
+    display: flex;
 
-        .egg-size-row {
-            display: flex;
+    align-items: center;
 
-            align-items: center;
+    gap: 5px;
 
-            gap: 5px;
-        }
+    color: #35684d;
 
-        .egg-badge {
-            display: inline-flex;
+    font-size: 13px;
 
-            align-items: center;
+    font-weight: 800;
 
-            padding: 4px 8px;
+    white-space: nowrap;
+}
 
-            border-radius: 20px;
+.reservation-code:before {
+    content: "\f073";
 
-            font-size: 9px;
+    font-family: "Font Awesome 6 Free";
 
-            font-weight: 700;
+    font-weight: 900;
 
-            white-space: nowrap;
-        }
+    font-size: 11px;
 
-        .egg-quantity {
-            color: #718079;
+    color: #315e4a;
+}
 
-            font-size: 9px;
 
-            font-weight: 700;
+/* =====================================================
+   SIZE
+===================================================== */
 
-            white-space: nowrap;
-        }
+.size-value {
+    color: #5e7067;
 
-        .trays-value {
-            color: #456354;
+    font-size: 13px;
 
-            font-size: 13px;
+    font-weight: 600;
 
-            font-weight: 800;
+    white-space: nowrap;
+}
 
-            text-align: center;
-        }
 
-        .amount-value {
-            color: #35634a;
+/* =====================================================
+   TOTAL QUANTITY
+===================================================== */
 
-            font-size: 12px;
+.trays-value {
+    color: #65736c;
 
-            font-weight: 800;
+    font-size: 13px;
 
-            white-space: nowrap;
-        }
+    font-weight: 600;
 
-        .method-badge {
-            display: inline-flex;
+    white-space: nowrap;
+}
 
-            align-items: center;
 
-            padding: 5px 10px;
+/* =====================================================
+   METHOD
+===================================================== */
 
-            border-radius: 20px;
+.method-cell {
+    white-space: nowrap;
+}
 
-            font-size: 9px;
+.method-display {
+    display: inline-flex;
 
-            font-weight: 700;
+    align-items: center;
 
-            white-space: nowrap;
-        }
+    gap: 7px;
 
-        .method-delivery {
-            background: #e8f1f4;
-            color: #397081;
-            border: 1px solid #d5e5e9;
-        }
+    color: #53655c;
 
-        .method-pickup {
-            background: #eee9f4;
-            color: #70578a;
-            border: 1px solid #e1d8ea;
-        }
+    font-size: 13px;
 
-        /* =====================================================
-           STATUS
-        ===================================================== */
+    font-weight: 600;
 
-        .status-badge {
-            display: inline-flex;
+    white-space: nowrap;
+}
 
-            align-items: center;
-            justify-content: center;
+.method-display i {
+    width: 13px;
 
-            padding: 5px 11px;
+    color: #1f5b43;
 
-            border-radius: 20px;
+    font-size: 9px;
 
-            font-size: 9px;
+    text-align: center;
+}
 
-            font-weight: 800;
 
-            white-space: nowrap;
-        }
+/* =====================================================
+   DATE
+===================================================== */
 
-        .status-pending {
-            background: #faf0d6;
-            color: #a07a27;
-            border: 1px solid #f0dfb2;
-        }
+.date-main {
+    color: #596a61;
 
-        .status-confirmed {
-            background: #e7f2e7;
-            color: #4c8757;
-            border: 1px solid #d3e7d3;
-        }
+    font-size: 13px;
 
-        .status-delivered {
-            background: #e4f0f7;
-            color: #3978a5;
-            border: 1px solid #d2e4ef;
-        }
+    font-weight: 600;
 
-        .status-cancelled {
-            background: #fae8e6;
-            color: #bf5b51;
-            border: 1px solid #f1d3cf;
-        }
+    white-space: nowrap;
+}
 
-        .status-completed {
-            background: #e7f2e7;
-            color: #4c8757;
-            border: 1px solid #d3e7d3;
-        }
+.date-time {
+    margin-top: 2px;
 
-        /* =====================================================
-           ACTIONS
-        ===================================================== */
+    color: #819088;
 
-        .actions-cell {
-            white-space: nowrap;
-        }
+    font-size: 11px;
 
-        .actions-wrapper {
-            display: flex;
+    white-space: nowrap;
+}
 
-            align-items: center;
 
-            justify-content: center;
+/* =====================================================
+   TOTAL
+===================================================== */
 
-            gap: 6px;
-        }
+.amount-value {
+    color: #596b62;
 
-        .action-button {
-            width: 32px;
-            height: 32px;
+    font-size: 13px;
 
-            border-radius: 8px;
+    font-weight: 600;
 
-            border: none;
+    white-space: nowrap;
+}
 
-            display: inline-flex;
 
-            align-items: center;
-            justify-content: center;
+/* =====================================================
+   STATUS
+===================================================== */
 
-            cursor: pointer;
+.status-badge {
+    display: inline-flex;
 
-            transition: 0.2s ease;
+    align-items: center;
+    justify-content: center;
 
-            font-size: 12px;
-        }
+    min-width: 51px;
 
-        .print-button {
-            background: #e8f1ea;
-            color: #38704c;
-            border: 1px solid #d4e4d7;
-        }
+    height: 20px;
 
-        .print-button:hover {
-            background: #dceadd;
-        }
+    padding: 3px 9px;
 
-        .cancel-button {
-            background: #f8e8e6;
-            color: #bb5a50;
-            border: 1px solid #efd3cf;
-        }
+    border-radius: 20px;
 
-        .cancel-button:hover {
-            background: #f4dcd9;
-        }
+    font-size: 11px;
 
-        /* =====================================================
-           EMPTY STATE
-        ===================================================== */
+    font-weight: 800;
 
-        .empty-state {
-            padding: 55px 20px;
+    white-space: nowrap;
 
-            text-align: center;
+    border: none;
+}
 
-            color: #98a39e;
 
-            font-size: 11px;
-        }
+/* COMPLETED */
 
-        .empty-state i {
-            display: block;
+.status-completed {
+    background: #cfead8;
 
-            font-size: 29px;
+    color: #438052;
+}
 
-            margin-bottom: 10px;
 
-            color: #ccd3ce;
-        }
+/* CANCELLED */
 
-        /* =====================================================
-           TABLE FOOTER
-        ===================================================== */
+.status-cancelled {
+    background: #f8dddd;
 
-        .table-footer {
-            padding: 12px 16px;
+    color: #b95750;
+}
 
-            background: #fafaf7;
 
-            border-top: 1px solid #ecece7;
+/* =====================================================
+   ACTION
+===================================================== */
 
-            display: flex;
+.actions-cell {
+    text-align: center;
 
-            align-items: center;
+    white-space: nowrap;
+}
 
-            justify-content: space-between;
+.actions-wrapper {
+    display: flex;
 
-            gap: 15px;
+    align-items: center;
 
-            color: #929d97;
+    justify-content: center;
 
-            font-size: 10px;
-        }
+    gap: 4px;
+}
 
-        .footer-number {
-            color: #65736c;
-            font-weight: 700;
-        }
+.action-button {
+    height: 27px;
 
-        .pagination {
-            display: flex;
+    border-radius: 7px;
 
-            align-items: center;
+    display: inline-flex;
 
-            gap: 4px;
-        }
+    align-items: center;
 
-        .pagination a {
-            width: 31px;
-            height: 31px;
+    justify-content: center;
 
-            border-radius: 7px;
+    cursor: pointer;
 
-            border: 1px solid #e1e2dc;
+    font-family: Arial, Helvetica, sans-serif;
 
-            background: #ffffff;
+    font-size: 11px;
 
-            color: #63736a;
+    font-weight: 700;
 
-            text-decoration: none;
+    transition: 0.15s ease;
+}
 
-            display: flex;
 
-            align-items: center;
-            justify-content: center;
+/* =====================================================
+   PRINT BUTTON
+===================================================== */
 
-            font-size: 10px;
+.print-button {
+    width: 58px;
 
-            font-weight: 700;
-        }
+    background: #ffffff;
 
-        .pagination a:hover {
-            background: #f1f4ef;
-        }
+    color: #315f49;
 
-        .pagination a.active {
-            background: #214f2c;
+    border: 1px solid #2f684d;
+}
 
-            border-color: #214f2c;
+.print-button i {
+    margin-right: 4px;
 
-            color: #ffffff;
-        }
+    font-size: 10px;
+}
 
-        .pagination a.disabled {
-            color: #c0c5c1;
+.print-button:hover {
+    background: #edf5ef;
+}
 
-            background: #f7f7f4;
 
-            pointer-events: none;
-        }
+/* =====================================================
+   TABLE FOOTER
+===================================================== */
 
+.table-footer {
+    min-height: 40px;
+
+    padding: 7px 9px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    background: #ffffff;
+
+    border-top: 1px solid #ecefea;
+
+    color: #829089;
+
+    font-size: 8px;
+}
+
+.footer-number {
+    color: #66776e;
+
+    font-weight: 700;
+}
+
+
+/* =====================================================
+   PAGINATION
+===================================================== */
+
+.pagination {
+    display: flex;
+
+    align-items: center;
+
+    gap: 4px;
+}
+
+.pagination a {
+    width: 23px;
+    height: 23px;
+
+    border-radius: 50%;
+
+    border: 1px solid #dfe3df;
+
+    background: #ffffff;
+
+    color: #63736a;
+
+    text-decoration: none;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    font-size: 8px;
+
+    font-weight: 700;
+}
+
+.pagination a:hover {
+    background: #f1f4f1;
+}
+
+.pagination a.active {
+    background: #214f2c;
+
+    border-color: #214f2c;
+
+    color: #ffffff;
+}
+
+.pagination a.disabled {
+    color: #c0c7c2;
+
+    background: #f8f9f7;
+
+    pointer-events: none;
+}
         /* =====================================================
            CANCEL MODAL
         ===================================================== */
@@ -1635,59 +2374,64 @@ function getPaginationUrl($page_num)
            PRINT
         ===================================================== */
 
-        @media print {
+     @media print {
 
-            @page {
-                size: portrait;
-                margin: 0;
-            }
+    @page {
+        size: 80mm auto;
+        margin: 0;
+    }
 
-            html,
-            body {
-                height: 100%;
-                margin: 0;
-                padding: 0;
+    html,
+    body {
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 80mm !important;
+        background: #ffffff !important;
+    }
 
-                background: #ffffff !important;
-            }
+    body * {
+        visibility: hidden;
+    }
 
-            body * {
-                visibility: hidden;
-            }
+    #receipt-print-window,
+    #receipt-print-window * {
+        visibility: visible;
+    }
 
-            #receipt-print-window,
-            #receipt-print-window * {
-                visibility: visible;
+    #receipt-print-window {
+        position: absolute;
+        left: 0;
+        top: 0;
+display:none;
+        width: 80mm !important;
+        height: auto !important;
+        min-height: 0 !important;
 
-                display: block !important;
+        padding: 5mm !important;
+        margin: 0 !important;
 
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-            }
+        background: #ffffff !important;
+        color: #000000 !important;
 
-            #receipt-print-window {
-                position: absolute;
+        box-sizing: border-box;
+    }
 
-                left: 0;
-                top: 0;
+    #receipt-print-window > div {
+        width: 100% !important;
+        max-width: none !important;
+        min-height: 0 !important;
 
-                width: 100%;
-                height: 100vh;
+        margin: 0 !important;
+        padding: 0 !important;
 
-                padding: 30px;
+        border: none !important;
+        box-shadow: none !important;
+    }
 
-                box-sizing: border-box;
-
-                background: white !important;
-
-                color: black;
-            }
-
-            .no-print {
-                display: none !important;
-            }
-
-        }
+    .no-print {
+        display: none !important;
+    }
+}
 
     </style>
 
@@ -1703,239 +2447,114 @@ function getPaginationUrl($page_num)
 
         <div class="history-card">
 
-            <!-- =================================================
-                 HEADER
-            ================================================== -->
+       <!-- =====================================================
+     CUSTOMER DASHBOARD TOPBAR
+===================================================== -->
 
-            <div class="history-header">
+<div class="customer-dashboard-topbar">
 
-                <div class="history-title-wrap">
+    <div class="customer-page-title">
+        Reservation History
+    </div>
 
-                    <div class="history-title-icon">
-                        <i class="fa-solid fa-clock-rotate-left"></i>
+    <div class="customer-topbar-right">
+
+        <!-- NOTIFICATION -->
+
+        <div style="position: relative;">
+            <button
+                type="button"
+                class="customer-top-notification"
+                title="Notifications"
+                onclick="event.stopPropagation(); toggleCustomerNotificationDropdown()"
+            >
+                <i class="fa-regular fa-bell"></i>
+                <?php if ($unread_count > 0): ?>
+                    <span class="customer-notification-badge"><?php echo $unread_count > 99 ? '99+' : $unread_count; ?></span>
+                <?php endif; ?>
+            </button>
+
+            <!-- NOTIFICATION DROPDOWN -->
+            <div
+                class="customer-notification-dropdown hidden"
+                id="customerNotificationDropdown"
+            >
+                <div class="customer-notification-dropdown-header">
+                    <div class="customer-panel-title-group">
+                        <div class="customer-panel-title-icon">
+                            <i class="fa-solid fa-bell"></i>
+                        </div>
+                        <div class="customer-dashboard-panel-title">
+                            Notifications
+                        </div>
                     </div>
-
-                    <h1 class="history-title">
-                        Reservation History
-                    </h1>
-
+                    <a class="customer-mark-all-link" onclick="markAllCustomerAsRead(event)">
+                        Mark All as Read
+                    </a>
                 </div>
 
+                <div class="customer-notification-list" id="customerNotificationList">
+                    <!-- Notifications will be loaded here via JavaScript -->
+                </div>
+            </div>
+        </div>
 
-                <!-- HEADER RIGHT -->
+        <!-- DIVIDER -->
 
-                <div class="header-right">
+        <div class="customer-topbar-divider"></div>
 
-                    <!-- NOTIFICATION -->
+        <!-- CUSTOMER PROFILE -->
 
-                    <div class="notification-area">
+        <a
+            href="customer_profile.php"
+            class="customer-top-profile"
+        >
 
-                        <button
-                            type="button"
-                            onclick="toggleNotifications(event)"
-                            class="notification-button"
-                            title="Notifications"
-                        >
+            <!-- AVATAR -->
 
-                            <i class="fa-regular fa-bell"></i>
+            <div class="customer-avatar">
+                <i class="fa-solid fa-user"></i>
+            </div>
 
-                            <?php if ($unread_count > 0): ?>
+            <!-- CUSTOMER DETAILS -->
 
-                                <span
-                                    id="bell_badge"
-                                    class="notification-badge"
-                                >
-                                    <?php echo $unread_count > 9 ? '9+' : $unread_count; ?>
-                                </span>
+            <div class="customer-account-details">
 
-                            <?php endif; ?>
+                <span class="customer-top-name">
+                    Customer
+                </span>
 
-                        </button>
+                <div class="customer-date-time">
 
+                    <span
+                        class="customer-date"
+                        id="customer-live-date"
+                    >
+                        <?php echo date('F j, Y'); ?>
+                    </span>
 
-                        <!-- NOTIFICATION DROPDOWN -->
-
-                        <div
-                            id="notification_dropdown"
-                            class="hidden"
-                        >
-
-                            <div class="notification-header">
-
-                                <span class="notification-header-title">
-                                    Notifications
-                                </span>
-
-                                <span
-                                    id="unread_count"
-                                    class="notification-new-count <?php echo $unread_count > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'; ?>"
-                                >
-                                    <?php
-                                    echo $unread_count > 0
-                                        ? $unread_count . ' New'
-                                        : '0 New';
-                                    ?>
-                                </span>
-
-                            </div>
-
-
-                            <div
-                                id="notification_list"
-                                style="max-height: 300px; overflow-y: auto;"
-                            >
-
-                                <?php if (!empty($notifications)): ?>
-
-                                    <?php foreach ($notifications as $notif): ?>
-
-                                        <?php
-
-                                        $icon_bg =
-                                            'background:#e7f0e9;color:#467452;';
-
-                                        $icon_fa =
-                                            'fa-solid fa-circle-info';
-
-                                        if ($notif['type'] === 'success') {
-
-                                            $icon_bg =
-                                                'background:#e4f1e5;color:#478354;';
-
-                                            $icon_fa =
-                                                'fa-solid fa-circle-check';
-
-                                        } elseif ($notif['type'] === 'alert') {
-
-                                            $icon_bg =
-                                                'background:#fae7e4;color:#bb5d52;';
-
-                                            $icon_fa =
-                                                'fa-solid fa-triangle-exclamation';
-                                        }
-
-                                        ?>
-
-                                        <div class="notification-item">
-
-                                            <div
-                                                class="notification-icon"
-                                                style="<?php echo $icon_bg; ?>"
-                                            >
-                                                <i
-                                                    class="<?php echo $icon_fa; ?>"
-                                                ></i>
-                                            </div>
-
-                                            <div style="flex:1; min-width:0;">
-
-                                                <div class="notification-title-text">
-                                                    <?php
-                                                    echo htmlspecialchars(
-                                                        $notif['title']
-                                                    );
-                                                    ?>
-                                                </div>
-
-                                                <div class="notification-description">
-                                                    <?php
-                                                    echo htmlspecialchars(
-                                                        $notif['description']
-                                                    );
-                                                    ?>
-                                                </div>
-
-                                                <div class="notification-time">
-                                                    <?php
-                                                    echo date(
-                                                        'M d, g:i a',
-                                                        strtotime(
-                                                            $notif['created_at']
-                                                        )
-                                                    );
-                                                    ?>
-                                                </div>
-
-                                            </div>
-
-                                        </div>
-
-                                    <?php endforeach; ?>
-
-                                <?php else: ?>
-
-                                    <div
-                                        style="
-                                            padding:35px 15px;
-                                            text-align:center;
-                                            color:#a2aaa5;
-                                            font-size:11px;
-                                        "
-                                    >
-
-                                        <i
-                                            class="fa-regular fa-bell-slash"
-                                            style="
-                                                display:block;
-                                                font-size:23px;
-                                                margin-bottom:8px;
-                                                color:#cbd1cd;
-                                            "
-                                        ></i>
-
-                                        No new notifications
-
-                                    </div>
-
-                                <?php endif; ?>
-
-                            </div>
-
-                        </div>
-
-                    </div>
-
-
-                    <!-- USER -->
-
-                    <div class="user-area">
-
-                        <div class="user-avatar">
-                            <i class="fa-regular fa-user"></i>
-                        </div>
-
-                        <div class="user-info">
-
-                            <div class="user-name">
-                                <?php
-                                echo htmlspecialchars(
-                                    $current_user_name
-                                );
-                                ?>
-                            </div>
-
-                            <div class="current-date">
-                                <?php
-                                echo date('F j, Y');
-                                ?>
-                            </div>
-
-                            <div
-                                id="liveTime"
-                                class="current-time"
-                            >
-                                <?php echo date('h:i:s A'); ?>
-                            </div>
-
-                        </div>
-
-                        <i class="fa-solid fa-chevron-down user-chevron"></i>
-
-                    </div>
+                    <span
+                        class="customer-time"
+                        id="customer-live-time"
+                    >
+                        <?php echo date('h:i:s A'); ?>
+                    </span>
 
                 </div>
 
             </div>
+
+            <!-- DROPDOWN -->
+
+            <div class="customer-dropdown-icon">
+                <i class="fa-solid fa-chevron-down"></i>
+            </div>
+
+        </a>
+
+    </div>
+
+</div>
 
 
             <!-- =================================================
@@ -2034,704 +2653,755 @@ function getPaginationUrl($page_num)
                 </div>
 
 
-                <!-- =================================================
-                     SEARCH / FILTER TOOLBAR
-                ================================================== -->
+               <!-- =================================================
+     SEARCH / FILTER
+================================================== -->
 
-                <form
-                    method="GET"
-                    action=""
-                    id="historyFilterForm"
+<form
+    method="GET"
+    action=""
+    id="historyFilterForm"
+>
+
+    <div class="history-toolbar">
+
+        <!-- SEARCH -->
+
+        <div class="search-box">
+
+            <i class="fa-solid fa-magnifying-glass"></i>
+
+            <input
+                type="text"
+                name="search"
+                value="<?php echo htmlspecialchars($search); ?>"
+                placeholder="Search by reservation code..."
+            >
+
+        </div>
+
+
+        <!-- ALL EGG TYPES -->
+
+        <select
+            name="egg_type"
+            class="filter-select"
+            onchange="document.getElementById('historyFilterForm').submit();"
+        >
+
+            <option value="">
+                All Egg Sizes
+            </option>
+
+            <?php foreach ($egg_options as $option): ?>
+
+                <option
+                    value="<?php echo htmlspecialchars($option); ?>"
+                    <?php
+                    echo $filter_egg === $option
+                        ? 'selected'
+                        : '';
+                    ?>
                 >
 
-                    <div class="history-toolbar">
+                    <?php
+                    echo htmlspecialchars($option);
+                    ?>
 
-                        <!-- LIST ICON -->
+                </option>
 
-                        <button
-                            type="button"
-                            class="list-button"
-                            title="Show All Reservations"
-                            onclick="clearHistoryFilters()"
-                        >
-                            <i class="fa-solid fa-list"></i>
-                        </button>
+            <?php endforeach; ?>
+
+        </select>
 
 
-                        <!-- SEARCH -->
+        <!-- ALL METHODS -->
 
-                        <div class="search-box">
+        <select
+            name="delivery_method"
+            class="filter-select"
+            onchange="document.getElementById('historyFilterForm').submit();"
+        >
 
-                            <i class="fa-solid fa-magnifying-glass"></i>
+            <option value="">
+                All Methods
+            </option>
 
-                            <input
-                                type="text"
-                                name="search"
-                                value="<?php echo htmlspecialchars($search); ?>"
-                                placeholder="Search by reservation code..."
-                            >
+            <option
+                value="Delivery"
+                <?php
+                echo $filter_method === 'Delivery'
+                    ? 'selected'
+                    : '';
+                ?>
+            >
+                Delivery
+            </option>
 
-                        </div>
+            <option
+                value="Pickup"
+                <?php
+                echo $filter_method === 'Pickup'
+                    ? 'selected'
+                    : '';
+                ?>
+            >
+                Pickup
+            </option>
+
+        </select>
+
+<!-- ALL STATUS -->
+
+<select
+    name="status"
+    class="filter-select"
+    onchange="document.getElementById('historyFilterForm').submit();"
+>
+
+    <option value="">
+        All Status
+    </option>
+
+    <option
+        value="Completed"
+        <?php
+        echo $filter_status === 'Completed'
+            ? 'selected'
+            : '';
+        ?>
+    >
+        Completed
+    </option>
+
+    <option
+        value="Cancelled"
+        <?php
+        echo $filter_status === 'Cancelled'
+            ? 'selected'
+            : '';
+        ?>
+    >
+        Cancelled
+    </option>
+
+</select>
 
 
-                        <!-- ALL SIZES -->
+        <!-- DATE RANGE -->
 
-                        <select
-                            name="egg_type"
-                            class="filter-select"
-                            onchange="document.getElementById('historyFilterForm').submit();"
-                        >
+        <select
+            name="date_range"
+            class="filter-select"
+            onchange="document.getElementById('historyFilterForm').submit();"
+        >
 
-                            <option value="">
-                                All Sizes
-                            </option>
+            <option value="">
+                Date Range
+            </option>
 
-                            <?php foreach ($egg_options as $option): ?>
+            <option
+                value="today"
+                <?php
+                echo $filter_date === 'today'
+                    ? 'selected'
+                    : '';
+                ?>
+            >
+                Today
+            </option>
 
-                                <option
-                                    value="<?php echo htmlspecialchars($option); ?>"
-                                    <?php
-                                    echo $filter_egg === $option
-                                        ? 'selected'
-                                        : '';
-                                    ?>
-                                >
-                                    <?php echo htmlspecialchars($option); ?>
-                                </option>
+            <option
+                value="7days"
+                <?php
+                echo $filter_date === '7days'
+                    ? 'selected'
+                    : '';
+                ?>
+            >
+                Last 7 Days
+            </option>
 
-                            <?php endforeach; ?>
+            <option
+                value="30days"
+                <?php
+                echo $filter_date === '30days'
+                    ? 'selected'
+                    : '';
+                ?>
+            >
+                Last 30 Days
+            </option>
 
-                        </select>
+        </select>
+<button
+    type="button"
+    class="clear-filter-button"
+    onclick="clearHistoryFilters()"
+>
+    <i class="fa-solid fa-rotate-left"></i>
+    Clear
+</button>
+    </div>
+
+</form>
 
 
-                        <!-- ALL METHODS -->
+<!-- =================================================
+     TABLE
+================================================== -->
 
-                        <select
-                            name="delivery_method"
-                            class="filter-select"
-                            onchange="document.getElementById('historyFilterForm').submit();"
-                        >
+<div class="table-card">
 
-                            <option value="">
-                                All Methods
-                            </option>
+    <div class="table-scroll">
 
-                            <option
-                                value="Delivery"
+        <table>
+
+           <thead>
+
+    <tr>
+
+        <th>
+            Reservation Code
+        </th>
+
+        <th>
+            Size
+        </th>
+
+        <th>
+            Total Qty
+        </th>
+
+        <th>
+            Method
+        </th>
+
+        <th>
+            Date
+        </th>
+
+        <th>
+            Total
+        </th>
+
+        <th>
+            Status
+        </th>
+
+        <th style="text-align:center;">
+            Action
+        </th>
+
+    </tr>
+
+</thead>
+
+
+            <tbody>
+
+            <?php if (!empty($paged_reservations)): ?>
+
+                <?php foreach ($paged_reservations as $row): ?>
+
+                    <?php
+
+                    // =================================================
+                    // RECEIPT DATA
+                    // =================================================
+
+                    $receipt_json = htmlspecialchars(
+                        json_encode($row),
+                        ENT_QUOTES,
+                        'UTF-8'
+                    );
+
+
+                    // =================================================
+                    // TOTAL QUANTITY
+                    // =================================================
+
+                    $total_qty = 0;
+
+                    foreach ($row['items'] as $item) {
+
+                        $total_qty +=
+                            (int)$item['quantity'];
+                    }
+
+
+                    // =================================================
+                    // IDS
+                    // =================================================
+
+                    $ids_list = implode(
+                        ',',
+                        $row['ids']
+                    );
+
+
+                 // =================================================
+// STATUS
+// HISTORY ONLY: COMPLETED / CANCELLED
+// =================================================
+
+$status = isset($row['status'])
+    ? trim($row['status'])
+    : 'Completed';
+
+$status_lower = strtolower($status);
+
+if (
+    $status_lower === 'cancelled' ||
+    $status_lower === 'canceled'
+) {
+
+    $status = 'Cancelled';
+
+    $status_class = 'status-cancelled';
+
+} else {
+
+    $status = 'Completed';
+
+    $status_class = 'status-completed';
+}
+
+                    // =================================================
+                    // DATE / TIME
+                    // =================================================
+
+                    $date_timestamp =
+                        strtotime(
+                            $row['created_at']
+                        );
+
+                    if (
+                        $date_timestamp === false
+                    ) {
+
+                        $date_timestamp =
+                            strtotime(
+                                $row['reservation_date']
+                            );
+                    }
+
+                    if (
+                        $date_timestamp === false
+                    ) {
+
+                        $date_display =
+                            $row['reservation_date'];
+
+                        $time_display = '';
+
+                    } else {
+
+                        $date_display =
+                            date(
+                                'M j, Y',
+                                $date_timestamp
+                            );
+
+                        $time_display =
+                            date(
+                                'h:i A',
+                                $date_timestamp
+                            );
+                    }
+
+
+                    // =================================================
+                    // METHOD ICON
+                    // =================================================
+
+                    if (
+                        strtolower(
+                            $row['delivery_method']
+                        ) === 'delivery'
+                    ) {
+
+                        $method_icon =
+                            'fa-solid fa-truck';
+
+                    } else {
+
+                        $method_icon =
+                            'fa-solid fa-person-walking';
+                    }
+
+
+                    // =================================================
+                    // SHORT EGG NAMES
+                    // =================================================
+
+                    $egg_short_names = array(
+
+                        'Extra Small' => 'XS',
+                        'Small' => 'S',
+                        'Medium' => 'M',
+                        'Large' => 'L',
+                        'Extra Large' => 'XL',
+                        'Jumbo' => 'J',
+                        'Super Jumbo' => 'SJ',
+                        'Double Yolk' => 'DY'
+
+                    );
+
+                    ?>
+
+                    <tr>
+
+                        <!-- RESERVATION CODE -->
+
+                        <td>
+
+                            <div class="reservation-code">
+
                                 <?php
-                                echo $filter_method === 'Delivery'
-                                    ? 'selected'
-                                    : '';
+                                echo htmlspecialchars(
+                                    $row['reservation_code']
+                                );
                                 ?>
-                            >
-                                Delivery
-                            </option>
-
-                            <option
-                                value="Pickup"
-                                <?php
-                                echo $filter_method === 'Pickup'
-                                    ? 'selected'
-                                    : '';
-                                ?>
-                            >
-                                Pickup
-                            </option>
-
-                        </select>
-
-                    </div>
-
-                </form>
-
-
-                <!-- =================================================
-                     TABLE
-                ================================================== -->
-
-                <div class="table-card">
-
-                    <div class="table-scroll">
-
-                        <table>
-
-                            <thead>
-
-                                <tr>
-
-                                    <th>
-                                        Reservation Code
-                                    </th>
-
-                                    <th>
-                                        Date &amp; Time
-                                    </th>
-
-                                    <th>
-                                        Egg Size
-                                    </th>
-
-                                    <th style="text-align:center;">
-                                        Trays Ordered
-                                    </th>
-
-                                    <th>
-                                        Total Amount
-                                    </th>
-
-                                    <th>
-                                        Delivery Method
-                                    </th>
-
-                                    <th>
-                                        Status
-                                    </th>
-
-                                    <th style="text-align:center;">
-                                        Actions
-                                    </th>
-
-                                </tr>
-
-                            </thead>
-
-
-                            <tbody>
-
-                            <?php if (!empty($paged_reservations)): ?>
-
-                                <?php foreach ($paged_reservations as $row): ?>
-
-                                    <?php
-
-                                    // =================================================
-                                    // RECEIPT DATA
-                                    // =================================================
-
-                                    $receipt_json = htmlspecialchars(
-                                        json_encode($row),
-                                        ENT_QUOTES,
-                                        'UTF-8'
-                                    );
-
-                                    // =================================================
-                                    // TOTAL QUANTITY
-                                    // =================================================
-
-                                    $total_qty = 0;
-
-                                    foreach ($row['items'] as $item) {
-
-                                        $total_qty +=
-                                            (int)$item['quantity'];
-                                    }
-
-                                    // =================================================
-                                    // IDS FOR CANCELLATION
-                                    // =================================================
-
-                                    $ids_list = implode(
-                                        ',',
-                                        $row['ids']
-                                    );
-
-                                    // =================================================
-                                    // STATUS
-                                    // =================================================
-
-                                    $status =
-                                        !empty($row['status'])
-                                        ? $row['status']
-                                        : 'Pending';
-
-                                    $status_class = 'status-pending';
-
-                                    $status_lower =
-                                        strtolower($status);
-
-                                    if (
-                                        $status_lower === 'confirmed'
-                                    ) {
-
-                                        $status_class =
-                                            'status-confirmed';
-
-                                    } elseif (
-                                        $status_lower === 'delivered'
-                                    ) {
-
-                                        $status_class =
-                                            'status-delivered';
-
-                                    } elseif (
-                                        $status_lower === 'cancelled'
-                                        ||
-                                        $status_lower === 'canceled'
-                                    ) {
-
-                                        $status_class =
-                                            'status-cancelled';
-
-                                    } elseif (
-                                        $status_lower === 'completed'
-                                    ) {
-
-                                        $status_class =
-                                            'status-completed';
-                                    }
-
-                                    // =================================================
-                                    // DATE/TIME
-                                    // =================================================
-
-                                    $date_timestamp =
-                                        strtotime(
-                                            $row['created_at']
-                                        );
-
-                                    if (
-                                        $date_timestamp === false
-                                    ) {
-
-                                        $date_timestamp =
-                                            strtotime(
-                                                $row['reservation_date']
-                                            );
-                                    }
-
-                                    if (
-                                        $date_timestamp === false
-                                    ) {
-
-                                        $date_display =
-                                            $row['reservation_date'];
-
-                                        $time_display = '';
-
-                                    } else {
-
-                                        $date_display =
-                                            date(
-                                                'M j, Y',
-                                                $date_timestamp
-                                            );
-
-                                        $time_display =
-                                            date(
-                                                'h:i A',
-                                                $date_timestamp
-                                            );
-                                    }
-
-                                    ?>
-
-                                    <tr>
-
-                                        <!-- RESERVATION CODE -->
-
-                                        <td>
-
-                                            <div class="reservation-code">
-
-                                                <?php
-                                                echo htmlspecialchars(
-                                                    $row['reservation_code']
-                                                );
-                                                ?>
-
-                                            </div>
-
-                                        </td>
-
-
-                                        <!-- DATE & TIME -->
-
-                                        <td>
-
-                                            <div class="date-main">
-
-                                                <?php
-                                                echo htmlspecialchars(
-                                                    $date_display
-                                                );
-                                                ?>
-
-                                            </div>
-
-                                            <?php if ($time_display !== ''): ?>
-
-                                                <div class="date-time">
-
-                                                    <?php
-                                                    echo htmlspecialchars(
-                                                        $time_display
-                                                    );
-                                                    ?>
-
-                                                </div>
-
-                                            <?php endif; ?>
-
-                                        </td>
-
-
-                                        <!-- EGG SIZE -->
-
-                                        <td>
-
-                                            <div class="egg-size-list">
-
-                                                <?php foreach ($row['items'] as $item): ?>
-
-                                                    <?php
-
-                                                    $egg_class =
-                                                        'background:#eef1ee;color:#56645d;border:1px solid #dfe4df;';
-
-                                                    switch (
-                                                        $item['egg_type']
-                                                    ) {
-
-                                                        case 'Extra Small':
-                                                        case 'Small':
-
-                                                            $egg_class =
-                                                                'background:#f0f1ed;color:#667068;border:1px solid #e0e2dc;';
-
-                                                            break;
-
-                                                        case 'Medium':
-
-                                                            $egg_class =
-                                                                'background:#f6f0d9;color:#88732f;border:1px solid #ebe0b9;';
-
-                                                            break;
-
-                                                        case 'Large':
-
-                                                            $egg_class =
-                                                                'background:#f7e9d9;color:#9b6b39;border:1px solid #eed8bd;';
-
-                                                            break;
-
-                                                        case 'Extra Large':
-                                                        case 'Jumbo':
-                                                        case 'Super Jumbo':
-                                                        case 'Double Yolk':
-
-                                                            $egg_class =
-                                                                'background:#f5e5e1;color:#a35d54;border:1px solid #ead1cc;';
-
-                                                            break;
-                                                    }
-
-                                                    ?>
-
-                                                    <div class="egg-size-row">
-
-                                                        <span
-                                                            class="egg-badge"
-                                                            style="<?php echo $egg_class; ?>"
-                                                        >
-                                                            <?php
-                                                            echo htmlspecialchars(
-                                                                $item['egg_type']
-                                                            );
-                                                            ?>
-                                                        </span>
-
-                                                        <span class="egg-quantity">
-                                                            x<?php
-                                                            echo (int)$item['quantity'];
-                                                            ?>
-                                                        </span>
-
-                                                    </div>
-
-                                                <?php endforeach; ?>
-
-                                            </div>
-
-                                        </td>
-
-
-                                        <!-- TRAYS -->
-
-                                        <td>
-
-                                            <div class="trays-value">
-
-                                                <?php
-                                                echo number_format(
-                                                    $total_qty
-                                                );
-                                                ?>
-
-                                            </div>
-
-                                        </td>
-
-
-                                        <!-- TOTAL -->
-
-                                        <td>
-
-                                            <div class="amount-value">
-
-                                                ₱<?php
-                                                echo number_format(
-                                                    $row['total_price'],
-                                                    2
-                                                );
-                                                ?>
-
-                                            </div>
-
-                                        </td>
-
-
-                                        <!-- METHOD -->
-
-                                        <td>
-
-                                            <span
-                                                class="method-badge <?php
-                                                echo $row['delivery_method'] === 'Delivery'
-                                                    ? 'method-delivery'
-                                                    : 'method-pickup';
-                                                ?>"
-                                            >
-
-                                                <?php
-                                                echo htmlspecialchars(
-                                                    $row['delivery_method']
-                                                );
-                                                ?>
-
-                                            </span>
-
-                                        </td>
-
-
-                                        <!-- STATUS -->
-
-                                        <td>
-
-                                            <span
-                                                class="status-badge <?php echo $status_class; ?>"
-                                            >
-                                                <?php
-                                                echo htmlspecialchars(
-                                                    $status
-                                                );
-                                                ?>
-                                            </span>
-
-                                        </td>
-
-
-                                        <!-- ACTIONS -->
-
-                                        <td class="actions-cell">
-
-                                            <div class="actions-wrapper">
-
-                                                <!-- PRINT -->
-
-                                                <button
-                                                    type="button"
-                                                    onclick="printReceipt(<?php echo $receipt_json; ?>)"
-                                                    class="action-button print-button"
-                                                    title="Print Reservation"
-                                                >
-
-                                                    <i class="fa-solid fa-print"></i>
-
-                                                </button>
-
-
-                                                <!-- CANCEL -->
-
-                                                <?php
-                                                if (
-                                                    $status_lower !== 'cancelled'
-                                                    &&
-                                                    $status_lower !== 'canceled'
-                                                    &&
-                                                    $status_lower !== 'delivered'
-                                                    &&
-                                                    $status_lower !== 'completed'
-                                                ):
-                                                ?>
-
-                                                    <button
-                                                        type="button"
-                                                        onclick="openCancelModal('<?php echo htmlspecialchars($ids_list); ?>')"
-                                                        class="action-button cancel-button"
-                                                        title="Cancel Reservation"
-                                                    >
-
-                                                        <i class="fa-solid fa-xmark"></i>
-
-                                                    </button>
-
-                                                <?php endif; ?>
-
-                                            </div>
-
-                                        </td>
-
-                                    </tr>
-
-                                <?php endforeach; ?>
-
-                            <?php else: ?>
-
-                                <tr>
-
-                                    <td
-                                        colspan="8"
-                                        class="empty-state"
-                                    >
-
-                                        <i class="fa-regular fa-folder-open"></i>
-
-                                        No reservation histories found.
-
-                                    </td>
-
-                                </tr>
-
-                            <?php endif; ?>
-
-                            </tbody>
-
-                        </table>
-
-                    </div>
-
-
-                    <!-- =================================================
-                         TABLE FOOTER
-                    ================================================== -->
-
-                    <div class="table-footer">
-
-                        <div>
-
-                            <?php if ($total_records > 0): ?>
-
-                                Showing
-                                <span class="footer-number">
-                                    <?php echo $offset + 1; ?>
-                                </span>
-
-                                to
-
-                                <span class="footer-number">
-                                    <?php
-                                    echo min(
-                                        $offset + $limit,
-                                        $total_records
-                                    );
-                                    ?>
-                                </span>
-
-                                of
-
-                                <span class="footer-number">
-                                    <?php echo $total_records; ?>
-                                </span>
-
-                                reservations.
-
-                            <?php else: ?>
-
-                                Showing 0 reservations.
-
-                            <?php endif; ?>
-
-                        </div>
-
-
-                        <!-- PAGINATION -->
-
-                        <?php if ($total_pages > 1): ?>
-
-                            <div class="pagination">
-
-                                <!-- PREVIOUS -->
-
-                                <a
-                                    href="<?php
-                                    echo $page > 1
-                                        ? getPaginationUrl($page - 1)
-                                        : '#';
-                                    ?>"
-                                    class="<?php
-                                    echo $page <= 1
-                                        ? 'disabled'
-                                        : '';
-                                    ?>"
-                                    title="Previous"
-                                >
-
-                                    <i class="fa-solid fa-chevron-left"></i>
-
-                                </a>
-
-
-                                <!-- PAGE NUMBERS -->
-
-                                <?php for (
-                                    $i = 1;
-                                    $i <= $total_pages;
-                                    $i++
-                                ): ?>
-
-                                    <a
-                                        href="<?php echo getPaginationUrl($i); ?>"
-                                        class="<?php
-                                        echo $page === $i
-                                            ? 'active'
-                                            : '';
-                                        ?>"
-                                    >
-
-                                        <?php echo $i; ?>
-
-                                    </a>
-
-                                <?php endfor; ?>
-
-
-                                <!-- NEXT -->
-
-                                <a
-                                    href="<?php
-                                    echo $page < $total_pages
-                                        ? getPaginationUrl($page + 1)
-                                        : '#';
-                                    ?>"
-                                    class="<?php
-                                    echo $page >= $total_pages
-                                        ? 'disabled'
-                                        : '';
-                                    ?>"
-                                    title="Next"
-                                >
-
-                                    <i class="fa-solid fa-chevron-right"></i>
-
-                                </a>
 
                             </div>
 
-                        <?php endif; ?>
+                        
 
-                    </div>
+                        </td>
 
-                </div>
+
+                     <!-- SIZE -->
+
+<td>
+
+    <div class="size-value">
+
+        <?php
+
+        $display_sizes = array();
+
+        foreach ($row['items'] as $item) {
+
+            $short_name = isset(
+                $egg_short_names[$item['egg_type']]
+            )
+            ? $egg_short_names[$item['egg_type']]
+            : $item['egg_type'];
+
+            if (!in_array(
+                $short_name,
+                $display_sizes
+            )) {
+
+                $display_sizes[] = $short_name;
+
+            }
+        }
+
+        echo htmlspecialchars(
+            implode(', ', $display_sizes)
+        );
+
+        ?>
+
+    </div>
+
+</td>
+
+
+                        <!-- TOTAL QTY -->
+
+                        <td>
+
+                            <div class="trays-value">
+
+                                <?php
+                                echo number_format(
+                                    $total_qty
+                                );
+                                ?>
+
+                                <?php
+                                echo $total_qty == 1
+                                    ? ' tray'
+                                    : ' trays';
+                                ?>
+
+                            </div>
+
+                        </td>
+
+
+                        <!-- METHOD -->
+
+                        <td class="method-cell">
+
+                            <span class="method-display">
+
+                                <i
+                                    class="<?php echo $method_icon; ?>"
+                                ></i>
+
+                                <?php
+                                echo htmlspecialchars(
+                                    $row['delivery_method']
+                                );
+                                ?>
+
+                            </span>
+
+                        </td>
+
+
+                        <!-- DATE -->
+
+                        <td>
+
+                            <div class="date-main">
+
+                                <?php
+                                echo htmlspecialchars(
+                                    $date_display
+                                );
+                                ?>
+
+                            </div>
+
+                            <?php if (
+                                $time_display !== ''
+                            ): ?>
+
+                                <div class="date-time">
+
+                                    <?php
+                                    echo htmlspecialchars(
+                                        $time_display
+                                    );
+                                    ?>
+
+                                </div>
+
+                            <?php endif; ?>
+
+                        </td>
+
+
+                        <!-- TOTAL -->
+
+                        <td>
+
+                            <div class="amount-value">
+
+                                ₱<?php
+                                echo number_format(
+                                    $row['total_price'],
+                                    2
+                                );
+                                ?>
+
+                            </div>
+
+                        </td>
+
+
+                        <!-- STATUS -->
+
+                        <td>
+
+                            <span
+                                class="status-badge <?php echo $status_class; ?>"
+                            >
+
+                                <?php
+                                echo htmlspecialchars(
+                                    $status
+                                );
+                                ?>
+
+                            </span>
+
+                        </td>
+
+
+                        <!-- ACTION -->
+
+                        <td class="actions-cell">
+
+                            <div class="actions-wrapper">
+
+                                <button
+                                    type="button"
+                                    onclick="printReceipt(<?php echo $receipt_json; ?>)"
+                                    class="action-button print-button"
+                                    title="Print Reservation"
+                                >
+
+                                    <i class="fa-solid fa-print"></i>
+
+                                    Print
+
+                                </button>
+
+
+                             
+
+                            </div>
+
+                        </td>
+
+                    </tr>
+
+                <?php endforeach; ?>
+
+            <?php else: ?>
+
+                <tr>
+
+                    <td
+                        colspan="8"
+                        class="empty-state"
+                    >
+
+                        <i class="fa-regular fa-folder-open"></i>
+
+                        No reservation histories found.
+
+                    </td>
+
+                </tr>
+
+            <?php endif; ?>
+
+            </tbody>
+
+        </table>
+
+    </div>
+
+
+    <!-- =================================================
+         TABLE FOOTER
+    ================================================== -->
+
+    <div class="table-footer">
+
+        <div>
+
+            <?php if ($total_records > 0): ?>
+
+                Showing
+
+                <span class="footer-number">
+                    <?php echo $offset + 1; ?>
+                </span>
+
+                -
+
+                <span class="footer-number">
+                    <?php
+                    echo min(
+                        $offset + $limit,
+                        $total_records
+                    );
+                    ?>
+                </span>
+
+                of
+
+                <span class="footer-number">
+                    <?php echo $total_records; ?>
+                </span>
+
+                reservations.
+
+            <?php else: ?>
+
+                Showing 0 reservations.
+
+            <?php endif; ?>
+
+        </div>
+
+
+        <?php if ($total_pages > 1): ?>
+
+            <div class="pagination">
+
+                <!-- PREVIOUS -->
+
+                <a
+                    href="<?php
+                    echo $page > 1
+                        ? getPaginationUrl($page - 1)
+                        : '#';
+                    ?>"
+                    class="<?php
+                    echo $page <= 1
+                        ? 'disabled'
+                        : '';
+                    ?>"
+                    title="Previous"
+                >
+
+                    <i class="fa-solid fa-chevron-left"></i>
+
+                </a>
+
+
+                <!-- PAGE NUMBERS -->
+
+                <?php for (
+                    $i = 1;
+                    $i <= $total_pages;
+                    $i++
+                ): ?>
+
+                    <a
+                        href="<?php
+                        echo getPaginationUrl($i);
+                        ?>"
+                        class="<?php
+                        echo $page === $i
+                            ? 'active'
+                            : '';
+                        ?>"
+                    >
+
+                        <?php echo $i; ?>
+
+                    </a>
+
+                <?php endfor; ?>
+
+
+                <!-- NEXT -->
+
+                <a
+                    href="<?php
+                    echo $page < $total_pages
+                        ? getPaginationUrl($page + 1)
+                        : '#';
+                    ?>"
+                    class="<?php
+                    echo $page >= $total_pages
+                        ? 'disabled'
+                        : '';
+                    ?>"
+                    title="Next"
+                >
+
+                    <i class="fa-solid fa-chevron-right"></i>
+
+                </a>
+
+            </div>
+
+        <?php endif; ?>
+
+    </div>
+
+</div>
 
             </div>
 
@@ -2874,54 +3544,52 @@ function getPaginationUrl($page_num)
 
 <script>
 
-/* =========================================================
-   LIVE TIME
-========================================================= */
-
-function updateLiveTime() {
+function updateCustomerDateTime() {
 
     var now = new Date();
 
-    var hours = now.getHours();
-    var minutes = now.getMinutes();
-    var seconds = now.getSeconds();
+    var options = {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+    };
 
-    var ampm = hours >= 12 ? 'PM' : 'AM';
+    var dateText = now.toLocaleDateString(
+        'en-US',
+        options
+    );
 
-    hours = hours % 12;
+    var timeText = now.toLocaleTimeString(
+        'en-US',
+        {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+        }
+    );
 
-    hours = hours ? hours : 12;
+    var dateElement = document.getElementById(
+        'customer-live-date'
+    );
 
-    hours = hours < 10
-        ? '0' + hours
-        : hours;
+    var timeElement = document.getElementById(
+        'customer-live-time'
+    );
 
-    minutes = minutes < 10
-        ? '0' + minutes
-        : minutes;
-
-    seconds = seconds < 10
-        ? '0' + seconds
-        : seconds;
-
-    var timeString =
-        hours + ':' +
-        minutes + ':' +
-        seconds + ' ' +
-        ampm;
-
-    var timeElement =
-        document.getElementById('liveTime');
+    if (dateElement) {
+        dateElement.textContent = dateText;
+    }
 
     if (timeElement) {
-        timeElement.textContent = timeString;
+        timeElement.textContent = timeText;
     }
 }
 
-updateLiveTime();
+updateCustomerDateTime();
 
 setInterval(
-    updateLiveTime,
+    updateCustomerDateTime,
     1000
 );
 
@@ -3106,342 +3774,731 @@ function closeLogoutModal() {
 /* =========================================================
    PRINT RECEIPT
 ========================================================= */
-
 function printReceipt(data) {
 
-    var printWindow =
-        document.getElementById(
-            'receipt-print-window'
-        );
+    var printWindow = document.getElementById('receipt-print-window');
+
+
 
     var unitPrices = {
-
-        'Extra Small': 140,
-
-        'Small': 150,
-
-        'Medium': 175,
-
-        'Large': 195,
-
-        'Extra Large': 235,
-
-        'Jumbo': 255,
-
-        'Super Jumbo': 270,
-
-        'Double Yolk': 320
+        "Extra Small": 140,
+        "Small": 150,
+        "Medium": 175,
+        "Large": 195,
+        "Extra Large": 235,
+        "Jumbo": 255,
+        "Super Jumbo": 270,
+        "Double Yolk": 320
     };
 
+    var sizeCodes = {
+        "Extra Small": "XS",
+        "Small": "S",
+        "Medium": "M",
+        "Large": "L",
+        "Extra Large": "XL",
+        "Jumbo": "J",
+        "Super Jumbo": "SJ",
+        "Double Yolk": "DY"
+    };
 
-    var itemsHTML = '';
+    var totalAmount = 0;
+    var itemsHTML = "";
 
+    if (data.items && data.items.length > 0) {
 
-    data.items.forEach(
-        function(item) {
+        data.items.forEach(function(item) {
 
-            var unitPrice =
-                unitPrices[item.egg_type] || 0;
+            var eggType = item.egg_type || "";
+            var quantity = parseInt(item.quantity, 10) || 0;
 
-            var computedPrice =
-                unitPrice *
-                parseInt(item.quantity);
+            var unitPrice = unitPrices[eggType] || 0;
 
+            var lineTotal = unitPrice * quantity;
+
+            totalAmount += lineTotal;
+
+            var shortCode = sizeCodes[eggType] || eggType;
 
             itemsHTML +=
-                '<tr style="border-bottom:1px solid #e2e8f0;">' +
+                '<div class="receipt-item">' +
 
-                '<td style="padding:12px;font-weight:600;">' +
-                '🥚 ' +
-                item.egg_type +
-                ' Size' +
-                '</td>' +
+                    '<div class="item-main">' +
+                        '<span class="item-size">' +
+                            escapeHTML(shortCode) +
+                        '</span>' +
 
-                '<td style="padding:12px;text-align:center;">' +
-                '₱' +
-                unitPrice.toFixed(2) +
-                '</td>' +
+                        '<span class="item-qty">' +
+                            escapeHTML(String(quantity)) +
+                        '</span>' +
 
-                '<td style="padding:12px;text-align:center;font-weight:700;">' +
-                'x ' +
-                item.quantity +
-                '</td>' +
+                        '<span class="item-price">' +
+                            '₱' + lineTotal.toFixed(2) +
+                        '</span>' +
+                    '</div>' +
 
-                '<td style="padding:12px;text-align:right;font-weight:700;">' +
-                '₱' +
-                computedPrice.toLocaleString(
-                    undefined,
-                    {
-                        minimumFractionDigits: 2
-                    }
-                ) +
-                '</td>' +
+                    '<div class="item-description">' +
+                        escapeHTML(eggType) +
+                        ' @ ₱' + unitPrice.toFixed(2) +
+                    '</div>' +
 
-                '</tr>';
-        }
-    );
+                '</div>';
+        });
+    }
 
+    /*
+     * If total_price already exists in the database,
+     * use it when available.
+     */
+    var displayedTotal = parseFloat(data.total_price);
 
-    var reservationCode =
-        data.reservation_code
-            ? data.reservation_code
-            : 'RES-' + data.id;
+    if (isNaN(displayedTotal)) {
+        displayedTotal = totalAmount;
+    }
 
+    var deliveryMethod = data.delivery_method || "";
+
+    var deliveryText = "";
+
+    if (deliveryMethod.toLowerCase() === "delivery") {
+
+        deliveryText = "Delivery";
+
+    } else if (deliveryMethod.toLowerCase() === "pickup") {
+
+        deliveryText = "Pickup";
+
+    } else {
+
+        deliveryText = deliveryMethod;
+    }
+
+    var addressHTML = "";
+
+    if (
+        deliveryMethod.toLowerCase() === "delivery" &&
+        data.delivery_address
+    ) {
+
+        addressHTML =
+            '<div class="info-row">' +
+                '<span class="info-label">Address</span>' +
+                '<span class="info-value">' +
+                    escapeHTML(data.delivery_address) +
+                '</span>' +
+            '</div>';
+
+    } else {
+
+        addressHTML =
+            '<div class="info-row">' +
+                '<span class="info-label">Location</span>' +
+                '<span class="info-value">Farm Pickup</span>' +
+            '</div>';
+    }
 
     printWindow.innerHTML =
+        '<div class="thermal-receipt">' +
 
-        '<div style="' +
-        'font-family:Arial,Helvetica,sans-serif;' +
-        'max-width:750px;' +
-        'min-height:calc(100vh - 60px);' +
-        'margin:0 auto;' +
-        'padding:30px;' +
-        'border:1px solid #e2e8f0;' +
-        'background:#ffffff;' +
-        'box-sizing:border-box;' +
-        'display:flex;' +
-        'flex-direction:column;' +
-        'justify-content:space-between;' +
-        '">' +
+            /* =========================
+               HEADER
+            ========================== */
 
-        '<div>' +
+            '<div class="receipt-header">' +
 
-        '<div style="' +
-        'display:flex;' +
-        'justify-content:space-between;' +
-        'align-items:center;' +
-        'border-bottom:2px solid #f1f5f9;' +
-        'padding-bottom:15px;' +
-        'margin-bottom:25px;' +
-        '">' +
+                '<img ' +
+                    'src="vdvclogo.png" ' +
+                    'class="receipt-logo" ' +
+                    'alt="VDVC Egg Farm Logo"' +
+                '>' +
 
-        '<div style="display:flex;align-items:center;gap:14px;">' +
+                '<div class="farm-name">' +
+                    'VDVC EGG FARM' +
+                '</div>' +
 
-        '<img src="vdvc.png" ' +
-        'alt="VDVC Logo" ' +
-        'style="width:55px;height:55px;object-fit:contain;">' +
+                '<div class="receipt-title">' +
+                    'RESERVATION RECEIPT' +
+                '</div>' +
 
-        '<div>' +
+                '<div class="receipt-code">' +
+                    escapeHTML(data.reservation_code || "") +
+                '</div>' +
 
-        '<h2 style="' +
-        'margin:0;' +
-        'font-size:21px;' +
-        'font-weight:800;' +
-        'color:#214f2c;' +
-        'text-transform:uppercase;' +
-        '">' +
-        'VDVC Egg Farm' +
-        '</h2>' +
+            '</div>' +
 
-        '<span style="' +
-        'font-size:11px;' +
-        'background:#e7f1e8;' +
-        'color:#39704a;' +
-        'padding:3px 8px;' +
-        'border-radius:999px;' +
-        'font-weight:700;' +
-        '">' +
-        'Reservation Receipt' +
-        '</span>' +
+            '<div class="separator"></div>' +
 
-        '</div>' +
+            /* =========================
+               CUSTOMER INFORMATION
+            ========================== */
 
-        '</div>' +
+            '<div class="section-title">' +
+                'CUSTOMER INFORMATION' +
+            '</div>' +
 
-        '<div style="text-align:right;">' +
+            '<div class="info-row">' +
+                '<span class="info-label">Customer</span>' +
+                '<span class="info-value">' +
+                    escapeHTML(data.customer_name || "") +
+                '</span>' +
+            '</div>' +
 
-        '<div style="' +
-        'font-size:11px;' +
-        'font-weight:700;' +
-        'color:#64748b;' +
-        'text-transform:uppercase;' +
-        '">' +
-        'Reservation Code' +
-        '</div>' +
+            '<div class="info-row">' +
+                '<span class="info-label">Contact</span>' +
+                '<span class="info-value">' +
+                    escapeHTML(data.contact_number || "") +
+                '</span>' +
+            '</div>' +
 
-        '<div style="' +
-        'font-size:18px;' +
-        'font-weight:800;' +
-        'color:#39704a;' +
-        '">' +
-        reservationCode +
-        '</div>' +
+            '<div class="info-row">' +
+                '<span class="info-label">Method</span>' +
+                '<span class="info-value">' +
+                    escapeHTML(deliveryText) +
+                '</span>' +
+            '</div>' +
 
-        '</div>' +
+            addressHTML +
 
-        '</div>' +
+            '<div class="separator"></div>' +
 
+            /* =========================
+               RESERVATION DETAILS
+            ========================== */
 
-        '<div style="margin-bottom:25px;">' +
+            '<div class="section-title">' +
+                'RESERVATION DETAILS' +
+            '</div>' +
 
-        '<h3 style="' +
-        'font-size:13px;' +
-        'font-weight:700;' +
-        'color:#1e293b;' +
-        'text-transform:uppercase;' +
-        'margin-bottom:8px;' +
-        '">' +
-        'Contact & Delivery Information' +
-        '</h3>' +
+            '<div class="info-row">' +
+                '<span class="info-label">Date</span>' +
+                '<span class="info-value">' +
+                    escapeHTML(data.reservation_date || "Pending") +
+                '</span>' +
+            '</div>' +
 
-        '<div style="' +
-        'background:#f8fafc;' +
-        'border:1px solid #e2e8f0;' +
-        'border-radius:8px;' +
-        'padding:15px;' +
-        'font-size:13px;' +
-        'line-height:1.5;' +
-        '">' +
+            '<div class="info-row">' +
+                '<span class="info-label">Status</span>' +
+                '<span class="info-value">' +
+                    escapeHTML(data.status || "") +
+                '</span>' +
+            '</div>' +
 
-        '<div style="margin-bottom:6px;">' +
-        '<strong>Customer Name:</strong> ' +
-        escapeHTML(data.customer_name) +
-        '</div>' +
+            '<div class="separator"></div>' +
 
-        '<div style="margin-bottom:6px;">' +
-        '<strong>Contact Number:</strong> ' +
-        escapeHTML(data.contact_number) +
-        '</div>' +
+            /* =========================
+               ORDER SUMMARY
+            ========================== */
 
-        '<div>' +
-        '<strong>Delivery Address:</strong> ' +
-        escapeHTML(
-            data.delivery_address
-                ? data.delivery_address
-                : 'N/A (Store Pickup Specified)'
-        ) +
-        '</div>' +
+            '<div class="section-title">' +
+                'ORDER SUMMARY' +
+            '</div>' +
 
-        '</div>' +
+            '<div class="items-header">' +
+                '<span>SIZE</span>' +
+                '<span>QTY</span>' +
+                '<span>AMOUNT</span>' +
+            '</div>' +
 
-        '</div>' +
+            itemsHTML +
 
+            '<div class="separator"></div>' +
 
-        '<div style="margin-bottom:25px;">' +
+            /* =========================
+               TOTAL
+            ========================== */
 
-        '<h3 style="' +
-        'font-size:13px;' +
-        'font-weight:700;' +
-        'color:#1e293b;' +
-        'text-transform:uppercase;' +
-        'margin-bottom:8px;' +
-        '">' +
-        'Reservation Details' +
-        '</h3>' +
+            '<div class="total-row">' +
+                '<span>TOTAL</span>' +
+                '<span>₱' + displayedTotal.toFixed(2) + '</span>' +
+            '</div>' +
 
-        '<div style="' +
-        'background:#f8fafc;' +
-        'border:1px solid #e2e8f0;' +
-        'border-radius:8px;' +
-        'padding:15px;' +
-        'font-size:13px;' +
-        'line-height:1.5;' +
-        '">' +
+            '<div class="separator"></div>' +
 
-        '<div style="margin-bottom:6px;">' +
-        '<strong>Delivery Method:</strong> ' +
-        escapeHTML(data.delivery_method) +
-        '</div>' +
+            /* =========================
+               FOOTER
+            ========================== */
 
-        '<div>' +
-        '<strong>Reservation Date:</strong> ' +
-        escapeHTML(data.reservation_date) +
-        '</div>' +
+            '<div class="receipt-footer">' +
 
-        '</div>' +
+                '<div class="thank-you">' +
+                    'Thank you for your reservation!' +
+                '</div>' +
 
-        '</div>' +
+                '<div>' +
+                    'VDVC Egg Farm' +
+                '</div>' +
 
+                '<div class="footer-small">' +
+                    'Please keep this receipt for your reference.' +
+                '</div>' +
 
-        '<div style="margin-bottom:25px;">' +
-
-        '<h3 style="' +
-        'font-size:13px;' +
-        'font-weight:700;' +
-        'color:#1e293b;' +
-        'text-transform:uppercase;' +
-        'margin-bottom:8px;' +
-        '">' +
-        'Order Summary Breakdown' +
-        '</h3>' +
-
-        '<table style="' +
-        'width:100%;' +
-        'font-size:13px;' +
-        'border-collapse:collapse;' +
-        'border:1px solid #e2e8f0;' +
-        '">' +
-
-        '<tbody style="color:#334155;">' +
-
-        itemsHTML +
-
-        '<tr style="background:#f8fafc;font-size:14px;font-weight:800;">' +
-
-        '<td colspan="3" style="padding:12px;text-align:right;text-transform:uppercase;">' +
-        'Total Price Amount:' +
-        '</td>' +
-
-        '<td style="' +
-        'padding:12px;' +
-        'text-align:right;' +
-        'color:#39704a;' +
-        'font-size:17px;' +
-        '">' +
-
-        '₱' +
-
-        parseFloat(
-            data.total_price
-        ).toLocaleString(
-            undefined,
-            {
-                minimumFractionDigits: 2
-            }
-        ) +
-
-        '</td>' +
-
-        '</tr>' +
-
-        '</tbody>' +
-
-        '</table>' +
-
-        '</div>' +
-
-        '</div>' +
-
-
-        '<div style="' +
-        'text-align:center;' +
-        'border-top:1px dashed #cbd5e1;' +
-        'padding-top:20px;' +
-        'font-size:11px;' +
-        'color:#94a3b8;' +
-        '">' +
-
-        '<p style="' +
-        'margin:0;' +
-        'font-weight:600;' +
-        'color:#64748b;' +
-        'font-size:13px;' +
-        '">' +
-        'Thank you for your reservation with VDVC Egg Farm!' +
-        '</p>' +
-
-        '<p style="margin:4px 0 0 0;">' +
-        'System managed securely under © 2026 Egg Reservation Systems.' +
-        '</p>' +
-
-        '</div>' +
+            '</div>' +
 
         '</div>';
 
+    /*
+ * Temporary styles for thermal receipt
+ */
 
-    window.print();
+var oldStyle = document.getElementById('thermal-receipt-style');
+
+if (oldStyle) {
+    oldStyle.parentNode.removeChild(oldStyle);
 }
 
+var style = document.createElement('style');
+
+style.id = 'thermal-receipt-style';
+
+style.innerHTML =
+
+    /*
+     * NORMAL PAGE
+     * Receipt must stay hidden.
+     */
+    '#receipt-print-window {' +
+        'display: none;' +
+    '}' +
+
+    /*
+     * RECEIPT DESIGN
+     */
+    '#receipt-print-window .thermal-receipt {' +
+        'width: 70mm;' +
+        'max-width: 70mm;' +
+        'margin: 0 auto;' +
+        'padding: 3mm 0;' +
+        'box-sizing: border-box;' +
+        'font-family: Arial, Helvetica, sans-serif;' +
+        'font-size: 10px;' +
+        'line-height: 1.35;' +
+        'color: #000000;' +
+        'background: #ffffff;' +
+    '}' +
+
+    '#receipt-print-window .receipt-header {' +
+        'text-align: center;' +
+        'margin-bottom: 3mm;' +
+    '}' +
+
+    '#receipt-print-window .receipt-logo {' +
+        'display: block;' +
+        'width: 42mm;' +
+        'max-width: 100%;' +
+        'height: auto;' +
+        'margin: 0 auto 2mm auto;' +
+        'object-fit: contain;' +
+    '}' +
+
+    '#receipt-print-window .farm-name {' +
+        'font-size: 16px;' +
+        'font-weight: 700;' +
+        'letter-spacing: 0.5px;' +
+        'margin-top: 1mm;' +
+    '}' +
+
+    '#receipt-print-window .receipt-title {' +
+        'font-size: 11px;' +
+        'font-weight: 700;' +
+        'margin-top: 1mm;' +
+    '}' +
+
+    '#receipt-print-window .receipt-code {' +
+        'font-size: 10px;' +
+        'font-weight: 700;' +
+        'margin-top: 1.5mm;' +
+    '}' +
+
+    '#receipt-print-window .separator {' +
+        'border-top: 1px dashed #000000;' +
+        'margin: 3mm 0;' +
+        'height: 0;' +
+    '}' +
+
+    '#receipt-print-window .section-title {' +
+        'font-size: 10px;' +
+        'font-weight: 700;' +
+        'text-align: left;' +
+        'margin-bottom: 1.5mm;' +
+    '}' +
+
+    '#receipt-print-window .info-row {' +
+        'display: flex;' +
+        'align-items: flex-start;' +
+        'justify-content: space-between;' +
+        'gap: 3mm;' +
+        'margin-bottom: 1.2mm;' +
+    '}' +
+
+    '#receipt-print-window .info-label {' +
+        'font-weight: 700;' +
+        'flex: 0 0 22mm;' +
+    '}' +
+
+    '#receipt-print-window .info-value {' +
+        'text-align: right;' +
+        'flex: 1;' +
+        'word-break: break-word;' +
+    '}' +
+
+    '#receipt-print-window .items-header {' +
+        'display: grid;' +
+        'grid-template-columns: 1fr 12mm 23mm;' +
+        'gap: 1mm;' +
+        'font-weight: 700;' +
+        'font-size: 9px;' +
+        'padding-bottom: 1mm;' +
+        'border-bottom: 1px solid #000000;' +
+    '}' +
+
+    '#receipt-print-window .items-header span:nth-child(2),' +
+    '#receipt-print-window .items-header span:nth-child(3) {' +
+        'text-align: right;' +
+    '}' +
+
+    '#receipt-print-window .receipt-item {' +
+        'padding: 1.8mm 0;' +
+        'border-bottom: 1px dotted #777777;' +
+    '}' +
+
+    '#receipt-print-window .item-main {' +
+        'display: grid;' +
+        'grid-template-columns: 1fr 12mm 23mm;' +
+        'gap: 1mm;' +
+        'align-items: center;' +
+    '}' +
+
+    '#receipt-print-window .item-size {' +
+        'font-weight: 700;' +
+    '}' +
+
+    '#receipt-print-window .item-qty,' +
+    '#receipt-print-window .item-price {' +
+        'text-align: right;' +
+    '}' +
+
+    '#receipt-print-window .item-description {' +
+        'font-size: 8.5px;' +
+        'margin-top: 0.5mm;' +
+        'color: #333333;' +
+    '}' +
+
+    '#receipt-print-window .total-row {' +
+        'display: flex;' +
+        'justify-content: space-between;' +
+        'align-items: center;' +
+        'font-size: 13px;' +
+        'font-weight: 700;' +
+        'margin-top: 2mm;' +
+    '}' +
+
+    '#receipt-print-window .receipt-footer {' +
+        'text-align: center;' +
+        'font-size: 9px;' +
+        'margin-top: 3mm;' +
+    '}' +
+
+    '#receipt-print-window .thank-you {' +
+        'font-weight: 700;' +
+        'font-size: 10px;' +
+        'margin-bottom: 1mm;' +
+    '}' +
+
+    '#receipt-print-window .footer-small {' +
+        'font-size: 8px;' +
+        'margin-top: 1.5mm;' +
+    '}' +
+
+    /*
+     * PRINT ONLY
+     */
+    '@media print {' +
+
+        '@page {' +
+            'size: 80mm auto;' +
+            'margin: 0;' +
+        '}' +
+
+        'html, body {' +
+            'width: 80mm !important;' +
+            'height: auto !important;' +
+            'min-height: 0 !important;' +
+            'margin: 0 !important;' +
+            'padding: 0 !important;' +
+            'background: #ffffff !important;' +
+        '}' +
+
+        'body {' +
+            'overflow: visible !important;' +
+        '}' +
+
+        'body * {' +
+            'visibility: hidden !important;' +
+        '}' +
+
+        '#receipt-print-window {' +
+            'display: block !important;' +
+            'visibility: visible !important;' +
+            'position: absolute !important;' +
+            'left: 0 !important;' +
+            'top: 0 !important;' +
+            'width: 80mm !important;' +
+            'height: auto !important;' +
+            'min-height: 0 !important;' +
+            'margin: 0 !important;' +
+            'padding: 0 !important;' +
+            'background: #ffffff !important;' +
+            'overflow: visible !important;' +
+        '}' +
+
+        '#receipt-print-window .thermal-receipt,' +
+        '#receipt-print-window .thermal-receipt * {' +
+            'visibility: visible !important;' +
+        '}' +
+
+        '#receipt-print-window .thermal-receipt {' +
+            'display: block !important;' +
+            'width: 70mm !important;' +
+            'max-width: 70mm !important;' +
+            'height: auto !important;' +
+            'min-height: 0 !important;' +
+            'margin: 0 auto !important;' +
+            'padding: 3mm 0 !important;' +
+            'box-sizing: border-box !important;' +
+            'background: #ffffff !important;' +
+            'border: none !important;' +
+            'box-shadow: none !important;' +
+            'overflow: visible !important;' +
+        '}' +
+
+        '.no-print {' +
+            'display: none !important;' +
+        '}' +
+
+    '}';
+
+document.head.appendChild(style);
+
+/* =========================================================
+   CUSTOMER NOTIFICATION DROPDOWN
+========================================================= */
+
+var customerNotificationDropdown = null;
+var isCustomerDropdownOpen = false;
+
+function toggleCustomerNotificationDropdown()
+{
+    if (!customerNotificationDropdown) {
+        customerNotificationDropdown = document.getElementById('customerNotificationDropdown');
+    }
+
+    if (customerNotificationDropdown) {
+        isCustomerDropdownOpen = !isCustomerDropdownOpen;
+
+        if (isCustomerDropdownOpen) {
+            customerNotificationDropdown.classList.remove('hidden');
+            loadCustomerNotifications();
+        } else {
+            customerNotificationDropdown.classList.add('hidden');
+        }
+    }
+}
+
+function closeCustomerNotificationDropdown()
+{
+    if (customerNotificationDropdown && isCustomerDropdownOpen) {
+        customerNotificationDropdown.classList.add('hidden');
+        isCustomerDropdownOpen = false;
+    }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(event) {
+    if (customerNotificationDropdown && isCustomerDropdownOpen) {
+        var notificationButton = document.querySelector('.customer-top-notification');
+        var notificationContainer = customerNotificationDropdown.parentElement;
+        if (!notificationContainer.contains(event.target)) {
+            closeCustomerNotificationDropdown();
+        }
+    }
+});
+
+function loadCustomerNotifications()
+{
+    var notificationList = document.getElementById('customerNotificationList');
+    if (!notificationList) return;
+
+    // Show loading state
+    notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading notifications...</p></div>';
+
+    // Fetch notifications from the dedicated notifications page
+    fetch('customer_notifications.php')
+        .then(function(response) {
+            return response.text();
+        })
+        .then(function(html) {
+            // Parse the HTML to extract notification data
+            var parser = new DOMParser();
+            var doc = parser.parseFromString(html, 'text/html');
+
+            // Extract notification items from the dedicated page
+            var notificationItems = doc.querySelectorAll('.notification-item');
+
+            if (notificationItems.length > 0) {
+                var notificationsHtml = '';
+                notificationItems.forEach(function(item) {
+                    var isUnread = item.classList.contains('unread');
+                    var iconElement = item.querySelector('.notification-icon');
+                    var iconClass = 'info';
+                    var iconHtml = '<div class="customer-notification-icon info"><i class="fa-solid fa-bell"></i></div>';
+
+                    if (iconElement) {
+                        if (iconElement.classList.contains('success')) {
+                            iconClass = 'success';
+                            iconHtml = '<div class="customer-notification-icon success"><i class="fa-solid fa-check"></i></div>';
+                        } else if (iconElement.classList.contains('alert')) {
+                            iconClass = 'alert';
+                            iconHtml = '<div class="customer-notification-icon alert"><i class="fa-solid fa-exclamation"></i></div>';
+                        } else if (iconElement.classList.contains('warning')) {
+                            iconClass = 'warning';
+                            iconHtml = '<div class="customer-notification-icon warning"><i class="fa-solid fa-circle-exclamation"></i></div>';
+                        } else {
+                            iconHtml = iconElement.outerHTML;
+                        }
+                    }
+
+                    var titleElement = item.querySelector('.notification-title');
+                    var title = titleElement ? titleElement.textContent : 'Notification';
+
+                    var descElement = item.querySelector('.notification-desc');
+                    var description = descElement ? descElement.textContent : '';
+
+                    var timeElement = item.querySelector('.notification-time');
+                    var time = timeElement ? timeElement.textContent : '';
+
+                    var notificationId = item.getAttribute('onclick') ? item.getAttribute('onclick').match(/\d+/) : null;
+
+                    notificationsHtml += '<div class="customer-notification-item ' + (isUnread ? 'unread' : 'read') + '">';
+                    notificationsHtml += iconHtml;
+                    notificationsHtml += '<div class="customer-notification-content">';
+                    notificationsHtml += '<div class="customer-notification-title">' + title + '</div>';
+                    notificationsHtml += '<div class="customer-notification-description">' + description + '</div>';
+                    notificationsHtml += '<div class="customer-notification-time">' + time + '</div>';
+                    notificationsHtml += '</div>';
+                    if (notificationId && isUnread) {
+                        notificationsHtml += '<button class="customer-mark-read-btn" onclick="markCustomerAsRead(' + notificationId + ', this)">Mark as Read</button>';
+                    }
+                    notificationsHtml += '</div>';
+                });
+                notificationList.innerHTML = notificationsHtml;
+            } else {
+                notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-regular fa-bell-slash"></i><p>No notifications</p></div>';
+            }
+        })
+        .catch(function(error) {
+            notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-solid fa-exclamation-circle"></i><p>Failed to load notifications</p></div>';
+        });
+}
+
+function markCustomerAsRead(notificationId, buttonElement)
+{
+    var formData = new FormData();
+    formData.append('notification_id', notificationId);
+    formData.append('action', 'mark_read');
+
+    fetch('customer_notifications.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.success) {
+            var notificationItem = buttonElement.closest('.customer-notification-item');
+            if (notificationItem) {
+                notificationItem.classList.remove('unread');
+                notificationItem.classList.add('read');
+                buttonElement.style.display = 'none';
+            }
+
+            // Update badge count
+            var badge = document.querySelector('.customer-notification-badge');
+            if (badge) {
+                var currentCount = parseInt(badge.textContent);
+                if (currentCount > 1) {
+                    badge.textContent = currentCount - 1;
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        }
+    })
+    .catch(function(error) {
+        console.error('Failed to mark notification as read:', error);
+    });
+}
+
+function markAllCustomerAsRead(event)
+{
+    event.preventDefault();
+    event.stopPropagation();
+
+    var formData = new FormData();
+    formData.append('action', 'mark_all_read');
+
+    fetch('customer_notifications.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.success) {
+            // Reload page to update all notification states
+            window.location.reload();
+        }
+    })
+    .catch(function(error) {
+        console.error('Failed to mark all notifications as read:', error);
+    });
+}
+
+    /*
+     * Wait for logo to load before printing.
+     */
+  var logo = printWindow.querySelector('.receipt-logo');
+
+function startPrinting() {
+
+    setTimeout(function() {
+        window.print();
+    }, 300);
+}
+
+if (logo) {
+
+    if (logo.complete) {
+
+        startPrinting();
+
+    } else {
+
+        logo.onload = function() {
+            startPrinting();
+        };
+
+        logo.onerror = function() {
+            startPrinting();
+        };
+    }
+
+} else {
+
+    startPrinting();
+}
+}
 
 /* =========================================================
    ESCAPE HTML FOR PRINT

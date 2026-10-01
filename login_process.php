@@ -28,6 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $raw_username
     );
 
+    // Support both MD5 legacy and modern password hashes
     $password = md5($raw_password);
     
     // DEBUG: Log login attempt details
@@ -40,29 +41,48 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
        CHECK USER ACCOUNT
     ========================================= */
 
+    $row = null;
+
+    // First try MD5 (legacy)
     $sql = "
-
         SELECT * FROM users
-
         WHERE username = '$username'
-
         AND password = '$password'
-
         AND status = 'active'
-
     ";
 
     error_log("SQL Query: " . $sql);
 
-    $result = mysqli_query(
-        $conn,
-        $sql
-    );
+    $result = mysqli_query($conn, $sql);
     
     if (!$result) {
         error_log("SQL ERROR: " . mysqli_error($conn));
     } else {
-        error_log("Rows found: " . mysqli_num_rows($result));
+        error_log("Rows found (MD5): " . mysqli_num_rows($result));
+        if (mysqli_num_rows($result) == 1) {
+            $row = mysqli_fetch_assoc($result);
+        }
+    }
+    
+    // If MD5 fails, try with modern hash
+    if ($row === null) {
+        $sql_modern = "SELECT * FROM users WHERE username = '$username' AND status = 'active'";
+        $result_modern = mysqli_query($conn, $sql_modern);
+        
+        if ($result_modern && mysqli_num_rows($result_modern) == 1) {
+            $user_data = mysqli_fetch_assoc($result_modern);
+            error_log("Found user, checking modern hash");
+            
+            // Check if it's a modern hash
+            if (strpos($user_data['password'], '$2y$') === 0 || strpos($user_data['password'], '$2a$') === 0) {
+                if (password_verify($raw_password, $user_data['password'])) {
+                    error_log("Modern hash verification successful");
+                    $row = $user_data;
+                } else {
+                    error_log("Modern hash verification failed");
+                }
+            }
+        }
     }
     
     // CRITICAL FIX: If login failed, check if it's a case sensitivity issue
@@ -99,10 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
        SUCCESSFUL LOGIN
     ========================================= */
 
-    if (mysqli_num_rows($result) == 1) {
-
-        $row = mysqli_fetch_assoc($result);
-
+    if ($row !== null) {
         error_log("=== LOGIN SUCCESS ===");
         error_log("User ID: " . $row['id']);
         error_log("Username: " . $row['username']);

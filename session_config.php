@@ -23,19 +23,27 @@ if (preg_match('#^(/[^/]+)/#', $scriptPath, $matches)) {
 
 // Configure session cookie parameters BEFORE starting session
 // These settings ensure the session persists across all pages
-ini_set('session.use_only_cookies', '1');
-ini_set('session.use_trans_sid', '0');
-ini_set('session.cookie_lifetime', '0');  // Session cookie (expires when browser closes)
-ini_set('session.cookie_path', $projectPath);
-ini_set('session.cookie_domain', '');  // Current domain only
-ini_set('session.cookie_secure', '0');  // Allow HTTP (set to 1 for HTTPS only)
-ini_set('session.cookie_httponly', '1');  // Prevent JavaScript access
-ini_set('session.cookie_samesite', 'Lax');  // CSRF protection
-ini_set('session.gc_maxlifetime', '3600');  // 1 hour server-side
+// Only set these if session is not already active
+if (session_status() === PHP_SESSION_NONE) {
+    ini_set('session.use_only_cookies', '1');
+    ini_set('session.use_trans_sid', '0');
+    ini_set('session.cookie_lifetime', '0');  // Session cookie (expires when browser closes)
+    ini_set('session.cookie_path', $projectPath);
+    ini_set('session.cookie_domain', '');  // Current domain only
+    ini_set('session.cookie_secure', '0');  // Allow HTTP (set to 1 for HTTPS only)
+    ini_set('session.cookie_httponly', '1');  // Prevent JavaScript access
+    ini_set('session.cookie_samesite', 'Lax');  // CSRF protection
+    ini_set('session.gc_maxlifetime', '3600');  // 1 hour server-side
+}
 
 // Start session if not already started
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
+}
+
+// Generate CSRF token if not exists
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
 // Debug logging (remove in production)

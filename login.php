@@ -367,6 +367,43 @@
 
 
         /* =========================================
+           MESSAGE
+        ========================================= */
+
+        .message {
+
+            margin-bottom: 15px;
+
+            padding: 12px;
+
+            border-radius: 8px;
+
+            font-size: 14px;
+
+        }
+
+        .message.success {
+
+            background: #d4edda;
+
+            color: #155724;
+
+            border: 1px solid #c3e6cb;
+
+        }
+
+        .message.error {
+
+            background: #f8d7da;
+
+            color: #721c24;
+
+            border: 1px solid #f5c6cb;
+
+        }
+
+
+        /* =========================================
            LOGIN BUTTON
         ========================================= */
 
@@ -729,10 +766,17 @@ margin-top: 20px;
         <p class="welcome-subtitle">
 
             Log in to your account to access your dashboard and<br>
- 
+
             manage your activities with ease.
 
         </p>
+
+        <!-- MESSAGE -->
+        <?php if (isset($_GET['message'])): ?>
+            <div class="message <?php echo htmlspecialchars($_GET['type'] ?? 'success'); ?>">
+                <?php echo htmlspecialchars($_GET['message']); ?>
+            </div>
+        <?php endif; ?>
 
 
         <!-- LOGIN FORM -->
@@ -791,7 +835,7 @@ margin-top: 20px;
             <div class="form-utilities">
 
                 <a
-                    href="#"
+                    href="forgot_password.php"
                     class="forgot-link"
                 >
                     Forgot Password?
