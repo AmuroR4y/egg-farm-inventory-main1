@@ -74,7 +74,6 @@ $current = basename($_SERVER['PHP_SELF']);
     display: flex;
     flex-direction: column;
     gap: 8px;
-    flex: 1;
     padding: 0;
     margin: 0;
 }
@@ -142,8 +141,8 @@ $current = basename($_SERVER['PHP_SELF']);
    LOGOUT SECTION
 ================================ */
 .logout-section {
-    margin-top: auto;
-    margin-bottom: 190px;
+    margin-top: 0;
+    margin-bottom: 0;
     position: relative;
     z-index: 2;
 }
@@ -248,7 +247,7 @@ $current = basename($_SERVER['PHP_SELF']);
     <div class="logout-section">
 
         <a href="logout.php" class="menu-item btn-logout">
-        <img src="/egg-farm-inventory-main1/vdvclogoo.png" class="logo-img">
+
             <i class="fa-solid fa-right-from-bracket"></i>
             Log Out
 
@@ -257,6 +256,5 @@ $current = basename($_SERVER['PHP_SELF']);
     </div>
 
 </ul>
-```
 
 </nav>

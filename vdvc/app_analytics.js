@@ -36,8 +36,8 @@ const MAX_DELIVERY_RECORDS = 300;
 const RETAINED_SCOPE_LABEL = `Last ${DATA_RETENTION_DAYS} days`;
 const INVENTORY_FLOW_WINDOW_DAYS = 30;
 const INVENTORY_API_URL = window.VDVC_INVENTORY_API_URL
-  || '../egg-farm-inventory-main/egg-farm-inventory-main/inventory_api.php';
-const OWNER_API_URL = window.VDVC_OWNER_API_URL || 'owner_api.php';
+  || '/egg-farm-inventory-main1/inventory.php';
+const OWNER_API_URL = window.VDVC_OWNER_API_URL || '/egg-farm-inventory-main1/owner_api.php';
 
 // Config fallback thresholds — no minimum_level column exists in MySQL today.
 const EGG_SIZE_MINIMUM_LEVELS = {
@@ -589,38 +589,23 @@ function normalizeInventoryState(payload = {}) {
 }
 
 async function fetchInventoryFromApi() {
-  const fromDate = daysAgoDate(INVENTORY_FLOW_WINDOW_DAYS);
-  const query = new URLSearchParams({
-    resource: 'eggs',
-    from: fromDate,
-    limit: '500',
-  });
-  const supplyQuery = new URLSearchParams({
-    resource: 'supplies',
-    from: fromDate,
-    limit: '500',
-  });
-  const snapshotQuery = new URLSearchParams({ resource: 'snapshot' });
+  const response = await fetch(OWNER_API_URL, { credentials: 'same-origin' });
 
-  const [eggResponse, supplyResponse, snapshotResponse] = await Promise.all([
-    fetch(`${INVENTORY_API_URL}?${query.toString()}`, { credentials: 'same-origin' }),
-    fetch(`${INVENTORY_API_URL}?${supplyQuery.toString()}`, { credentials: 'same-origin' }),
-    fetch(`${INVENTORY_API_URL}?${snapshotQuery.toString()}`, { credentials: 'same-origin' }),
-  ]);
-
-  if (!eggResponse.ok || !supplyResponse.ok || !snapshotResponse.ok) {
-    throw new Error('Inventory API request failed.');
+  if (!response.ok) {
+    throw new Error('Owner API request failed.');
   }
 
-  const eggPayload = await eggResponse.json();
-  const supplyPayload = await supplyResponse.json();
-  const snapshotPayload = await snapshotResponse.json();
+  const payload = await response.json();
+
+  if (payload.status !== 'success') {
+    throw new Error('Owner API returned error: ' + (payload.message || 'Unknown error'));
+  }
 
   return normalizeInventoryState({
-    eggs: eggPayload.rows || [],
-    supplies: supplyPayload.rows || [],
-    snapshotEggs: snapshotPayload.eggs || [],
-    snapshotSupplies: snapshotPayload.supplies || [],
+    eggs: payload.inventory.eggs || [],
+    supplies: payload.inventory.supplies || [],
+    snapshotEggs: payload.inventory.snapshotEggs || [],
+    snapshotSupplies: payload.inventory.snapshotSupplies || [],
     source: 'api',
     loadedAt: toDateTimeKey(new Date()),
   });
@@ -2084,30 +2069,252 @@ function navigateToPage(pageName) {
   if (pageName === 'dashboard') {
     renderDashboard();
   } else if (pageName === 'users') {
-    renderUsersTable();
-    renderCustomerAccounts();
+    // Users page has its own inline JavaScript
+  } else if (pageName === 'analytics') {
+    renderAnalyticsPage();
+  } else if (pageName === 'forecasting') {
+    renderForecastingPage();
   } else if (pageName === 'reports') {
-    renderReportsTable();
+    // Reports page is static HTML, no dynamic rendering needed
   } else if (pageName === 'profile') {
     renderProfilePage();
   }
 }
 
-// Dashboard rendering
+// Dashboard rendering (streamlined)
 function renderDashboard() {
   if (state.activePage !== 'dashboard') return;
   const analytics = getDashboardAnalytics();
   renderDashboardStats(analytics);
   renderAlerts(analytics);
-  renderReservationChart(analytics);
-  renderInventoryChart(analytics);
-  renderSuppliesPanel(analytics);
-  renderProductInsights(analytics);
-  renderForecast(analytics);
-  renderNotifications(analytics);
   renderLiveMetric(analytics);
   renderActivityLog();
-  renderSMSMonitoring(analytics);
+  renderQuickStatus(analytics);
+  renderNotifications(analytics);
+}
+
+// Analytics page rendering
+function renderAnalyticsPage() {
+  state.activePage = 'analytics';
+  const analytics = getDashboardAnalytics();
+  renderAnalyticsReservationChart(analytics);
+  renderAnalyticsInventoryChart(analytics);
+  renderAnalyticsProductInsights(analytics);
+  renderAnalyticsSuppliesPanel(analytics);
+}
+
+// Forecasting page rendering
+function renderForecastingPage() {
+  state.activePage = 'forecasting';
+  const analytics = getDashboardAnalytics();
+  renderForecastingForecast(analytics);
+}
+
+// Reports page rendering (static HTML only)
+function renderReportsPage() {
+  // Reports page is static HTML, no dynamic rendering needed
+}
+
+// Quick status rendering for dashboard
+function renderQuickStatus(analytics) {
+  const inventoryStatus = document.getElementById('quick-inventory-status');
+  const reservationStatus = document.getElementById('quick-reservation-status');
+  const deliveryStatus = document.getElementById('quick-delivery-status');
+  const forecastStatus = document.getElementById('quick-forecast-status');
+
+  if (inventoryStatus) {
+    const inv = analytics.inventoryAnalytics;
+    inventoryStatus.textContent = inv.lowStockCount > 0 ? 'Low Stock' : 'Healthy';
+    inventoryStatus.style.color = inv.lowStockCount > 0 ? '#c62828' : '#527d59';
+  }
+
+  if (reservationStatus) {
+    const res = analytics.reservationAnalytics;
+    reservationStatus.textContent = res.activeReservations > 0 ? 'Active' : 'Quiet';
+  }
+
+  if (deliveryStatus) {
+    const del = analytics.deliveryAnalytics;
+    deliveryStatus.textContent = del.pendingDeliveries > 0 ? 'Scheduled' : 'None';
+  }
+
+  if (forecastStatus) {
+    const forecast = analytics.forecastAnalytics;
+    forecastStatus.textContent = forecast.nextForecast > 0 ? 'Increasing' : 'Stable';
+  }
+}
+
+// Analytics-specific render functions (reuse existing functions with new IDs)
+function renderAnalyticsReservationChart(analytics) {
+  const chart = document.getElementById('analytics-reservation-trend-chart');
+  const bars = document.getElementById('analytics-reservation-source-bars');
+  const axis = document.getElementById('analytics-reservation-axis-labels');
+  const kpi = document.getElementById('analytics-reservation-kpi');
+  const trendValue = document.getElementById('analytics-reservation-trend-value');
+  const topChannel = document.getElementById('analytics-reservation-top-channel');
+  const insight = document.getElementById('analytics-reservation-insight');
+
+  if (!chart) return;
+
+  const res = analytics.reservationAnalytics;
+  const sourceBreakdown = res.sourceBreakdown || [];
+
+  const reservationChartSvg = generateChartSvg(res.dailyData || [], 760, 245);
+  chart.innerHTML = reservationChartSvg;
+
+  if (bars) {
+    bars.innerHTML = sourceBreakdown.slice(0, 3).map((item, index) => `
+      <div class="channel-row">
+        <strong>${escapeHtml(item.label || 'Channel')}</strong>
+        <div class="channel-track"><i style="width:${Math.min(item.share || 0, 100)}%"></i></div>
+        <strong>${formatNumber(item.value || 0)}</strong>
+      </div>
+    `).join('');
+  }
+
+  if (kpi) kpi.textContent = formatNumber(res.totalReservations);
+  if (trendValue) trendValue.textContent = res.trend || 'Stable';
+  if (topChannel) {
+    const top = sourceBreakdown[0];
+    topChannel.textContent = top ? top.label : '—';
+  }
+  if (insight) insight.textContent = top ? `${top.label} is the primary booking channel with ${formatNumber(top.value)} reservations in the retained dataset.` : 'Booking channel insights will appear when reservation data is available.';
+}
+
+function renderAnalyticsInventoryChart(analytics) {
+  const chart = document.getElementById('analytics-inventory-flow-chart');
+  const labels = document.getElementById('analytics-inventory-flow-labels');
+  const kpi = document.getElementById('analytics-inventory-kpi');
+  const available = document.getElementById('analytics-inventory-available');
+  const reserved = document.getElementById('analytics-inventory-reserved');
+  const insight = document.getElementById('analytics-inventory-insight');
+  const healthBadge = document.getElementById('analytics-inventory-health-badge');
+
+  if (!chart) return;
+
+  const inv = analytics.inventoryAnalytics;
+  const flowData = inv.flowData || [];
+
+  const flowChartSvg = generateChartSvg(flowData, 760, 100);
+  chart.innerHTML = flowChartSvg;
+
+  if (labels) {
+    labels.innerHTML = flowData.length > 0 ? `
+      <div class="axis-label"><span>${escapeHtml(flowData[0].label || 'Start')}</span><span>${escapeHtml(flowData[flowData.length - 1].label || 'End')}</span></div>
+    ` : '';
+  }
+
+  if (kpi) kpi.textContent = formatNumber(inv.totalInventory);
+  if (available) available.textContent = formatNumber(inv.availableInventory);
+  if (reserved) reserved.textContent = formatNumber(inv.reservedUnits);
+  if (healthBadge) {
+    healthBadge.textContent = inv.lowStockCount > 0 ? 'Low Stock' : 'Healthy';
+    healthBadge.style.color = inv.lowStockCount > 0 ? '#c62828' : '#527d59';
+  }
+  if (insight) {
+    insight.textContent = inv.lowStockCount > 0
+      ? `${inv.lowStockCount} item(s) are below threshold from the ${inv.source}. ${formatNumber(inv.reservedUnits)} eggs are reserved.`
+      : `${formatNumber(inv.availableInventory)} eggs remain available after reservations from the ${inv.source}.`;
+  }
+}
+
+function renderAnalyticsProductInsights(analytics) {
+  const gauge = document.getElementById('analytics-product-insight-gauge');
+  const bars = document.getElementById('analytics-product-insight-bars');
+  const note = document.getElementById('analytics-product-insight-note');
+  const kpi = document.getElementById('analytics-product-kpi');
+  const leaderLabel = document.getElementById('analytics-product-leader');
+  const trendIcon = document.getElementById('analytics-product-trend-icon');
+  const trendValue = document.getElementById('analytics-product-trend-value');
+
+  if (!gauge) return;
+
+  const product = analytics.productAnalytics;
+  const products = product.sizeDistribution || [];
+  const leader = products[0] || {};
+
+  if (bars) {
+    bars.innerHTML = products.slice(0, 6).map((item, index) => `
+      <div class="product-bar-row"><div class="product-bar-label"><span>${escapeHtml(item.label)}</span><strong>${formatPercent(item.share)}</strong></div><div class="product-bar-track"><i class="product-bar-fill ${index === 0 ? 'leader' : ''}" style="width:${Math.max(item.share, 4)}%;opacity:${item.opacity}"></i></div></div>
+    `).join('');
+  }
+
+  if (kpi) kpi.textContent = formatPercent(leader.share || 0);
+  if (leaderLabel) leaderLabel.textContent = leader.label || '—';
+  if (trendIcon) trendIcon.textContent = product.trendDirection === 'up' ? '↑' : (product.trendDirection === 'down' ? '↓' : '→');
+  if (trendValue) trendValue.textContent = product.trendText || 'No data';
+  if (note) note.textContent = `${leader.label} leads with ${formatPercent(leader.share)} of completed delivery volume.`;
+}
+
+function renderAnalyticsSuppliesPanel(analytics) {
+  const container = document.getElementById('analytics-supplies-overview');
+  if (!container) return;
+  const supplies = analytics.inventoryAnalytics.latestSupplies || [];
+  if (!supplies.length) {
+    container.innerHTML = '<div class="empty-state">No supply inventory rows returned from the ledger yet.</div>';
+    return;
+  }
+  container.innerHTML = `<div class="supply-summary-strip">
+    ${supplies.slice(0, 4).map(row => {
+      const low = (row.current_stock || 0) < 50;
+      return `<div><span>${escapeHtml(row.item_category)}</span><strong class="${low ? 'supply-alert-stat' : ''}">${formatNumber(row.current_stock)}</strong></div>`;
+    }).join('')}
+  </div>
+  <div class="supply-table-wrap">
+    <table class="supplies-modern-table">
+      <thead><tr><th>Category</th><th>Item</th><th>Stock</th><th>Batch</th></tr></thead>
+      <tbody>
+        ${supplies.slice(0, 8).map(row => {
+          const low = (row.current_stock || 0) < 50;
+          return `<tr><td>${escapeHtml(row.item_category)}</td><td><strong>${escapeHtml(row.item_name)}</strong></td><td><span class="stock-value ${low ? 'low' : ''}">${formatNumber(row.current_stock)}</span></td><td>${escapeHtml(row.batch_id || '—')}</td></tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+function renderForecastingForecast(analytics) {
+  const chart = document.getElementById('forecasting-summary-chart');
+  const axis = document.getElementById('forecasting-axis-labels');
+  const predictions = document.getElementById('forecasting-predictions');
+  const inventorySection = document.getElementById('forecasting-inventory-section');
+  const kpi = document.getElementById('forecasting-kpi');
+  const insight = document.getElementById('forecasting-insight');
+
+  if (!chart) return;
+
+  const f = analytics.forecastAnalytics;
+  const forecastData = f.forecastData || [];
+
+  const forecastChartSvg = generateChartSvg(forecastData, 760, 240);
+  chart.innerHTML = forecastChartSvg;
+
+  if (axis) {
+    axis.innerHTML = forecastData.length > 0 ? `
+      <div class="axis-label"><span>${escapeHtml(forecastData[0].label || 'Start')}</span><span>${escapeHtml(forecastData[forecastData.length - 1].label || 'End')}</span></div>
+    ` : '';
+  }
+
+  if (kpi) kpi.textContent = formatNumber(f.nextForecast);
+
+  if (inventorySection) {
+    inventorySection.innerHTML = `
+      <div class="readiness-header">
+        <h3>Inventory Readiness</h3>
+        <div class="readiness-badge ${f.sufficiency === 'sufficient' ? '' : 'insufficient'}">${f.sufficiency}</div>
+      </div>
+      <div class="readiness-progress"><i style="width:${f.readinessPercent || 0}%"></i></div>
+      <div class="readiness-grid">
+        <div><span>Forecast demand</span><strong>${formatNumber(f.nextForecast)}</strong></div>
+        <div><span>Current inventory</span><strong>${formatNumber(f.currentInventory)}</strong></div>
+        <div><span>Safety stock</span><strong>${formatNumber(f.safetyStock)}</strong></div>
+      </div>`;
+  }
+
+  if (insight) {
+    const strongest = f.peakDemand || {};
+    insight.textContent = strongest ? `Peak demand is ${formatNumber(strongest.value)} units in ${strongest.label}; inventory readiness is currently ${f.sufficiency.toLowerCase()}.` : 'Demand forecasting based on historical reservation patterns.';
+  }
 }
 
 // Profile page rendering
@@ -2116,15 +2323,25 @@ function renderProfilePage() {
   
   // Set form values
   const fullNameInput = document.getElementById('profile-full-name');
+  const usernameInput = document.getElementById('profile-username');
   const emailInput = document.getElementById('profile-email');
   const phoneInput = document.getElementById('profile-phone');
-  const jobTitleInput = document.getElementById('profile-job-title');
+  const roleInput = document.getElementById('profile-role');
+  const statusInput = document.getElementById('profile-status');
+  const createdInput = document.getElementById('profile-created');
+  const displayName = document.getElementById('profile-display-name');
+  const displayRole = document.getElementById('profile-display-role');
   const avatarPreview = document.getElementById('profile-avatar-preview');
   
   if (fullNameInput) fullNameInput.value = profile.fullName || '';
+  if (usernameInput) usernameInput.value = profile.username || '';
   if (emailInput) emailInput.value = profile.email || '';
   if (phoneInput) phoneInput.value = profile.phone || '';
-  if (jobTitleInput) jobTitleInput.value = profile.jobTitle || '';
+  if (roleInput) roleInput.value = profile.role || 'Owner';
+  if (statusInput) statusInput.value = profile.status || 'Active';
+  if (createdInput) createdInput.value = profile.createdAt ? new Date(profile.createdAt).toLocaleDateString() : '';
+  if (displayName) displayName.textContent = profile.fullName || 'Owner';
+  if (displayRole) displayRole.textContent = profile.role || 'Owner';
   
   if (avatarPreview) {
     if (profile.avatar) {
@@ -2133,6 +2350,64 @@ function renderProfilePage() {
       const initials = getInitials(profile.fullName || 'Admin');
       avatarPreview.textContent = initials;
     }
+  }
+  
+  // Store original values for cancel functionality
+  window.originalProfileValues = {
+    fullName: profile.fullName || '',
+    email: profile.email || '',
+    phone: profile.phone || ''
+  };
+  
+  // Generate and set CSRF token
+  generateCsrfToken();
+}
+
+// CSRF token generation
+function generateCsrfToken() {
+  const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
+  const csrfInput = document.getElementById('csrf_token');
+  const passwordCsrfInput = document.getElementById('password_csrf_token');
+  if (csrfInput) csrfInput.value = token;
+  if (passwordCsrfInput) passwordCsrfInput.value = token;
+}
+
+// Password requirements checker
+function checkPasswordRequirements() {
+  const newPassword = document.getElementById('new-password')?.value || '';
+  const confirmPassword = document.getElementById('confirm-password')?.value || '';
+  
+  const reqLength = document.getElementById('req-length');
+  const reqSpecial = document.getElementById('req-special');
+  const reqMatch = document.getElementById('req-match');
+  
+  if (!reqLength || !reqSpecial || !reqMatch) return;
+  
+  // Check length
+  if (newPassword.length >= 8) {
+    reqLength.classList.add('met');
+    reqLength.querySelector('.requirement-icon').textContent = '✓';
+  } else {
+    reqLength.classList.remove('met');
+    reqLength.querySelector('.requirement-icon').textContent = '○';
+  }
+  
+  // Check special character
+  if (/[!@#$%^&*(),.?":{}|<>]/.test(newPassword)) {
+    reqSpecial.classList.add('met');
+    reqSpecial.querySelector('.requirement-icon').textContent = '✓';
+  } else {
+    reqSpecial.classList.remove('met');
+    reqSpecial.querySelector('.requirement-icon').textContent = '○';
+  }
+  
+  // Check match
+  if (newPassword === confirmPassword && newPassword !== '') {
+    reqMatch.classList.add('met');
+    reqMatch.querySelector('.requirement-icon').textContent = '✓';
+  } else {
+    reqMatch.classList.remove('met');
+    reqMatch.querySelector('.requirement-icon').textContent = '○';
   }
 }
 
@@ -2498,6 +2773,16 @@ function setupEventListeners() {
       }
     });
   });
+
+  // Quick link buttons
+  document.querySelectorAll('.quick-link-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const page = btn.dataset.page;
+      if (page) {
+        navigateToPage(page);
+      }
+    });
+  });
   
   // Sidebar toggle
   const sidebarToggle = document.querySelector('.sidebar-toggle');
@@ -2720,43 +3005,71 @@ function setupEventListeners() {
     profileForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       
+      // Clear previous errors
+      document.getElementById('profile-full-name-error').textContent = '';
+      document.getElementById('profile-email-error').textContent = '';
+      document.getElementById('profile-phone-error').textContent = '';
+      
       const formData = new FormData(profileForm);
-      const updatedProfile = {
-        ...state.profile,
-        fullName: formData.get('fullName'),
-        email: formData.get('email'),
-        phone: formData.get('phone'),
-        jobTitle: formData.get('jobTitle'),
-      };
+      const fullName = formData.get('fullName');
+      const email = formData.get('email');
+      const phone = formData.get('phone');
+      const csrfToken = formData.get('csrf_token');
+      
+      // Frontend validation
+      if (!fullName || fullName.trim() === '') {
+        document.getElementById('profile-full-name-error').textContent = 'Full name is required.';
+        return;
+      }
+      
+      if (!email || !isValidEmail(email)) {
+        document.getElementById('profile-email-error').textContent = 'Please enter a valid email address.';
+        return;
+      }
+      
+      // Show loading state
+      const saveBtn = document.getElementById('profile-save-btn');
+      const originalText = saveBtn.textContent;
+      saveBtn.textContent = 'Saving...';
+      saveBtn.disabled = true;
       
       try {
         await requestOwnerEndpoint('owner_profile_api.php', {
           action: 'profile',
-          fullname: updatedProfile.fullName,
-          email: updatedProfile.email,
+          fullname: fullName,
+          email: email,
+          phone: phone,
+          csrf_token: csrfToken
         });
+        
+        // Reload data to get updated profile
         await loadOwnerData();
+        
+        // Update header name if in parent window
+        if (window.parent && window.parent.updateOwnerName) {
+          window.parent.updateOwnerName(fullName);
+        }
+        
         showToast('Profile updated successfully.', 'success');
         renderProfilePage();
       } catch (error) {
         showToast(error.message, 'error');
+      } finally {
+        saveBtn.textContent = originalText;
+        saveBtn.disabled = false;
       }
     });
   }
   
-  // Profile photo upload
-  const profilePhotoInput = document.getElementById('profile-photo');
-  if (profilePhotoInput) {
-    profilePhotoInput.addEventListener('change', async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      
-      try {
-        const optimizedImage = await optimizeAvatarFile(file);
-        void optimizedImage;
-        showToast('Profile photos are not supported by the current database schema.', 'info');
-      } catch (error) {
-        showToast(error.message, 'error');
+  // Profile cancel button
+  const cancelBtn = document.getElementById('profile-cancel-btn');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', () => {
+      if (window.originalProfileValues) {
+        document.getElementById('profile-full-name').value = window.originalProfileValues.fullName;
+        document.getElementById('profile-email').value = window.originalProfileValues.email;
+        document.getElementById('profile-phone').value = window.originalProfileValues.phone;
+        showToast('Changes discarded.', 'info');
       }
     });
   }
@@ -2770,30 +3083,98 @@ function setupEventListeners() {
       const currentPassword = document.getElementById('current-password').value;
       const newPassword = document.getElementById('new-password').value;
       const confirmPassword = document.getElementById('confirm-password').value;
+      const csrfToken = document.getElementById('password_csrf_token').value;
       
       // Clear previous errors
       document.getElementById('current-password-error').textContent = '';
       document.getElementById('new-password-error').textContent = '';
       document.getElementById('confirm-password-error').textContent = '';
       
-      // Validate current password
-      const isCurrentValid = await verifyPassword(currentPassword, state.profile);
-      if (!isCurrentValid) {
-        document.getElementById('current-password-error').textContent = 'Current password is incorrect.';
-        document.getElementById('current-password')?.focus();
+      // Frontend validation
+      if (!currentPassword) {
+        document.getElementById('current-password-error').textContent = 'Current password is required.';
         return;
       }
       
-      // Validate new password
+      if (!newPassword) {
+        document.getElementById('new-password-error').textContent = 'New password is required.';
+        return;
+      }
+      
+      if (!confirmPassword) {
+        document.getElementById('confirm-password-error').textContent = 'Please confirm your new password.';
+        return;
+      }
+      
+      if (newPassword !== confirmPassword) {
+        document.getElementById('confirm-password-error').textContent = 'Passwords do not match.';
+        return;
+      }
+      
       if (newPassword.length < 8) {
         document.getElementById('new-password-error').textContent = 'Password must be at least 8 characters.';
-        document.getElementById('new-password')?.focus();
         return;
       }
       
       if (!/[!@#$%^&*(),.?":{}|<>]/.test(newPassword)) {
         document.getElementById('new-password-error').textContent = 'Password must contain at least one special character.';
-        document.getElementById('new-password')?.focus();
+        return;
+      }
+      
+      // Note: Current password verification is done on backend for security
+      
+      // Show loading state
+      const saveBtn = document.getElementById('password-save-btn');
+      const originalText = saveBtn.textContent;
+      saveBtn.textContent = 'Changing...';
+      saveBtn.disabled = true;
+      
+      try {
+        await requestOwnerEndpoint('owner_profile_api.php', {
+          action: 'password',
+          current_password: currentPassword,
+          new_password: newPassword,
+          confirm_password: confirmPassword,
+          csrf_token: csrfToken
+        });
+        
+        passwordForm.reset();
+        checkPasswordRequirements();
+        showToast('Password updated successfully.', 'success');
+      } catch (error) {
+        if (error.message.includes('Current password')) {
+          document.getElementById('current-password-error').textContent = error.message;
+        } else if (error.message.includes('match')) {
+          document.getElementById('confirm-password-error').textContent = error.message;
+        } else {
+          document.getElementById('new-password-error').textContent = error.message;
+        }
+      } finally {
+        saveBtn.textContent = originalText;
+        saveBtn.disabled = false;
+      }
+    });
+  }
+  
+  // Password input listeners for requirements checking
+  const newPasswordInput = document.getElementById('new-password');
+  const confirmPasswordInput = document.getElementById('confirm-password');
+  
+  if (newPasswordInput) {
+    newPasswordInput.addEventListener('input', checkPasswordRequirements);
+    newPasswordInput.addEventListener('keyup', checkPasswordRequirements);
+  }
+  
+  if (confirmPasswordInput) {
+    confirmPasswordInput.addEventListener('input', checkPasswordRequirements);
+    confirmPasswordInput.addEventListener('keyup', checkPasswordRequirements);
+  }
+  
+  // Email validation helper
+  function isValidEmail(email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  }
         return;
       }
       
@@ -2880,6 +3261,12 @@ async function loadOwnerData() {
 }
 
 async function init() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const page = urlParams.get('page') || 'dashboard';
+
+  // Set the active page state BEFORE loading data
+  state.activePage = page;
+
   await loadOwnerData();
 
   const loadingOverlay = document.getElementById('loading-overlay');
@@ -2891,9 +3278,30 @@ async function init() {
 
   renderReportCategoryOptions();
   setupEventListeners();
-  navigateToPage('dashboard');
+
+  // Render the appropriate page immediately (DOM is already loaded)
+  switch(page) {
+    case 'users':
+      // Users page has its own inline JavaScript
+      break;
+    case 'analytics':
+      // Analytics page has its own inline JavaScript
+      break;
+    case 'forecasting':
+      // Forecasting page has its own inline JavaScript
+      break;
+    case 'reports':
+      // Reports page is static HTML, no dynamic rendering needed
+      break;
+    case 'profile':
+      renderProfilePage();
+      break;
+    default:
+      navigateToPage('dashboard');
+      renderDashboard();
+  }
+
   initNotificationBadge();
-  renderDashboard();
 
   state._liveMetricInterval = setInterval(() => {
     const analytics = getDashboardAnalytics();

@@ -1411,7 +1411,7 @@ body {
 
 .main-content {
 
-    margin-left: 312px;
+    margin-left: 260px;
 
     min-height: 100vh;
 
@@ -1537,7 +1537,7 @@ body {
         center;
 
     gap:
-        18px;
+        16px;
 
     height:
         100%;
@@ -1569,6 +1569,12 @@ body {
     justify-content:
         center;
 
+    background:
+        none;
+
+    border:
+        none;
+
     text-decoration:
         none;
 
@@ -1580,6 +1586,9 @@ body {
 
     transition:
         0.2s ease;
+
+    cursor:
+        pointer;
 
 }
 
@@ -1643,6 +1652,211 @@ body {
 
 
 /* =========================================================
+   NOTIFICATION DROPDOWN
+========================================================= */
+
+.notification-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 360px;
+    background: #ffffff;
+    border: 1px solid #e2dfd7;
+    border-radius: 10px;
+    box-shadow: 0 3px 10px rgba(70, 65, 55, 0.05);
+    z-index: 1000;
+}
+
+.notification-dropdown.hidden {
+    display: none;
+}
+
+.notification-dropdown-header {
+    min-height: 50px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #e9e6df;
+}
+
+.notification-dropdown-header .panel-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.notification-dropdown-header .panel-title-icon {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #eef3ed;
+    color: #527d59;
+    font-size: 14px;
+}
+
+.notification-dropdown-header .dashboard-panel-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #3f4b45;
+}
+
+.notification-dropdown-header .mark-all-link {
+    font-size: 11px;
+    font-weight: 700;
+    color: #527d59;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.notification-dropdown-header .mark-all-link:hover {
+    text-decoration: underline;
+}
+
+.notification-dropdown-header .mark-all-link:active {
+    text-decoration: underline;
+}
+
+.notification-list {
+    max-height: 350px;
+    overflow-y: auto;
+    padding: 5px 14px 10px;
+}
+
+.notification-list::-webkit-scrollbar {
+    width: 5px;
+}
+
+.notification-list::-webkit-scrollbar-track {
+    background: #f0eee8;
+}
+
+.notification-list::-webkit-scrollbar-thumb {
+    background: #c8d4c4;
+    border-radius: 4px;
+}
+
+.notification-item {
+    min-height: 48px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid #eceae4;
+    transition: background 0.2s ease;
+}
+
+.notification-item:last-child {
+    border-bottom: none;
+}
+
+.notification-item:hover {
+    background: #fafaf7;
+}
+
+.notification-item.read {
+    opacity: 0.6;
+}
+
+.notification-item.unread {
+    background: #f7f6f2;
+}
+
+.notification-icon {
+    width: 29px;
+    height: 29px;
+    min-width: 29px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 12px;
+}
+
+.notification-icon.info {
+    background: #edf3e8;
+    color: #527d59;
+}
+
+.notification-icon.success {
+    background: #e9f1e6;
+    color: #527d59;
+}
+
+.notification-icon.alert {
+    background: #fff4e4;
+    color: #b67b30;
+}
+
+.notification-icon.warning {
+    background: #eee9f7;
+    color: #70558c;
+}
+
+.notification-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.notification-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #4d5851;
+}
+
+.notification-description {
+    margin-top: 4px;
+    font-size: 10px;
+    color: #8a9089;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.notification-time {
+    font-size: 10px;
+    color: #969a94;
+    white-space: nowrap;
+}
+
+.mark-read-btn {
+    background: none;
+    border: none;
+    color: #527d59;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 20px;
+    transition: background 0.2s ease;
+}
+
+.mark-read-btn:hover {
+    background: #e9f1e6;
+}
+
+.notification-empty {
+    padding: 35px 15px;
+    text-align: center;
+    color: #92968f;
+    font-size: 9px;
+}
+
+.notification-empty i {
+    font-size: 24px;
+    margin-bottom: 8px;
+    color: #d1d5db;
+}
+
+.notification-empty p {
+    font-size: 12px;
+    margin: 0;
+}
+
+
+/* =========================================================
    HEADER DIVIDER
 ========================================================= */
 
@@ -1673,10 +1887,7 @@ body {
         center;
 
     gap:
-        11px;
-
-    min-width:
-        190px;
+        10px;
 
     text-decoration:
         none;
@@ -1754,7 +1965,7 @@ body {
         center;
 
     min-width:
-        100px;
+        140px;
 
 }
 
@@ -1792,7 +2003,7 @@ body {
         block;
 
     margin-top:
-        5px;
+        3px;
 
     color:
         #8a9590;
@@ -1802,9 +2013,6 @@ body {
 
     line-height:
         1.2;
-
-    white-space:
-        nowrap;
 
 }
 
@@ -1817,7 +2025,7 @@ body {
         block;
 
     margin-top:
-        3px;
+        2px;
 
     color:
         #527d59;
@@ -1830,9 +2038,6 @@ body {
 
     line-height:
         1.2;
-
-    white-space:
-        nowrap;
 
 }
 
@@ -1866,7 +2071,7 @@ body {
 .manager-date {
 
     font-size:
-        0.63rem;
+        0.65rem;
 
     color:
         #8a9590;
@@ -1877,7 +2082,7 @@ body {
 .manager-time {
 
     font-size:
-        0.63rem;
+        0.65rem;
 
     color:
         #527d59;
@@ -2946,6 +3151,13 @@ white-space: nowrap;
 
     }
 
+    .dashboard-topbar-right {
+
+        gap:
+            12px;
+
+    }
+
 }
 
 
@@ -2996,41 +3208,67 @@ white-space: nowrap;
 
 
         <!-- NOTIFICATION -->
+        <div style="position: relative;">
+            <button
+                type="button"
+                class="top-notification"
+                title="Notifications"
+                onclick="event.stopPropagation(); toggleNotificationDropdown()"
+            >
 
-        <a
-            href="manager_notifications.php"
-            class="top-notification"
-            title="Notifications"
-        >
-
-            <i class="fa-regular fa-bell"></i>
-
-
-            <?php if ($manager_unread_notifications > 0) { ?>
-
-                <span class="notification-badge">
-
-                    <?php
-
-                    if ($manager_unread_notifications > 9) {
-
-                        echo '9+';
-
-                    } else {
-
-                        echo $manager_unread_notifications;
-
-                    }
-
-                    ?>
-
-                </span>
-
-            <?php } ?>
+                <i class="fa-regular fa-bell"></i>
 
 
-        </a>
+                <?php if ($manager_unread_notifications > 0) { ?>
 
+                    <span class="notification-badge">
+
+                        <?php
+
+                        if ($manager_unread_notifications > 9) {
+
+                            echo '9+';
+
+                        } else {
+
+                            echo $manager_unread_notifications;
+
+                        }
+
+                        ?>
+
+                    </span>
+
+                <?php } ?>
+
+
+            </button>
+
+
+            <!-- NOTIFICATION DROPDOWN -->
+            <div
+                class="notification-dropdown hidden"
+                id="notificationDropdown"
+            >
+                <div class="notification-dropdown-header">
+                    <div class="panel-title-group">
+                        <div class="panel-title-icon">
+                            <i class="fa-solid fa-bell"></i>
+                        </div>
+                        <div class="dashboard-panel-title">
+                            Notifications
+                        </div>
+                    </div>
+                    <a class="mark-all-link" onclick="markAllAsRead(event)">
+                        Mark All as Read
+                    </a>
+                </div>
+
+                <div class="notification-list" id="notificationList">
+                    <!-- Notifications will be loaded here via JavaScript -->
+                </div>
+            </div>
+        </div>
 
 
         <!-- VERTICAL DIVIDER -->
@@ -3071,36 +3309,35 @@ white-space: nowrap;
                 </div>
 
 
-<!-- DATE AND TIME -->
+                <!-- DATE -->
 
-<div class="manager-date-time">
+                <div class="manager-role">
 
+                    <span
+                        class="manager-date"
+                        id="currentDate"
+                    >
 
-    <!-- DATE -->
+                        Loading date...
 
-    <span
-        class="manager-date"
-        id="currentDate"
-    >
+                    </span>
 
-        Loading date...
-
-    </span>
-
-
-    <!-- TIME -->
-
-    <span
-        class="manager-time"
-        id="currentTime"
-    >
-
-        Loading time...
-
-    </span>
+                </div>
 
 
-</div>
+                <!-- TIME -->
+
+                <div class="manager-time">
+
+                    <span
+                        id="currentTime"
+                    >
+
+                        Loading time...
+
+                    </span>
+
+                </div>
 
 
             </div>
@@ -4583,6 +4820,194 @@ setInterval(
     1000
 
 );
+
+
+/* =========================================================
+   NOTIFICATION DROPDOWN
+========================================================= */
+
+var notificationDropdown = null;
+var isDropdownOpen = false;
+
+function toggleNotificationDropdown()
+{
+    if (!notificationDropdown) {
+        notificationDropdown = document.getElementById('notificationDropdown');
+    }
+
+    if (notificationDropdown) {
+        isDropdownOpen = !isDropdownOpen;
+
+        if (isDropdownOpen) {
+            notificationDropdown.classList.remove('hidden');
+            loadNotifications();
+        } else {
+            notificationDropdown.classList.add('hidden');
+        }
+    }
+}
+
+function closeNotificationDropdown()
+{
+    if (notificationDropdown && isDropdownOpen) {
+        notificationDropdown.classList.add('hidden');
+        isDropdownOpen = false;
+    }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(event) {
+    if (notificationDropdown && isDropdownOpen) {
+        var notificationButton = document.querySelector('.top-notification');
+        var notificationContainer = notificationDropdown.parentElement;
+        if (!notificationContainer.contains(event.target)) {
+            closeNotificationDropdown();
+        }
+    }
+});
+
+function loadNotifications()
+{
+    var notificationList = document.getElementById('notificationList');
+    if (!notificationList) return;
+
+    // Show loading state
+    notificationList.innerHTML = '<div class="notification-empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading notifications...</p></div>';
+
+    // Fetch notifications from the dedicated notifications page
+    fetch('manager_notifications.php')
+        .then(function(response) {
+            return response.text();
+        })
+        .then(function(html) {
+            // Parse the HTML to extract notification data
+            var parser = new DOMParser();
+            var doc = parser.parseFromString(html, 'text/html');
+
+            // Extract notification items from the dedicated page
+            var notificationItems = doc.querySelectorAll('.notification-item');
+
+            if (notificationItems.length > 0) {
+                var notificationsHtml = '';
+                notificationItems.forEach(function(item) {
+                    var isUnread = item.classList.contains('unread');
+                    var iconElement = item.querySelector('.notification-icon');
+                    var iconClass = 'info';
+                    var iconHtml = '<div class="notification-icon info"><i class="fa-solid fa-bell"></i></div>';
+
+                    if (iconElement) {
+                        if (iconElement.classList.contains('success')) {
+                            iconClass = 'success';
+                            iconHtml = '<div class="notification-icon success"><i class="fa-solid fa-check"></i></div>';
+                        } else if (iconElement.classList.contains('alert')) {
+                            iconClass = 'alert';
+                            iconHtml = '<div class="notification-icon alert"><i class="fa-solid fa-triangle-exclamation"></i></div>';
+                        } else if (iconElement.classList.contains('warning')) {
+                            iconClass = 'warning';
+                            iconHtml = '<div class="notification-icon warning"><i class="fa-solid fa-circle-exclamation"></i></div>';
+                        } else {
+                            iconHtml = iconElement.outerHTML;
+                        }
+                    }
+
+                    var titleElement = item.querySelector('.notification-title');
+                    var title = titleElement ? titleElement.textContent : 'Notification';
+
+                    var descElement = item.querySelector('.notification-desc');
+                    var description = descElement ? descElement.textContent : '';
+
+                    var timeElement = item.querySelector('.notification-time');
+                    var time = timeElement ? timeElement.textContent : '';
+
+                    var notificationId = item.getAttribute('onclick') ? item.getAttribute('onclick').match(/\d+/) : null;
+
+                    notificationsHtml += '<div class="notification-item ' + (isUnread ? 'unread' : 'read') + '">';
+                    notificationsHtml += iconHtml;
+                    notificationsHtml += '<div class="notification-content">';
+                    notificationsHtml += '<div class="notification-title">' + title + '</div>';
+                    notificationsHtml += '<div class="notification-description">' + description + '</div>';
+                    notificationsHtml += '<div class="notification-time">' + time + '</div>';
+                    notificationsHtml += '</div>';
+                    if (notificationId && isUnread) {
+                        notificationsHtml += '<button class="mark-read-btn" onclick="markAsRead(' + notificationId + ', this)">Mark as Read</button>';
+                    }
+                    notificationsHtml += '</div>';
+                });
+
+                notificationList.innerHTML = notificationsHtml;
+            } else {
+                notificationList.innerHTML = '<div class="notification-empty"><i class="fa-regular fa-bell-slash"></i><p>No notifications</p></div>';
+            }
+        })
+        .catch(function(error) {
+            notificationList.innerHTML = '<div class="notification-empty"><i class="fa-solid fa-exclamation-circle"></i><p>Failed to load notifications</p></div>';
+        });
+}
+
+function markAsRead(notificationId, buttonElement)
+{
+    var formData = new FormData();
+    formData.append('mark_read', '1');
+    formData.append('notification_id', notificationId);
+
+    fetch('manager_notifications.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.success) {
+            // Update UI
+            var notificationItem = buttonElement.closest('.notification-item');
+            if (notificationItem) {
+                notificationItem.classList.remove('unread');
+                notificationItem.classList.add('read');
+                buttonElement.remove();
+
+                // Update badge
+                var badge = document.querySelector('.notification-badge');
+                if (badge) {
+                    var currentBadge = parseInt(badge.textContent);
+                    if (!isNaN(currentBadge) && currentBadge > 0) {
+                        if (currentBadge > 1) {
+                            badge.textContent = currentBadge - 1;
+                        } else {
+                            badge.remove();
+                        }
+                    }
+                }
+            }
+        }
+    })
+    .catch(function(error) {
+        console.error('Error marking notification as read:', error);
+    });
+}
+
+function markAllAsRead(event)
+{
+    if (event) {
+        event.preventDefault();
+    }
+
+    var formData = new FormData();
+    formData.append('mark_all_read', '1');
+
+    fetch('manager_notifications.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) {
+        // Reload page to update all counts
+        window.location.reload();
+    })
+    .catch(function(error) {
+        console.error('Error marking all as read:', error);
+    });
+}
+
 </script>
 
 

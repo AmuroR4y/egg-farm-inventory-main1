@@ -9,19 +9,6 @@ if (!isset($_SESSION['role']) || !in_array($_SESSION['role'], ['manager', 'owner
 } 
  
 $current = basename($_SERVER['PHP_SELF']);
-
-// Unread notification count for sidebar badge
-$_panel_unread_notif = 0;
-if (isset($_SESSION['user_id'])) {
-    require_once 'db.php';
-    $_panel_uid = (int)$_SESSION['user_id'];
-    $_panel_res = mysqli_query($conn,
-        "SELECT COUNT(*) AS total FROM notifications WHERE user_id = $_panel_uid AND is_read = 0"
-    );
-    if ($_panel_res && ($r = mysqli_fetch_assoc($_panel_res))) {
-        $_panel_unread_notif = (int)$r['total'];
-    }
-}
 ?> 
 
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -90,7 +77,6 @@ if (isset($_SESSION['user_id'])) {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    flex: 1;
     padding: 0;
     margin: 0;
 }
@@ -164,8 +150,8 @@ if (isset($_SESSION['user_id'])) {
    LOGOUT SECTION
 ================================ */
 .logout-section {
-    margin-top: auto;
-    margin-bottom: 190px;
+    margin-top: 0;
+    margin-bottom: 0;
     position: relative;
     z-index: 2;
 }
@@ -196,24 +182,6 @@ if (isset($_SESSION['user_id'])) {
 .main-content {
     margin-left: 260px;
     padding: 30px;
-}
-
-/* ================================
-   SIDEBAR NOTIFICATION BADGE
-================================ */
-.notif-count {
-    margin-left: auto;
-    background: #e74c3c;
-    color: #fff;
-    font-size: 10px;
-    font-weight: 700;
-    min-width: 18px;
-    height: 18px;
-    border-radius: 9px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 5px;
 }
 
 </style>
@@ -299,18 +267,6 @@ if (isset($_SESSION['user_id'])) {
 
     </a>
 
-
-    <!-- NOTIFICATIONS -->
-    <a href="manager_notifications.php"
-    class="menu-item <?= ($current == 'manager_notifications.php') ? 'active' : ''; ?>">
-
-        <i class="fa-solid fa-bell"></i>
-        Notifications
-        <?php if ($_panel_unread_notif > 0): ?>
-            <span class="notif-count"><?= $_panel_unread_notif > 9 ? '9+' : $_panel_unread_notif; ?></span>
-        <?php endif; ?>
-
-    </a>
 
     <!-- LOGOUT -->
     <div class="logout-section">

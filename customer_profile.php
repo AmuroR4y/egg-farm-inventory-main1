@@ -1,8 +1,10 @@
 <?php
+// Include standardized session configuration FIRST
+require_once 'session_config.php';
 
-if (!isset($_SESSION)) {
-    session_start();
-}
+date_default_timezone_set('Asia/Manila');
+
+include 'db.php';
 
 /*
 |--------------------------------------------------------------------------
@@ -14,8 +16,6 @@ if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit();
 }
-
-include 'db.php';
 
 $user_id = $_SESSION['user_id'];
 
@@ -76,6 +76,18 @@ if ($column_query) {
     }
 }
 
+
+/*
+|--------------------------------------------------------------------------
+| NOTIFICATION COUNT
+|--------------------------------------------------------------------------
+*/
+
+$unread_notifications = 0;
+$notification_count_result = $conn->query("SELECT COUNT(*) AS total FROM notifications WHERE user_id = " . (int)$user_id . " AND is_read = 0");
+if ($notification_count_result && ($notification_count_row = $notification_count_result->fetch_assoc())) {
+    $unread_notifications = (int)$notification_count_row['total'];
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -930,7 +942,16 @@ if (
 <style>
 
     body {
-        background: #f5f6f7;
+        min-height: 100vh;
+
+    font-family:
+        Arial,
+        Helvetica,
+        sans-serif;
+
+    background: #f3f1eb;
+
+    color: #3f4b45;
     }
 
     .main-content {
@@ -949,70 +970,817 @@ if (
     | OUTER PROFILE CARD
     |--------------------------------------------------------------------------
     */
+.profile-outer-card {
+    width: 100%;
+    background: #ffffff;
+    border: 1px solid #dfe5e1;
+    border-radius: 14px;
+    padding: 0;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+.customer-dashboard-topbar {
 
-    .profile-outer-card {
-        width: 100%;
-        background: #ffffff;
-        border: 1px solid #dfe5e1;
-        border-radius: 14px;
-        padding: 25px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-    }
+    min-height: 86px;
 
+    width: 100%;
 
-    /*
-    |--------------------------------------------------------------------------
-    | OUTER CARD HEADER
-    |--------------------------------------------------------------------------
-    */
+    display: flex;
 
-    .page-header {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-    }
+    align-items: center;
 
-    .page-header-icon {
-        width: 46px;
-        height: 46px;
-        min-width: 46px;
-        border-radius: 50%;
+    justify-content: space-between;
 
-        display: flex;
-        align-items: center;
-        justify-content: center;
+    padding: 0 28px;
 
-        background: #e8f1eb;
-        color: #356b4b;
-        font-size: 20px;
-    }
+    background: #f7f6f2;
 
-    .page-title {
-        font-size: 22px;
-        font-weight: 700;
-        color: #35433b;
-        margin: 0;
-    }
+    border-bottom: 1px solid #dddcd6;
 
-    .page-subtitle {
-        font-size: 12px;
-        color: #6b7280;
-        margin: 3px 0 0;
-    }
+    box-sizing: border-box;
+
+    border-radius: 13px 13px 0 0;
+}
 
 
-    /*
-    |--------------------------------------------------------------------------
-    | HEADER DIVIDER
-    |--------------------------------------------------------------------------
-    */
+/* =========================================================
+   HEADER TITLE
+========================================================= */
 
-    .profile-header-divider {
-        width: 100%;
-        height: 1px;
-        background: #e5e9e6;
-        margin: 22px 0;
-    }
+.customer-page-title {
+
+    margin:
+        0;
+
+    font-size:
+        1.35rem;
+
+    font-weight:
+        700;
+
+    color:
+        #3f4b45;
+
+    letter-spacing:
+        -0.3px;
+}
+
+
+/* =========================================================
+   HEADER RIGHT
+========================================================= */
+
+.customer-topbar-right {
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    gap:
+        18px;
+
+    height:
+        100%;
+}
+
+
+/* =========================================================
+   NOTIFICATION
+========================================================= */
+
+.customer-top-notification {
+
+    position:
+        relative;
+
+    width:
+        40px;
+
+    height:
+        40px;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    text-decoration:
+        none;
+
+    color:
+        #65716b;
+
+    font-size:
+        1.2rem;
+
+    transition:
+        0.2s ease;
+}
+
+
+.customer-top-notification:hover {
+
+    color:
+        #527d59;
+}
+
+
+/* =========================================================
+   NOTIFICATION BADGE
+========================================================= */
+
+.customer-notification-badge {
+
+    position:
+        absolute;
+
+    top:
+        1px;
+
+    right:
+        0;
+
+    min-width:
+        17px;
+
+    height:
+        17px;
+
+    padding:
+        0 4px;
+
+    border-radius:
+        50%;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    background:
+        #527d59;
+
+    color:
+        #ffffff;
+
+    font-size:
+        0.58rem;
+
+    font-weight:
+        700;
+
+    border:
+        2px solid #f7f6f2;
+}
+
+
+/* =========================================================
+   CUSTOMER NOTIFICATION DROPDOWN
+========================================================= */
+
+.customer-notification-dropdown {
+
+    position:
+        absolute;
+
+    top:
+        100%;
+
+    right:
+        0;
+
+    margin-top:
+        10px;
+
+    width:
+        380px;
+
+    max-height:
+        500px;
+
+    background:
+        #ffffff;
+
+    border:
+        1px solid #e0e4e0;
+
+    border-radius:
+        12px;
+
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.12);
+
+    z-index:
+        1000;
+
+    overflow:
+        hidden;
+}
+
+.customer-notification-dropdown.hidden {
+
+    display:
+        none;
+}
+
+.customer-notification-dropdown-header {
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        space-between;
+
+    padding:
+        16px 20px;
+
+    border-bottom:
+        1px solid #e8ebe7;
+
+    background:
+        #f7f6f2;
+}
+
+.customer-panel-title-group {
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    gap:
+        10px;
+}
+
+.customer-panel-title-icon {
+
+    width:
+        32px;
+
+    height:
+        32px;
+
+    border-radius:
+        8px;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    background:
+        #527d59;
+
+    color:
+        #ffffff;
+
+    font-size:
+        0.9rem;
+}
+
+.customer-dashboard-panel-title {
+
+    font-size:
+        0.95rem;
+
+    font-weight:
+        700;
+
+    color:
+        #214f2c;
+}
+
+.customer-mark-all-link {
+
+    font-size:
+        0.8rem;
+
+    font-weight:
+        600;
+
+    color:
+        #527d59;
+
+    cursor:
+        pointer;
+
+    text-decoration:
+        none;
+
+    transition:
+        0.2s ease;
+}
+
+.customer-mark-all-link:hover {
+
+    color:
+        #214f2c;
+
+    text-decoration:
+        underline;
+}
+
+.customer-notification-list {
+
+    max-height:
+        420px;
+
+    overflow-y:
+        auto;
+
+    overflow-x:
+        hidden;
+}
+
+.customer-notification-item {
+
+    display:
+        flex;
+
+    align-items:
+        flex-start;
+
+    gap:
+        12px;
+
+    padding:
+        16px 20px;
+
+    border-bottom:
+        1px solid #f0f2ef;
+
+    transition:
+        0.2s ease;
+
+    cursor:
+        default;
+}
+
+.customer-notification-item:hover {
+
+    background:
+        #f9faf8;
+}
+
+.customer-notification-item.unread {
+
+    background:
+        #f0f5e9;
+}
+
+.customer-notification-item.unread:hover {
+
+    background:
+        #e9f0df;
+}
+
+.customer-notification-icon {
+
+    width:
+        36px;
+
+    height:
+        36px;
+
+    min-width:
+        36px;
+
+    border-radius:
+        10px;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    font-size:
+        0.95rem;
+}
+
+.customer-notification-icon.success {
+
+    background:
+        #dcfce7;
+
+    color:
+        #166534;
+}
+
+.customer-notification-icon.alert {
+
+    background:
+        #fee2e2;
+
+    color:
+        #991b1b;
+}
+
+.customer-notification-icon.info {
+
+    background:
+        #dbeafe;
+
+    color:
+        #1e40af;
+}
+
+.customer-notification-icon.warning {
+
+    background:
+        #fef3c7;
+
+    color:
+        #92400e;
+}
+
+.customer-notification-content {
+
+    flex:
+        1;
+
+    min-width:
+        0;
+}
+
+.customer-notification-title {
+
+    font-size:
+        0.85rem;
+
+    font-weight:
+        700;
+
+    color:
+        #214f2c;
+
+    margin-bottom:
+        4px;
+
+    line-height:
+        1.3;
+}
+
+.customer-notification-item.unread .customer-notification-title {
+
+    color:
+        #1a4023;
+}
+
+.customer-notification-description {
+
+    font-size:
+        0.8rem;
+
+    color:
+        #5c665f;
+
+    line-height:
+        1.4;
+
+    margin-bottom:
+        6px;
+}
+
+.customer-notification-time {
+
+    font-size:
+        0.72rem;
+
+    color:
+        #8b968f;
+
+    font-weight:
+        500;
+}
+
+.customer-notification-empty {
+
+    display:
+        flex;
+
+    flex-direction:
+        column;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    padding:
+        40px 20px;
+
+    color:
+        #8b968f;
+}
+
+.customer-notification-empty i {
+
+    font-size:
+        2rem;
+
+    margin-bottom:
+        12px;
+
+    opacity:
+        0.6;
+}
+
+.customer-notification-empty p {
+
+    font-size:
+        0.85rem;
+
+    margin:
+        0;
+}
+
+.customer-mark-read-btn {
+
+    padding:
+        6px 12px;
+
+    font-size:
+        0.75rem;
+
+    font-weight:
+        600;
+
+    color:
+        #527d59;
+
+    background:
+        #f0f5e9;
+
+    border:
+        1px solid #dce4d5;
+
+    border-radius:
+        6px;
+
+    cursor:
+        pointer;
+
+    transition:
+        0.2s ease;
+
+    margin-left:
+        auto;
+}
+
+.customer-mark-read-btn:hover {
+
+    background:
+        #e9f0df;
+
+    border-color:
+        #cdd6c5;
+}
+
+
+/* =========================================================
+   HEADER DIVIDER
+========================================================= */
+
+.customer-topbar-divider {
+
+    width:
+        1px;
+
+    height:
+        42px;
+
+    background:
+        #deded8;
+}
+
+
+/* =========================================================
+   CUSTOMER PROFILE
+========================================================= */
+
+.customer-top-profile {
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    gap:
+        11px;
+
+    min-width:
+        190px;
+
+    text-decoration:
+        none;
+
+    color:
+        #3f4b45;
+}
+
+
+/* =========================================================
+   CUSTOMER AVATAR
+========================================================= */
+
+.customer-avatar {
+
+    width:
+        54px;
+
+    height:
+        54px;
+
+    min-width:
+        54px;
+
+    border-radius:
+        50%;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    background:
+        #e8ebe7;
+
+    border:
+        1px solid #d9ddd8;
+
+    color:
+        #527d59;
+
+    font-size:
+        1.25rem;
+
+    box-shadow:
+        0 2px 6px
+        rgba(
+            0,
+            0,
+            0,
+            0.04
+        );
+}
+
+
+/* =========================================================
+   CUSTOMER ACCOUNT DETAILS
+========================================================= */
+
+.customer-account-details {
+
+    display:
+        flex;
+
+    flex-direction:
+        column;
+
+    justify-content:
+        center;
+
+    min-width:
+        100px;
+}
+
+
+/* =========================================================
+   CUSTOMER NAME
+========================================================= */
+
+.customer-top-name {
+
+    display:
+        block;
+
+    margin:
+        0;
+
+    color:
+        #3f4b45;
+
+    font-size:
+        0.88rem;
+
+    font-weight:
+        700;
+
+    line-height:
+        1.2;
+}
+
+
+/* =========================================================
+   DATE AND LIVE TIME
+========================================================= */
+
+.customer-date-time {
+
+    display:
+        flex;
+
+    flex-direction:
+        column;
+
+    align-items:
+        flex-start;
+
+    gap:
+        2px;
+
+    margin-top:
+        5px;
+
+    white-space:
+        nowrap;
+}
+
+
+.customer-date {
+
+    font-size:
+        0.63rem;
+
+    color:
+        #8a9590;
+
+    line-height:
+        1.2;
+}
+
+
+.customer-time {
+
+    font-size:
+        0.63rem;
+
+    color:
+        #527d59;
+
+    font-weight:
+        600;
+
+    line-height:
+        1.2;
+
+    white-space:
+        nowrap;
+}
+
+
+/* =========================================================
+   DROPDOWN ICON
+========================================================= */
+
+.customer-dropdown-icon {
+
+    width:
+        28px;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    color:
+        #65716b;
+
+    font-size:
+        0.7rem;
+}
 
 
     /*
@@ -1021,12 +1789,13 @@ if (
     |--------------------------------------------------------------------------
     */
 
-    .profile-layout {
-        display: grid;
-        grid-template-columns: 270px minmax(0, 1fr);
-        gap: 18px;
-        align-items: stretch;
-    }
+  .profile-layout {
+    display: grid;
+    grid-template-columns: 270px minmax(0, 1fr);
+    gap: 18px;
+    align-items: stretch;
+    padding: 25px;
+}
 
 
     /*
@@ -1457,27 +2226,41 @@ if (
         }
 
     }
+@media (max-width: 650px) {
 
-    @media (max-width: 650px) {
-
-        .main-content {
-            padding: 15px;
-        }
-
-        .profile-outer-card {
-            padding: 18px;
-        }
-
-        .form-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .profile-tabs {
-            gap: 10px;
-            overflow-x: auto;
-        }
-
+    .main-content {
+        padding: 15px;
     }
+
+    .profile-outer-card {
+        padding: 0;
+        border-radius: 12px;
+    }
+
+    .customer-dashboard-topbar {
+        min-height: 78px;
+        padding: 0 18px;
+    }
+
+    .profile-layout {
+        padding: 18px;
+    }
+
+    .alert {
+        margin-left: 18px;
+        margin-right: 18px;
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-tabs {
+        gap: 10px;
+        overflow-x: auto;
+    }
+
+}
 
 </style>
 
@@ -1494,28 +2277,114 @@ if (
         <!-- LARGE OUTER CARD -->
         <div class="profile-outer-card">
 
-            <!-- PROFILE MANAGEMENT HEADER -->
-            <div class="page-header">
+       <!-- =====================================================
+     CUSTOMER DASHBOARD TOPBAR
+===================================================== -->
 
-                <div class="page-header-icon">
+<div class="customer-dashboard-topbar">
 
-                    <i class="fa-solid fa-user"></i>
+    <div class="customer-page-title">
+        Profile Management
+    </div>
 
+    <div class="customer-topbar-right">
+
+        <!-- NOTIFICATION -->
+
+        <div style="position: relative;">
+            <button
+                type="button"
+                class="customer-top-notification"
+                title="Notifications"
+                onclick="event.stopPropagation(); toggleCustomerNotificationDropdown()"
+            >
+                <i class="fa-regular fa-bell"></i>
+                <?php if ($unread_notifications > 0): ?>
+                    <span class="customer-notification-badge"><?php echo $unread_notifications > 99 ? '99+' : $unread_notifications; ?></span>
+                <?php endif; ?>
+            </button>
+
+            <!-- NOTIFICATION DROPDOWN -->
+            <div
+                class="customer-notification-dropdown hidden"
+                id="customerNotificationDropdown"
+            >
+                <div class="customer-notification-dropdown-header">
+                    <div class="customer-panel-title-group">
+                        <div class="customer-panel-title-icon">
+                            <i class="fa-solid fa-bell"></i>
+                        </div>
+                        <div class="customer-dashboard-panel-title">
+                            Notifications
+                        </div>
+                    </div>
+                    <a class="customer-mark-all-link" onclick="markAllCustomerAsRead(event)">
+                        Mark All as Read
+                    </a>
                 </div>
 
-                <div>
+                <div class="customer-notification-list" id="customerNotificationList">
+                    <!-- Notifications will be loaded here via JavaScript -->
+                </div>
+            </div>
+        </div>
 
-                    <h1 class="page-title">
-                        Profile Management
-                    </h1>
+        <!-- DIVIDER -->
 
-                    <p class="page-subtitle">
-                        Manage your account information and security settings.
-                    </p>
+        <div class="customer-topbar-divider"></div>
+
+        <!-- CUSTOMER PROFILE -->
+
+        <a
+            href="customer_profile.php"
+            class="customer-top-profile"
+        >
+
+            <!-- AVATAR -->
+
+            <div class="customer-avatar">
+                <i class="fa-solid fa-user"></i>
+            </div>
+
+            <!-- CUSTOMER DETAILS -->
+
+            <div class="customer-account-details">
+
+                <span class="customer-top-name">
+                    Customer
+                </span>
+
+                <div class="customer-date-time">
+
+                    <span
+                        class="customer-date"
+                        id="customer-live-date"
+                    >
+                        <?php echo date('F j, Y'); ?>
+                    </span>
+
+                    <span
+                        class="customer-time"
+                        id="customer-live-time"
+                    >
+                        <?php echo date('h:i:s A'); ?>
+                    </span>
 
                 </div>
 
             </div>
+
+            <!-- DROPDOWN -->
+
+            <div class="customer-dropdown-icon">
+                <i class="fa-solid fa-chevron-down"></i>
+            </div>
+
+        </a>
+
+    </div>
+
+</div>
 
 
             <!-- HORIZONTAL DIVIDER -->
@@ -2082,6 +2951,54 @@ if (
 <script>
 
 
+function updateCustomerDateTime() {
+
+    var now = new Date();
+
+    var options = {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+    };
+
+    var dateText = now.toLocaleDateString(
+        'en-US',
+        options
+    );
+
+    var timeText = now.toLocaleTimeString(
+        'en-US',
+        {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+        }
+    );
+
+    var dateElement = document.getElementById(
+        'customer-live-date'
+    );
+
+    var timeElement = document.getElementById(
+        'customer-live-time'
+    );
+
+    if (dateElement) {
+        dateElement.textContent = dateText;
+    }
+
+    if (timeElement) {
+        timeElement.textContent = timeText;
+    }
+}
+
+updateCustomerDateTime();
+
+setInterval(
+    updateCustomerDateTime,
+    1000
+);
 /*
 |--------------------------------------------------------------------------
 | TAB SWITCHING
@@ -2387,6 +3304,192 @@ if (profilePhotoInput) {
         }
     );
 
+}
+
+/* =========================================================
+   CUSTOMER NOTIFICATION DROPDOWN
+========================================================= */
+
+var customerNotificationDropdown = null;
+var isCustomerDropdownOpen = false;
+
+function toggleCustomerNotificationDropdown()
+{
+    if (!customerNotificationDropdown) {
+        customerNotificationDropdown = document.getElementById('customerNotificationDropdown');
+    }
+
+    if (customerNotificationDropdown) {
+        isCustomerDropdownOpen = !isCustomerDropdownOpen;
+
+        if (isCustomerDropdownOpen) {
+            customerNotificationDropdown.classList.remove('hidden');
+            loadCustomerNotifications();
+        } else {
+            customerNotificationDropdown.classList.add('hidden');
+        }
+    }
+}
+
+function closeCustomerNotificationDropdown()
+{
+    if (customerNotificationDropdown && isCustomerDropdownOpen) {
+        customerNotificationDropdown.classList.add('hidden');
+        isCustomerDropdownOpen = false;
+    }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(event) {
+    if (customerNotificationDropdown && isCustomerDropdownOpen) {
+        var notificationButton = document.querySelector('.customer-top-notification');
+        var notificationContainer = customerNotificationDropdown.parentElement;
+        if (!notificationContainer.contains(event.target)) {
+            closeCustomerNotificationDropdown();
+        }
+    }
+});
+
+function loadCustomerNotifications()
+{
+    var notificationList = document.getElementById('customerNotificationList');
+    if (!notificationList) return;
+
+    // Show loading state
+    notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading notifications...</p></div>';
+
+    // Fetch notifications from the dedicated notifications page
+    fetch('customer_notifications.php')
+        .then(function(response) {
+            return response.text();
+        })
+        .then(function(html) {
+            // Parse the HTML to extract notification data
+            var parser = new DOMParser();
+            var doc = parser.parseFromString(html, 'text/html');
+
+            // Extract notification items from the dedicated page
+            var notificationItems = doc.querySelectorAll('.notification-item');
+
+            if (notificationItems.length > 0) {
+                var notificationsHtml = '';
+                notificationItems.forEach(function(item) {
+                    var isUnread = item.classList.contains('unread');
+                    var iconElement = item.querySelector('.notification-icon');
+                    var iconClass = 'info';
+                    var iconHtml = '<div class="customer-notification-icon info"><i class="fa-solid fa-bell"></i></div>';
+
+                    if (iconElement) {
+                        if (iconElement.classList.contains('success')) {
+                            iconClass = 'success';
+                            iconHtml = '<div class="customer-notification-icon success"><i class="fa-solid fa-check"></i></div>';
+                        } else if (iconElement.classList.contains('alert')) {
+                            iconClass = 'alert';
+                            iconHtml = '<div class="customer-notification-icon alert"><i class="fa-solid fa-exclamation"></i></div>';
+                        } else if (iconElement.classList.contains('warning')) {
+                            iconClass = 'warning';
+                            iconHtml = '<div class="customer-notification-icon warning"><i class="fa-solid fa-circle-exclamation"></i></div>';
+                        } else {
+                            iconHtml = iconElement.outerHTML;
+                        }
+                    }
+
+                    var titleElement = item.querySelector('.notification-title');
+                    var title = titleElement ? titleElement.textContent : 'Notification';
+
+                    var descElement = item.querySelector('.notification-desc');
+                    var description = descElement ? descElement.textContent : '';
+
+                    var timeElement = item.querySelector('.notification-time');
+                    var time = timeElement ? timeElement.textContent : '';
+
+                    var notificationId = item.getAttribute('onclick') ? item.getAttribute('onclick').match(/\d+/) : null;
+
+                    notificationsHtml += '<div class="customer-notification-item ' + (isUnread ? 'unread' : 'read') + '">';
+                    notificationsHtml += iconHtml;
+                    notificationsHtml += '<div class="customer-notification-content">';
+                    notificationsHtml += '<div class="customer-notification-title">' + title + '</div>';
+                    notificationsHtml += '<div class="customer-notification-description">' + description + '</div>';
+                    notificationsHtml += '<div class="customer-notification-time">' + time + '</div>';
+                    notificationsHtml += '</div>';
+                    if (notificationId && isUnread) {
+                        notificationsHtml += '<button class="customer-mark-read-btn" onclick="markCustomerAsRead(' + notificationId + ', this)">Mark as Read</button>';
+                    }
+                    notificationsHtml += '</div>';
+                });
+                notificationList.innerHTML = notificationsHtml;
+            } else {
+                notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-regular fa-bell-slash"></i><p>No notifications</p></div>';
+            }
+        })
+        .catch(function(error) {
+            notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-solid fa-exclamation-circle"></i><p>Failed to load notifications</p></div>';
+        });
+}
+
+function markCustomerAsRead(notificationId, buttonElement)
+{
+    var formData = new FormData();
+    formData.append('notification_id', notificationId);
+    formData.append('action', 'mark_read');
+
+    fetch('customer_notifications.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.success) {
+            var notificationItem = buttonElement.closest('.customer-notification-item');
+            if (notificationItem) {
+                notificationItem.classList.remove('unread');
+                notificationItem.classList.add('read');
+                buttonElement.style.display = 'none';
+            }
+
+            // Update badge count
+            var badge = document.querySelector('.customer-notification-badge');
+            if (badge) {
+                var currentCount = parseInt(badge.textContent);
+                if (currentCount > 1) {
+                    badge.textContent = currentCount - 1;
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        }
+    })
+    .catch(function(error) {
+        console.error('Failed to mark notification as read:', error);
+    });
+}
+
+function markAllCustomerAsRead(event)
+{
+    event.preventDefault();
+    event.stopPropagation();
+
+    var formData = new FormData();
+    formData.append('action', 'mark_all_read');
+
+    fetch('customer_notifications.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.success) {
+            // Reload page to update all notification states
+            window.location.reload();
+        }
+    })
+    .catch(function(error) {
+        console.error('Failed to mark all notifications as read:', error);
+    });
 }
 
 

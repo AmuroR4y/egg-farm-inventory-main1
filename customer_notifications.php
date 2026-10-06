@@ -265,7 +265,7 @@ if ($user_stmt) {
                 <?php foreach ($notifications as $notification): ?>
                     <div class="notification-item <?php echo !$notification['is_read'] ? 'unread' : ''; ?>"
                          onclick="markAsRead(<?php echo $notification['id']; ?>)">
-                        <div class="notification-icon <?php echo htmlspecialchars($notification['type']); ?>">
+                        <div class="notification-icon <?php echo htmlspecialchars($notification['type'] ?? '', ENT_QUOTES, 'UTF-8'); ?>">
                             <?php
                             $icon = 'fa-bell';
                             if ($notification['type'] === 'success') $icon = 'fa-check';
@@ -275,11 +275,16 @@ if ($user_stmt) {
                             <i class="fa-solid <?php echo $icon; ?>"></i>
                         </div>
                         <div class="notification-content">
-                            <div class="notification-title"><?php echo htmlspecialchars($notification['title']); ?></div>
-                            <div class="notification-desc"><?php echo htmlspecialchars($notification['description']); ?></div>
+                            <div class="notification-title"><?php echo htmlspecialchars($notification['title'] ?? '', ENT_QUOTES, 'UTF-8'); ?></div>
+                            <div class="notification-desc"><?php echo htmlspecialchars($notification['description'] ?? '', ENT_QUOTES, 'UTF-8'); ?></div>
                         </div>
                         <div class="notification-time">
-                            <?php echo date('M d, Y g:i A', strtotime($notification['created_at'])); ?>
+                            <?php
+                            $notif_time = isset($notification['created_at']) && $notification['created_at'] !== ''
+                                ? strtotime($notification['created_at'])
+                                : time();
+                            echo date('M d, Y g:i A', $notif_time);
+                            ?>
                         </div>
                     </div>
                 <?php endforeach; ?>

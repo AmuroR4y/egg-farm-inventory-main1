@@ -58,8 +58,26 @@ try {
         );
     }
 
-    $profileRows = fetch_all_rows($conn, "SELECT fullname, email FROM users WHERE id = " . (int)$_SESSION['user_id'] . " AND role = 'owner' LIMIT 1");
-    $profile = $profileRows ? array('fullName' => $profileRows[0]['fullname'], 'email' => $profileRows[0]['email'], 'phone' => '', 'jobTitle' => '', 'avatar' => '') : array();
+    $profileRows = fetch_all_rows($conn, "SELECT fullname, username, email, phone, role, status, created_at FROM users WHERE id = " . (int)$_SESSION['user_id'] . " AND role = 'owner' LIMIT 1");
+    $profile = $profileRows ? array(
+        'fullName' => $profileRows[0]['fullname'],
+        'username' => $profileRows[0]['username'],
+        'email' => $profileRows[0]['email'],
+        'phone' => $profileRows[0]['phone'] ?? '',
+        'role' => ucfirst($profileRows[0]['role']),
+        'status' => ucfirst($profileRows[0]['status']),
+        'createdAt' => $profileRows[0]['created_at'],
+        'avatar' => ''
+    ) : array(
+        'fullName' => '',
+        'username' => '',
+        'email' => '',
+        'phone' => '',
+        'role' => 'Owner',
+        'status' => 'Active',
+        'createdAt' => '',
+        'avatar' => ''
+    );
 
     $reservations = array();
     $deliveries = array();

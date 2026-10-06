@@ -1,11 +1,16 @@
 <?php
 ob_start();
 
+// Include standardized session configuration FIRST
+require_once 'session_config.php';
+
+date_default_timezone_set('Asia/Manila');
+
 require 'db.php';
-// Helper function to get manager users
+
 // Helper function to get manager users
 function getManagerUsers($conn) {
-    $managers = array();  // Changed from [] to array()
+    $managers = array();
     $stmt = $conn->prepare("SELECT id FROM users WHERE role = 'manager'");
     $stmt->execute();
     $result = $stmt->get_result();
@@ -27,10 +32,6 @@ function getOwnerUsers($conn) {
     $stmt->close();
     return $owners;
 }
-// Start session to store submission status safely across redirect
-if (session_id() == '') {
-    session_start();
-}
 
 // Security Enforcement
 if (!isset($_SESSION['user_id'])) {
@@ -48,6 +49,16 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] != 'customer') {
 $user_id = $_SESSION['user_id'];
 $customer_name = isset($_SESSION['fullname']) ? $_SESSION['fullname'] : '';
 $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : 'Customer';
+
+// =========================================================
+// NOTIFICATION COUNT
+// =========================================================
+
+$unread_notifications = 0;
+$notification_count_result = $conn->query("SELECT COUNT(*) AS total FROM notifications WHERE user_id = " . (int)$user_id . " AND is_read = 0");
+if ($notification_count_result && ($notification_count_row = $notification_count_result->fetch_assoc())) {
+    $unread_notifications = (int)$notification_count_row['total'];
+}
 
 // Helper function to insert notifications easily into the database
 function add_notification($conn, $user_id, $title, $description, $type = 'info') {
@@ -361,6 +372,48 @@ while ($row = $reservation_result->fetch_assoc()) {
 
 $reservation_stmt->close();
 
+
+// =========================================================
+// MY RESERVATIONS PAGINATION
+// 3 RESERVATIONS PER PAGE
+// =========================================================
+
+$reservations_per_page = 3;
+
+$total_reservations = count($my_reservations);
+
+$total_pages = ceil(
+    $total_reservations / $reservations_per_page
+);
+
+$current_page = isset($_GET['page'])
+    ? intval($_GET['page'])
+    : 1;
+
+if ($current_page < 1) {
+    $current_page = 1;
+}
+
+if ($current_page > $total_pages && $total_pages > 0) {
+    $current_page = $total_pages;
+}
+
+$reservation_offset =
+    ($current_page - 1) * $reservations_per_page;
+
+
+// Convert associative array to indexed array
+$my_reservations = array_values($my_reservations);
+
+
+// Get only reservations for current page
+$paginated_reservations = array_slice(
+    $my_reservations,
+    $reservation_offset,
+    $reservations_per_page
+);
+
+
 // Default avatar - no profile_photo column required
 
 ?>
@@ -422,7 +475,10 @@ body {
         );
 }
 
-
+.copy-reservation-btn:hover {
+    color: #214f2c !important;
+    background: #e8f0ea !important;
+}
 /* =========================================================
    RESERVATION OUTER CARD
    SAME AS CUSTOMER DASHBOARD WRAPPER
@@ -1012,10 +1068,6 @@ body {
             none !important;
     }
 }
-/* =========================================================
-   CUSTOMER RESERVATION HEADER
-   SAME AS CUSTOMER DASHBOARD
-========================================================= */
 
 .customer-dashboard-topbar {
 
@@ -1052,7 +1104,7 @@ body {
    HEADER TITLE
 ========================================================= */
 
-.customer-dashboard-page-title {
+.customer-page-title {
 
     margin:
         0;
@@ -1075,7 +1127,7 @@ body {
    HEADER RIGHT
 ========================================================= */
 
-.customer-dashboard-topbar-right {
+.customer-topbar-right {
 
     display:
         flex;
@@ -1088,26 +1140,6 @@ body {
 
     height:
         100%;
-}
-
-
-/* =========================================================
-   NOTIFICATION CONTAINER
-========================================================= */
-
-.customer-notification-container {
-
-    position:
-        relative;
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    justify-content:
-        center;
 }
 
 
@@ -1135,20 +1167,11 @@ body {
     justify-content:
         center;
 
-    text-decoration:
-        none;
-
     background:
         transparent;
 
     border:
         none;
-
-    padding:
-        0;
-
-    cursor:
-        pointer;
 
     color:
         #65716b;
@@ -1158,6 +1181,9 @@ body {
 
     transition:
         0.2s ease;
+
+    cursor:
+        pointer;
 }
 
 
@@ -1218,6 +1244,190 @@ body {
 
     border:
         2px solid #f7f6f2;
+}
+
+
+/* =========================================================
+   CUSTOMER NOTIFICATION DROPDOWN
+========================================================= */
+
+.customer-notification-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    width: 360px;
+    background: #ffffff;
+    border: 1px solid #e2dfd7;
+    border-radius: 10px;
+    box-shadow: 0 3px 10px rgba(70, 65, 55, 0.05);
+    z-index: 1000;
+}
+
+.customer-notification-dropdown.hidden {
+    display: none;
+}
+
+.customer-notification-dropdown-header {
+    min-height: 50px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #e9e6df;
+}
+
+.customer-panel-title-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.customer-panel-title-icon {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #eef3ed;
+    color: #527d59;
+    font-size: 14px;
+}
+
+.customer-dashboard-panel-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #3f4b45;
+}
+
+.customer-mark-all-link {
+    font-size: 11px;
+    font-weight: 700;
+    color: #527d59;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.customer-mark-all-link:hover {
+    text-decoration: underline;
+}
+
+.customer-notification-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.customer-notification-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #f0eee8;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.customer-notification-item:hover {
+    background: #faf9f7;
+}
+
+.customer-notification-item.unread {
+    background: #f0f5f1;
+}
+
+.customer-notification-item.unread:hover {
+    background: #e8f0e9;
+}
+
+.customer-notification-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 14px;
+}
+
+.customer-notification-icon.success {
+    background: #e8f5e9;
+    color: #2e7d32;
+}
+
+.customer-notification-icon.alert {
+    background: #fff3e0;
+    color: #e65100;
+}
+
+.customer-notification-icon.info {
+    background: #e3f2fd;
+    color: #1565c0;
+}
+
+.customer-notification-icon.warning {
+    background: #fff8e1;
+    color: #f57f17;
+}
+
+.customer-notification-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.customer-notification-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: #1a2e1c;
+    margin-bottom: 4px;
+}
+
+.customer-notification-item.unread .customer-notification-title {
+    color: #214f2c;
+}
+
+.customer-notification-description {
+    font-size: 12px;
+    color: #5a6b60;
+    line-height: 1.4;
+}
+
+.customer-notification-time {
+    font-size: 11px;
+    color: #9aaa9a;
+    margin-top: 4px;
+}
+
+.customer-notification-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: #9aaa9a;
+}
+
+.customer-notification-empty i {
+    font-size: 32px;
+    margin-bottom: 12px;
+    color: #c8d4c4;
+}
+
+.customer-notification-empty p {
+    font-size: 13px;
+    margin: 0;
+}
+
+.customer-mark-read-btn {
+    background: none;
+    border: none;
+    color: #527d59;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 4px 8px;
+    margin-top: 8px;
+}
+
+.customer-mark-read-btn:hover {
+    text-decoration: underline;
 }
 
 
@@ -1361,33 +1571,7 @@ body {
 
 
 /* =========================================================
-   CUSTOMER ROLE
-========================================================= */
-
-.customer-role {
-
-    display:
-        block;
-
-    margin-top:
-        5px;
-
-    color:
-        #8a9590;
-
-    font-size:
-        0.63rem;
-
-    line-height:
-        1.2;
-
-    white-space:
-        nowrap;
-}
-
-
-/* =========================================================
-   DATE AND TIME
+   DATE AND LIVE TIME
 ========================================================= */
 
 .customer-date-time {
@@ -1419,6 +1603,9 @@ body {
 
     color:
         #8a9590;
+
+    line-height:
+        1.2;
 }
 
 
@@ -1435,6 +1622,9 @@ body {
 
     line-height:
         1.2;
+
+    white-space:
+        nowrap;
 }
 
 
@@ -1468,6 +1658,8 @@ body {
 
 .step-column {
     min-width: 0;
+    min-height: 0;
+    display: flex;
 }
 
 .step-card {
@@ -1476,16 +1668,111 @@ body {
     border-radius: 16px;
     padding: 22px;
     height: 100%;
+    width: 100%;
     box-sizing: border-box;
     box-shadow: 0 4px 14px rgba(80, 72, 55, 0.06);
+
+    /* IMPORTANT */
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .step-1-card {
     background: #ffffff;
 }
 
+/* =========================================================
+   STEP 2 / STEP 3 INTERNAL SCROLL
+========================================================= */
+
 .step-scroll {
     min-height: 0;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    padding-right: 6px;
+}
+
+/* =========================================================
+   STEP 2 SCROLLBAR
+========================================================= */
+
+.step-column:nth-child(2) .step-scroll::-webkit-scrollbar {
+    width: 7px;
+}
+
+.step-column:nth-child(2) .step-scroll::-webkit-scrollbar-track {
+    background: #f1f2ef;
+    border-radius: 10px;
+}
+
+.step-column:nth-child(2) .step-scroll::-webkit-scrollbar-thumb {
+    background: #b8c8bc;
+    border-radius: 10px;
+}
+
+.step-column:nth-child(2) .step-scroll::-webkit-scrollbar-thumb:hover {
+    background: #527d59;
+}
+
+/* Firefox */
+
+.step-column:nth-child(2) .step-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: #b8c8bc #f1f2ef;
+}
+
+/* =========================================================
+   STEP 2 CONTENT
+========================================================= */
+
+.step-column:nth-child(2) .step-scroll {
+    padding-bottom: 4px;
+}
+
+/* =========================================================
+   STEP 2 METHOD INFORMATION
+========================================================= */
+
+#method_description {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* =========================================================
+   PICKUP / DELIVERY INFORMATION
+========================================================= */
+
+#pickup_date_section,
+#delivery_schedule_info {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* =========================================================
+   ADD TO CART
+========================================================= */
+
+.step-column:nth-child(2) button[onclick="addItemToBundle()"] {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+
+.egg-btn.selected {
+    border-color: #214f2c !important;
+    background: #f1f6f2 !important;
+    color: #214f2c !important;
+}
+
+.timeline-progress {
+    background: #214f2c !important;
+}
+button[name="submit_reservation"]:hover {
+    background-color: #173b20 !important;
 }
 </style>
 <body class="font-sans text-gray-700 antialiased min-h-screen">
@@ -1504,207 +1791,108 @@ body {
 
         <div class="reservation-card bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
 
-            <!-- =====================================================
-                 RESERVATION HEADER
-                 ===================================================== -->
- <!-- =====================================================
-     CUSTOMER RESERVATION TOPBAR
+          
+<!-- =====================================================
+     CUSTOMER DASHBOARD TOPBAR
 ===================================================== -->
 
 <div class="customer-dashboard-topbar">
 
-    <!-- PAGE TITLE -->
-    <h1 class="customer-dashboard-page-title">
-        📝 Customer Reservation
-    </h1>
+    <div class="customer-page-title">
+        Customer Reservation
+    </div>
 
-
-    <!-- HEADER RIGHT -->
-    <div class="customer-dashboard-topbar-right">
-
+    <div class="customer-topbar-right">
 
         <!-- NOTIFICATION -->
-        <div class="customer-notification-container">
 
+        <div style="position: relative;">
             <button
                 type="button"
                 class="customer-top-notification"
-                onclick="toggleNotifications(event)"
                 title="Notifications"
+                onclick="event.stopPropagation(); toggleCustomerNotificationDropdown()"
             >
-
                 <i class="fa-regular fa-bell"></i>
-
-                <?php if ($unread_count > 0) { ?>
-
-                    <span class="customer-notification-badge">
-                        <?php echo $unread_count; ?>
-                    </span>
-
-                <?php } ?>
-
+                <?php if ($unread_notifications > 0): ?>
+                    <span class="customer-notification-badge"><?php echo $unread_notifications > 99 ? '99+' : $unread_notifications; ?></span>
+                <?php endif; ?>
             </button>
 
-
-            <!-- KEEP YOUR EXISTING NOTIFICATION DROPDOWN -->
+            <!-- NOTIFICATION DROPDOWN -->
             <div
-                id="notification_dropdown"
-                class="notification-dropdown-custom hidden"
+                class="customer-notification-dropdown hidden"
+                id="customerNotificationDropdown"
             >
-
-                <div class="notification-dropdown-header-custom">
-
-                    <strong>
-                        Notifications
-                    </strong>
-
-                    <?php if ($unread_count > 0) { ?>
-
-                        <span>
-                            <?php echo $unread_count; ?> unread
-                        </span>
-
-                    <?php } ?>
-
-                </div>
-
-
-                <div class="notification-list-custom">
-
-                    <?php if (count($notifications) > 0) { ?>
-
-                        <?php foreach ($notifications as $notification) { ?>
-
-                            <div class="notification-item-custom">
-
-                                <div class="notification-item-icon-custom">
-
-                                    <i class="fa-regular fa-bell"></i>
-
-                                </div>
-
-
-                                <div class="notification-item-content-custom">
-
-                                    <strong>
-                                        <?php
-                                        echo htmlspecialchars(
-                                            $notification['title']
-                                        );
-                                        ?>
-                                    </strong>
-
-                                    <span>
-                                        <?php
-                                        echo htmlspecialchars(
-                                            $notification['message']
-                                        );
-                                        ?>
-                                    </span>
-
-                                </div>
-
-                            </div>
-
-                        <?php } ?>
-
-                    <?php } else { ?>
-
-                        <div class="notification-empty-custom">
-
-                            <i class="fa-regular fa-circle-check"></i>
-
-                            <strong>
-                                No new notifications
-                            </strong>
-
-                            <span>
-                                You're all caught up.
-                            </span>
-
+                <div class="customer-notification-dropdown-header">
+                    <div class="customer-panel-title-group">
+                        <div class="customer-panel-title-icon">
+                            <i class="fa-solid fa-bell"></i>
                         </div>
-
-                    <?php } ?>
-
+                        <div class="customer-dashboard-panel-title">
+                            Notifications
+                        </div>
+                    </div>
+                    <a class="customer-mark-all-link" onclick="markAllCustomerAsRead(event)">
+                        Mark All as Read
+                    </a>
                 </div>
 
+                <div class="customer-notification-list" id="customerNotificationList">
+                    <!-- Notifications will be loaded here via JavaScript -->
+                </div>
             </div>
-
         </div>
 
-
         <!-- DIVIDER -->
+
         <div class="customer-topbar-divider"></div>
 
-
         <!-- CUSTOMER PROFILE -->
+
         <a
             href="customer_profile.php"
             class="customer-top-profile"
         >
 
             <!-- AVATAR -->
+
             <div class="customer-avatar">
-
-                <i class="fa-regular fa-user"></i>
-
+                <i class="fa-solid fa-user"></i>
             </div>
 
+            <!-- CUSTOMER DETAILS -->
 
-            <!-- ACCOUNT DETAILS -->
             <div class="customer-account-details">
 
                 <span class="customer-top-name">
-
-                    <?php
-
-                    $reservation_name_parts =
-                        explode(
-                            " ",
-                            trim($customer_name)
-                        );
-
-                    echo htmlspecialchars(
-                        $reservation_name_parts[0]
-                    );
-
-                    ?>
-
+                    Customer
                 </span>
-
-
-              
-
 
                 <div class="customer-date-time">
 
-                  <span class="customer-date">
+                    <span
+                        class="customer-date"
+                        id="customer-live-date"
+                    >
+                        <?php echo date('F j, Y'); ?>
+                    </span>
 
-    <?php
-    echo date("F d, Y");
-    ?>
-
-</span>
-
-<span
-    class="customer-time"
-    id="live-time"
->
-    <?php
-    echo date("g:i A");
-    ?>
-</span>
+                    <span
+                        class="customer-time"
+                        id="customer-live-time"
+                    >
+                        <?php echo date('h:i:s A'); ?>
+                    </span>
 
                 </div>
 
             </div>
 
+            <!-- DROPDOWN -->
 
-            <!-- DROPDOWN ICON -->
             <div class="customer-dropdown-icon">
-
                 <i class="fa-solid fa-chevron-down"></i>
-
             </div>
 
         </a>
@@ -1712,7 +1900,6 @@ body {
     </div>
 
 </div>
-
 
 
             <!-- =====================================================
@@ -1732,7 +1919,7 @@ body {
             Step 1: Contact & Delivery Information
         </h2>
 <!-- Reservation ID -->
-<div class="border border-blue-200 bg-blue-50/40 rounded-lg px-4 py-3 mb-4">
+<div class="rounded-lg px-4 py-3 mb-4" style="border: 1px solid #b8cbbd; background: #f1f6f2;">
 
     <div class="flex items-center justify-between">
 
@@ -1741,7 +1928,7 @@ body {
                 Reservation ID
             </label>
 
-            <div class="text-lg font-extrabold text-blue-600 tracking-wide">
+           <div class="text-lg font-extrabold tracking-wide" style="color: #214f2c;">
                 <?= htmlspecialchars($reservation_code); ?>
             </div>
 
@@ -1753,7 +1940,7 @@ body {
         <button
             type="button"
             onclick="copyReservationCode()"
-            class="w-8 h-8 rounded-lg hover:bg-blue-100 text-gray-500 hover:text-blue-600 transition"
+           class="copy-reservation-btn w-8 h-8 rounded-lg text-gray-500 transition"
             title="Copy Reservation ID"
         >
             <i class="fa-regular fa-copy"></i>
@@ -1818,7 +2005,7 @@ body {
                                         <button type="button" data-egg="<?= $size ?>" onclick="setEgg('<?= $size ?>')" class="egg-btn flex flex-col items-center p-2 border rounded-lg transition-all border-gray-200 hover:bg-gray-50">
                                             <span class="w-5 h-7 bg-slate-100 border border-slate-400 rounded-full inline-block shadow-inner mb-1"></span>
                                             <span class="text-[9px] text-gray-600 font-medium text-center leading-none mb-1"><?= $size ?></span>
-                                            <span class="text-[9px] text-blue-600 font-bold">₱<?= $price ?></span>
+                                            <span class="text-[9px] font-bold" style="color: #214f2c;">₱<?= $price ?></span>
                                         </button>
                                     <?php endforeach; ?>
                                 </div>
@@ -1835,7 +2022,64 @@ body {
                                 <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Quantity</label>
                                 <input type="number" id="quantity_input" min="1" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
                             </div>
+<!-- =====================================================
+     PICKUP DATE
+     Only visible when Pickup is selected
+     ===================================================== -->
 
+<div id="pickup_date_section" class="hidden">
+
+    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+        Preferred Pickup Date
+    </label>
+
+    <input
+        type="date"
+        id="reservation_date_input"
+        name="reservation_date"
+        min="<?= $today ?>"
+        onchange="updateLiveSummary()"
+        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+    >
+
+    <p class="text-[10px] text-gray-400 mt-1">
+        Select the date when you prefer to pick up your order at the farm.
+    </p>
+
+</div>
+
+<!-- =====================================================
+     DELIVERY INFORMATION
+     Only visible when Delivery is selected
+     ===================================================== -->
+
+<div
+    id="delivery_schedule_info"
+    class="hidden rounded-lg p-3"
+    style="border: 1px solid #d5e2d8; background: #f1f6f2;"
+>
+
+    <div class="flex items-start gap-2">
+
+       <i class="fa-solid fa-truck mt-0.5" style="color: #214f2c;"></i>
+
+        <div>
+
+           <p class="text-xs font-bold" style="color: #214f2c;">
+                Delivery Schedule
+            </p>
+
+          <p class="text-[10px] mt-1 leading-relaxed" style="color: #214f2c;">
+                No date is required at this time.
+                The farm manager will assign the delivery date
+                based on availability.
+            </p>
+
+        </div>
+
+    </div>
+
+</div>
                             <div>
 
     <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
@@ -1902,63 +2146,7 @@ body {
 
 </div>
 
-<!-- =====================================================
-     PICKUP DATE
-     Only visible when Pickup is selected
-     ===================================================== -->
 
-<div id="pickup_date_section" class="hidden">
-
-    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
-        Preferred Pickup Date
-    </label>
-
-    <input
-        type="date"
-        id="reservation_date_input"
-        name="reservation_date"
-        min="<?= $today ?>"
-        onchange="updateLiveSummary()"
-        class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-    >
-
-    <p class="text-[10px] text-gray-400 mt-1">
-        Select the date when you prefer to pick up your order at the farm.
-    </p>
-
-</div>
-
-<!-- =====================================================
-     DELIVERY INFORMATION
-     Only visible when Delivery is selected
-     ===================================================== -->
-
-<div
-    id="delivery_schedule_info"
-    class="hidden border border-blue-100 bg-blue-50 rounded-lg p-3"
->
-
-    <div class="flex items-start gap-2">
-
-        <i class="fa-solid fa-truck text-blue-500 mt-0.5"></i>
-
-        <div>
-
-            <p class="text-xs font-bold text-blue-700">
-                Delivery Schedule
-            </p>
-
-            <p class="text-[10px] text-blue-600 mt-1 leading-relaxed">
-                No date is required at this time.
-                The farm manager will assign the delivery date
-                based on availability.
-            </p>
-
-        </div>
-
-    </div>
-
-</div>
                         </div>
                     </div>
 </div>
@@ -1996,12 +2184,12 @@ body {
                                     
                                     <div class="divide-y divide-gray-100 bg-gray-50 p-3 text-xs space-y-2 border-t border-gray-100">
                                         <div class="flex justify-between"><span class="text-gray-500">Method:</span><span id="summary_method" class="font-semibold text-gray-700">None selected</span></div>
-                                        <div class="flex justify-between"><span class="text-gray-500">Date:</span><span id="summary_date" class="font-semibold text-blue-600">None selected</span></div>
+                                        <div class="flex justify-between"><span class="text-gray-500">Date:</span><span id="summary_date" class="font-semibold" style="color: #214f2c;">None selected</span></div>
                                         <div class="flex justify-between"><span class="text-gray-500">Address:</span><span id="summary_address_display" class="font-semibold text-gray-700 max-w-[180px] truncate text-right">None</span></div>
                                     </div>
                                     <div class="flex justify-between p-4 bg-slate-50 items-center border-t border-gray-200">
                                         <span class="font-bold text-slate-800">Grand Total:</span>
-                                        <span class="text-xl font-extrabold text-blue-600">₱<span id="total_display">0</span></span>
+                                       <span class="text-xl font-extrabold" style="color: #214f2c;">₱<span id="total_display">0</span></span>
                                     </div>
                                 </div>
                             </div>
@@ -2010,24 +2198,29 @@ body {
                                 <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Reservation Timeline</h3>
                                 <div class="relative flex items-center justify-between px-4">
                                     <div class="absolute left-4 right-4 h-1 bg-gray-200 top-1/2 -translate-y-1/2 z-0"></div>
-                                    <div id="timeline_progress_bar" class="absolute left-4 h-1 bg-blue-500 top-1/2 -translate-y-1/2 z-0 transition-all duration-500 <?= $is_submitted ? 'w-full' : 'w-0'; ?>"></div>
+                                    <div id="timeline_progress_bar" class="timeline-progress absolute left-4 h-1 top-1/2 -translate-y-1/2 z-0 transition-all duration-500 <?= $is_submitted ? 'w-full' : 'w-0'; ?>"></div>
                                     <div class="z-10 flex flex-col items-center">
-                                        <div class="w-5 h-5 rounded-full bg-blue-600 border-4 border-white shadow"></div>
-                                        <span class="text-xs font-semibold text-blue-600 mt-1">Draft</span>
+                                      <div class="w-5 h-5 rounded-full border-4 border-white shadow" style="background: #214f2c;"></div>
+                                       <span class="text-xs font-semibold mt-1" style="color: #214f2c;">Draft</span>
                                     </div>
                                     <div class="z-10 flex flex-col items-center">
-                                        <div class="w-5 h-5 rounded-full border-4 border-white shadow bg-gray-300 <?= $is_submitted ? 'bg-blue-600' : 'bg-gray-300'; ?>"></div>
-                                        <span class="text-xs mt-1 <?= $is_submitted ? 'text-blue-600 font-semibold' : 'text-gray-400 font-medium'; ?>">Processing</span>
+                                        <div class="w-5 h-5 rounded-full border-4 border-white shadow bg-gray-300 <?= $is_submitted ? 'style="background: #214f2c;"' : 'bg-gray-300'; ?>"></div>
+                                        <span class="text-xs mt-1 <?= $is_submitted ? 'style="color: #214f2c;" font-semibold' : 'text-gray-400 font-medium'; ?>">Processing</span>
                                     </div>
                                     <div class="z-10 flex flex-col items-center">
-                                        <div class="w-5 h-5 rounded-full border-4 border-white shadow bg-gray-300 <?= $is_submitted ? 'bg-blue-600' : 'bg-gray-300'; ?>"></div>
-                                        <span class="text-xs mt-1 <?= $is_submitted ? 'text-blue-600 font-semibold' : 'text-gray-400 font-medium'; ?>">Submitted</span>
+                                        <div class="w-5 h-5 rounded-full border-4 border-white shadow bg-gray-300 <?= $is_submitted ? 'style="background: #214f2c;"' : 'bg-gray-300'; ?>"></div>
+                                        <span class="text-xs mt-1 <?= $is_submitted ? 'style="color: #214f2c;" font-semibold' : 'text-gray-400 font-medium'; ?>">Submitted</span>
                                     </div>
                                 </div>
                             </div>
 
                             <div class="space-y-3 pt-2">
-                                <button type="submit" name="submit_reservation" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-xl shadow-md transition flex items-center justify-center space-x-2">
+                                <button
+    type="submit"
+    name="submit_reservation"
+    class="w-full text-white font-medium py-3 px-4 rounded-xl shadow-md transition flex items-center justify-center space-x-2"
+    style="background-color: #214f2c;"
+>
                                     <i class="fa-regular fa-circle-check"></i><span>Submit Reservation</span>
                                 </button>
                                 <button type="button" onclick="openCancellationModal()" class="w-full text-center text-sm text-gray-500 hover:text-red-500 transition font-medium py-1 block">
@@ -2072,7 +2265,7 @@ body {
 
         <?php if (!empty($my_reservations)): ?>
 
-            <?php foreach ($my_reservations as $reservation): ?>
+      <?php foreach ($paginated_reservations as $reservation): ?>
 
                 <?php
 
@@ -2112,7 +2305,7 @@ body {
 
                             <div class="flex items-center gap-2 mb-2">
 
-                                <span class="text-base font-extrabold text-blue-600">
+                              <span class="text-base font-extrabold" style="color: #214f2c;">
                                     <?= htmlspecialchars($reservation['reservation_code']); ?>
                                 </span>
 
@@ -2217,7 +2410,8 @@ body {
 
                                 <?php foreach ($reservation['items'] as $item): ?>
 
-                                    <span class="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-md text-xs font-semibold">
+                                 <span class="px-2.5 py-1 rounded-md text-xs font-semibold"
+      style="background: #f1f6f2; color: #214f2c;">
 
                                         <?= htmlspecialchars($item['egg_type']); ?>
                                         x <?= intval($item['quantity']); ?>
@@ -2248,7 +2442,7 @@ body {
                                 Total Price
                             </p>
 
-                            <p class="text-xl font-extrabold text-blue-600">
+            <p class="text-xl font-extrabold" style="color: #214f2c;">
 
                                 ₱<?= number_format(
                                     $reservation['total_price'],
@@ -2326,14 +2520,114 @@ body {
 
         <?php endif; ?>
 
-    </div>
+       </div>
+
+
+    <!-- =====================================================
+         PAGINATION
+         ===================================================== -->
+
+    <?php if ($total_pages > 1): ?>
+
+        <div
+            class="px-5 py-4 border-t border-gray-200 flex items-center justify-between"
+            style="background: #ffffff;"
+        >
+
+            <!-- Previous -->
+            <div>
+
+                <?php if ($current_page > 1): ?>
+
+                    <a
+                        href="?page=<?= $current_page - 1; ?>"
+                        class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition"
+                    >
+                        <i class="fa-solid fa-chevron-left text-[10px]"></i>
+                        Previous
+                    </a>
+
+                <?php else: ?>
+
+                    <span
+                        class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-100 text-xs font-semibold text-gray-300 cursor-not-allowed"
+                    >
+                        <i class="fa-solid fa-chevron-left text-[10px]"></i>
+                        Previous
+                    </span>
+
+                <?php endif; ?>
+
+            </div>
+
+
+            <!-- Page Numbers -->
+            <div class="flex items-center gap-1">
+
+                <?php for ($page = 1; $page <= $total_pages; $page++): ?>
+
+                    <?php if ($page == $current_page): ?>
+
+                        <span
+                            class="w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold text-white"
+                            style="background: #214f2c;"
+                        >
+                            <?= $page; ?>
+                        </span>
+
+                    <?php else: ?>
+
+                        <a
+                            href="?page=<?= $page; ?>"
+                            class="w-8 h-8 flex items-center justify-center rounded-lg text-xs font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 transition"
+                        >
+                            <?= $page; ?>
+                        </a>
+
+                    <?php endif; ?>
+
+                <?php endfor; ?>
+
+            </div>
+
+
+            <!-- Next -->
+            <div>
+
+                <?php if ($current_page < $total_pages): ?>
+
+                    <a
+                        href="?page=<?= $current_page + 1; ?>"
+                        class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition"
+                    >
+                        Next
+                        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                    </a>
+
+                <?php else: ?>
+
+                    <span
+                        class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-100 text-xs font-semibold text-gray-300 cursor-not-allowed"
+                    >
+                        Next
+                        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                    </span>
+
+                <?php endif; ?>
+
+            </div>
+
+        </div>
+
+    <?php endif; ?>
 
 
     <!-- Information Footer -->
 
     <?php if (!empty($my_reservations)): ?>
 
-        <div class="px-5 py-3 bg-blue-50 border-t border-blue-100 text-xs text-blue-700">
+       <div class="px-5 py-3 text-xs"
+     style="background: #f1f6f2; border-top: 1px solid #d5e2d8; color: #214f2c;">
 
             <i class="fa-solid fa-circle-info mr-2"></i>
 
@@ -2389,51 +2683,55 @@ body {
 
     <script>
   
-/* =========================================================
-   CUSTOMER HEADER LIVE TIME
-========================================================= */
-
-function updateCustomerLiveTime() {
-
-    var timeElement =
-        document.getElementById('customer_live_time');
-
-    if (!timeElement) {
-        return;
-    }
+function updateCustomerDateTime() {
 
     var now = new Date();
 
-    var hours = now.getHours();
-    var minutes = now.getMinutes();
-    var seconds = now.getSeconds();
+    var options = {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+    };
 
-    var ampm = hours >= 12 ? 'PM' : 'AM';
+    var dateText = now.toLocaleDateString(
+        'en-US',
+        options
+    );
 
-    hours = hours % 12;
+    var timeText = now.toLocaleTimeString(
+        'en-US',
+        {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+        }
+    );
 
-    hours = hours
-        ? hours
-        : 12;
+    var dateElement = document.getElementById(
+        'customer-live-date'
+    );
 
-    hours = String(hours).padStart(2, '0');
-    minutes = String(minutes).padStart(2, '0');
-    seconds = String(seconds).padStart(2, '0');
+    var timeElement = document.getElementById(
+        'customer-live-time'
+    );
 
-    timeElement.innerText =
-        hours + ':' +
-        minutes + ':' +
-        seconds + ' ' +
-        ampm;
+    if (dateElement) {
+        dateElement.textContent = dateText;
+    }
+
+    if (timeElement) {
+        timeElement.textContent = timeText;
+    }
 }
 
-
-updateCustomerLiveTime();
+updateCustomerDateTime();
 
 setInterval(
-    updateCustomerLiveTime,
+    updateCustomerDateTime,
     1000
 );
+
 
 
         function openLogoutModal() {
@@ -2494,7 +2792,7 @@ window.addEventListener('click', function(event) {
             document.getElementById('egg_type_select').value = val;
             document.querySelectorAll('.egg-btn').forEach(btn => {
                 btn.className = btn.getAttribute('data-egg') === val 
-                    ? "egg-btn flex flex-col items-center p-2 border rounded-lg transition-all border-blue-500 bg-blue-50"
+                   ? "egg-btn flex flex-col items-center p-2 border rounded-lg transition-all"
                     : "egg-btn flex flex-col items-center p-2 border rounded-lg transition-all border-gray-200 hover:bg-gray-50";
             });
         }
@@ -2630,22 +2928,23 @@ else {
 
         // Description
         methodDescription.innerHTML = `
-            <div class="border border-blue-100 bg-blue-50 rounded-lg p-3">
-                <div class="flex items-start gap-2">
-                    <i class="fa-solid fa-truck text-blue-500 mt-0.5"></i>
+           <div class="border border-blue-100 bg-blue-50 rounded-lg p-3"
+     style="border-color: #d5e2d8; background-color: #f1f6f2;">
+    <div class="flex items-start gap-2">
+        <i class="fa-solid fa-truck mt-0.5" style="color: #214f2c;"></i>
 
-                    <div>
-                        <p class="text-xs font-bold text-blue-700">
-                            Delivery Selected
-                        </p>
+        <div>
+            <p class="text-xs font-bold" style="color: #214f2c;">
+                Delivery Selected
+            </p>
 
-                        <p class="text-[10px] text-blue-600 mt-1">
-                            The farm manager will assign your delivery date
-                            based on availability.
-                        </p>
-                    </div>
-                </div>
-            </div>
+            <p class="text-[10px] mt-1" style="color: #214f2c;">
+                The farm manager will assign your delivery date
+                based on availability.
+            </p>
+        </div>
+    </div>
+</div>
         `;
 
     }
@@ -2677,22 +2976,23 @@ else {
 
         // Description
         methodDescription.innerHTML = `
-            <div class="border border-green-100 bg-green-50 rounded-lg p-3">
-                <div class="flex items-start gap-2">
-                    <i class="fa-solid fa-shop text-green-500 mt-0.5"></i>
+          <div class="rounded-lg p-3"
+     style="border: 1px solid #d5e2d8; background-color: #f1f6f2;">
+    <div class="flex items-start gap-2">
+        <i class="fa-solid fa-shop mt-0.5" style="color: #214f2c;"></i>
 
-                    <div>
-                        <p class="text-xs font-bold text-green-700">
-                            Pickup Selected
-                        </p>
+        <div>
+            <p class="text-xs font-bold" style="color: #214f2c;">
+                Pickup Selected
+            </p>
 
-                        <p class="text-[10px] text-green-600 mt-1">
-                            Please select your preferred pickup date
-                            from the farm.
-                        </p>
-                    </div>
-                </div>
-            </div>
+            <p class="text-[10px] mt-1" style="color: #214f2c;">
+                Please select your preferred pickup date
+                from the farm.
+            </p>
+        </div>
+    </div>
+</div>
         `;
     }
 
@@ -2703,12 +3003,12 @@ else {
 
     btnDelivery.className =
         method === 'Delivery'
-        ? "p-3 border rounded-lg flex flex-col items-center justify-center space-y-1 border-blue-500 bg-blue-50 text-blue-600"
+       ? "p-3 border rounded-lg flex flex-col items-center justify-center space-y-1 border-green-800 bg-green-50 text-green-800"
         : "p-3 border rounded-lg flex flex-col items-center justify-center space-y-1 border-gray-200 text-gray-500";
 
     btnPickup.className =
         method === 'Pickup'
-        ? "p-3 border rounded-lg flex flex-col items-center justify-center space-y-1 border-blue-500 bg-blue-50 text-blue-600"
+       ? "p-3 border rounded-lg flex flex-col items-center justify-center space-y-1 border-green-800 bg-green-50 text-green-800"
         : "p-3 border rounded-lg flex flex-col items-center justify-center space-y-1 border-gray-200 text-gray-500";
 }
 
@@ -2819,15 +3119,197 @@ else {
             .then(res => res.json()).then(data => { if(data.status === 'success') location.reload(); });
         }
 
-        function toggleNotifications(e) { e.stopPropagation(); document.getElementById('notification_dropdown').classList.toggle('hidden'); }
-        document.addEventListener('click', () => document.getElementById('notification_dropdown').classList.add('hidden'));
+        function toggleCustomerNotificationDropdown()
+        {
+            if (!customerNotificationDropdown) {
+                customerNotificationDropdown = document.getElementById('customerNotificationDropdown');
+            }
+
+            if (customerNotificationDropdown) {
+                isCustomerDropdownOpen = !isCustomerDropdownOpen;
+
+                if (isCustomerDropdownOpen) {
+                    customerNotificationDropdown.classList.remove('hidden');
+                    loadCustomerNotifications();
+                } else {
+                    customerNotificationDropdown.classList.add('hidden');
+                }
+            }
+        }
+
+        function closeCustomerNotificationDropdown()
+        {
+            if (customerNotificationDropdown && isCustomerDropdownOpen) {
+                customerNotificationDropdown.classList.add('hidden');
+                isCustomerDropdownOpen = false;
+            }
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            if (customerNotificationDropdown && isCustomerDropdownOpen) {
+                var notificationButton = document.querySelector('.customer-top-notification');
+                var notificationContainer = customerNotificationDropdown.parentElement;
+                if (!notificationContainer.contains(event.target)) {
+                    closeCustomerNotificationDropdown();
+                }
+            }
+        });
+
+        function loadCustomerNotifications()
+        {
+            var notificationList = document.getElementById('customerNotificationList');
+            if (!notificationList) return;
+
+            // Show loading state
+            notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading notifications...</p></div>';
+
+            // Fetch notifications from the dedicated notifications page
+            fetch('customer_notifications.php')
+                .then(function(response) {
+                    return response.text();
+                })
+                .then(function(html) {
+                    // Parse the HTML to extract notification data
+                    var parser = new DOMParser();
+                    var doc = parser.parseFromString(html, 'text/html');
+
+                    // Extract notification items from the dedicated page
+                    var notificationItems = doc.querySelectorAll('.notification-item');
+
+                    if (notificationItems.length > 0) {
+                        var notificationsHtml = '';
+                        notificationItems.forEach(function(item) {
+                            var isUnread = item.classList.contains('unread');
+                            var iconElement = item.querySelector('.notification-icon');
+                            var iconClass = 'info';
+                            var iconHtml = '<div class="customer-notification-icon info"><i class="fa-solid fa-bell"></i></div>';
+
+                            if (iconElement) {
+                                if (iconElement.classList.contains('success')) {
+                                    iconClass = 'success';
+                                    iconHtml = '<div class="customer-notification-icon success"><i class="fa-solid fa-check"></i></div>';
+                                } else if (iconElement.classList.contains('alert')) {
+                                    iconClass = 'alert';
+                                    iconHtml = '<div class="customer-notification-icon alert"><i class="fa-solid fa-exclamation"></i></div>';
+                                } else if (iconElement.classList.contains('warning')) {
+                                    iconClass = 'warning';
+                                    iconHtml = '<div class="customer-notification-icon warning"><i class="fa-solid fa-circle-exclamation"></i></div>';
+                                } else {
+                                    iconHtml = iconElement.outerHTML;
+                                }
+                            }
+
+                            var titleElement = item.querySelector('.notification-title');
+                            var title = titleElement ? titleElement.textContent : 'Notification';
+
+                            var descElement = item.querySelector('.notification-desc');
+                            var description = descElement ? descElement.textContent : '';
+
+                            var timeElement = item.querySelector('.notification-time');
+                            var time = timeElement ? timeElement.textContent : '';
+
+                            var notificationId = item.getAttribute('onclick') ? item.getAttribute('onclick').match(/\d+/) : null;
+
+                            notificationsHtml += '<div class="customer-notification-item ' + (isUnread ? 'unread' : 'read') + '">';
+                            notificationsHtml += iconHtml;
+                            notificationsHtml += '<div class="customer-notification-content">';
+                            notificationsHtml += '<div class="customer-notification-title">' + title + '</div>';
+                            notificationsHtml += '<div class="customer-notification-description">' + description + '</div>';
+                            notificationsHtml += '<div class="customer-notification-time">' + time + '</div>';
+                            notificationsHtml += '</div>';
+                            if (notificationId && isUnread) {
+                                notificationsHtml += '<button class="customer-mark-read-btn" onclick="markCustomerAsRead(' + notificationId + ', this)">Mark as Read</button>';
+                            }
+                            notificationsHtml += '</div>';
+                        });
+
+                        notificationList.innerHTML = notificationsHtml;
+                    } else {
+                        notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-regular fa-bell-slash"></i><p>No notifications</p></div>';
+                    }
+                })
+                .catch(function(error) {
+                    notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-solid fa-exclamation-circle"></i><p>Failed to load notifications</p></div>';
+                });
+        }
+
+        function markCustomerAsRead(notificationId, buttonElement)
+        {
+            var formData = new FormData();
+            formData.append('mark_read', '1');
+            formData.append('notification_id', notificationId);
+
+            fetch('customer_notifications.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                if (data.success) {
+                    // Update UI
+                    var notificationItem = buttonElement.closest('.customer-notification-item');
+                    if (notificationItem) {
+                        notificationItem.classList.remove('unread');
+                        notificationItem.classList.add('read');
+                        buttonElement.remove();
+
+                        // Update badge
+                        var badge = document.querySelector('.customer-notification-badge');
+                        if (badge) {
+                            var currentBadge = parseInt(badge.textContent);
+                            if (!isNaN(currentBadge) && currentBadge > 0) {
+                                if (currentBadge > 1) {
+                                    badge.textContent = currentBadge - 1;
+                                } else {
+                                    badge.remove();
+                                }
+                            }
+                        }
+                    }
+                }
+            })
+            .catch(function(error) {
+                console.error('Failed to mark notification as read:', error);
+            });
+        }
+
+        function markAllCustomerAsRead(event)
+        {
+            event.preventDefault();
+            event.stopPropagation();
+
+            var formData = new FormData();
+            formData.append('mark_all_read', '1');
+
+            fetch('customer_notifications.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(function(response) {
+                return response.text();
+            })
+            .then(function() {
+                // Reload page to update all notification states
+                window.location.reload();
+            })
+            .catch(function(error) {
+                console.error('Failed to mark all notifications as read:', error);
+            });
+        }
+
+        var customerNotificationDropdown = null;
+        var isCustomerDropdownOpen = false;
 
         <?php if (!empty($message)): ?>
             document.addEventListener('DOMContentLoaded', openSuccessModal);
         <?php endif; ?>
 
 
-     function matchReservationStepHeights() {
+
+function matchReservationStepHeights() {
 
     const stepCards = document.querySelectorAll('.step-card');
     const step1Card = document.querySelector('.step-1-card');
@@ -2837,10 +3319,10 @@ else {
         return;
     }
 
-
     /* =====================================================
        MOBILE / TABLET
-       ===================================================== */
+       Keep Step 2 scrollable instead of expanding endlessly
+    ===================================================== */
 
     if (window.innerWidth < 1024) {
 
@@ -2849,9 +3331,11 @@ else {
         });
 
         scrollAreas.forEach(function(area) {
+
             area.style.height = '';
             area.style.maxHeight = '';
-            area.style.overflowY = 'visible';
+            area.style.overflowY = 'auto';
+
         });
 
         return;
@@ -2859,9 +3343,8 @@ else {
 
 
     /* =====================================================
-       IMPORTANT:
-       CLEAR ALL PREVIOUS INLINE HEIGHTS FIRST
-       ===================================================== */
+       CLEAR PREVIOUS INLINE HEIGHTS
+    ===================================================== */
 
     stepCards.forEach(function(card) {
         card.style.height = '';
@@ -2870,47 +3353,60 @@ else {
     scrollAreas.forEach(function(area) {
         area.style.height = '';
         area.style.maxHeight = '';
-        area.style.overflowY = 'visible';
+        area.style.overflowY = 'auto';
     });
 
 
     /* =====================================================
-       GET STEP 1'S TRUE NATURAL HEIGHT
+       GET STEP 1 NATURAL HEIGHT
+    ===================================================== */
 
-       Step 1 is NOT allowed to inherit the height
-       of Step 2 or Step 3.
-       ===================================================== */
-
-    const step1Height = step1Card.getBoundingClientRect().height;
+    const step1Height =
+        step1Card.getBoundingClientRect().height;
 
 
     /* =====================================================
-       APPLY STEP 1 HEIGHT TO STEP 2 & STEP 3
-       ===================================================== */
+       MAKE ALL STEP CARDS THE SAME HEIGHT
+    ===================================================== */
 
     stepCards.forEach(function(card) {
-        card.style.height = step1Height + 'px';
+
+        card.style.height =
+            step1Height + 'px';
+
+        card.style.minHeight =
+            step1Height + 'px';
+
     });
 
 
     /* =====================================================
-       STEP 2 & STEP 3 = INTERNAL SCROLL
-
-       Their outer cards have the exact same height
-       as Step 1, while their content can scroll.
-       ===================================================== */
+       STEP 2 AND STEP 3 INTERNAL SCROLL
+    ===================================================== */
 
     scrollAreas.forEach(function(area) {
 
-        area.style.height = 'auto';
-        area.style.flex = '1 1 auto';
-        area.style.minHeight = '0';
-        area.style.overflowY = 'auto';
+        area.style.flex =
+            '1 1 auto';
+
+        area.style.minHeight =
+            '0';
+
+        area.style.height =
+            'auto';
+
+        area.style.maxHeight =
+            'none';
+
+        area.style.overflowY =
+            'auto';
+
+        area.style.overflowX =
+            'hidden';
 
     });
 
 }
-
 
 /* Run after page finishes loading */
 window.addEventListener('load', function() {
@@ -2953,48 +3449,6 @@ function copyReservationCode() {
         alert('Reservation ID copied: ' + reservationCode);
     }
 }
-
-
-function updateLiveTime() {
-
-    var now = new Date();
-
-    var hours = now.getHours();
-    var minutes = now.getMinutes();
-    var seconds = now.getSeconds();
-
-    var ampm = hours >= 12 ? "PM" : "AM";
-
-    hours = hours % 12;
-
-    if (hours === 0) {
-        hours = 12;
-    }
-
-    hours = hours < 10 ? "0" + hours : hours;
-    minutes = minutes < 10 ? "0" + minutes : minutes;
-    seconds = seconds < 10 ? "0" + seconds : seconds;
-
-    var timeString =
-        hours + ":" +
-        minutes + ":" +
-        seconds + " " +
-        ampm;
-
-    var liveTime =
-        document.getElementById("live-time");
-
-    if (liveTime) {
-        liveTime.innerHTML = timeString;
-    }
-}
-
-updateLiveTime();
-
-setInterval(
-    updateLiveTime,
-    1000
-);
 
 
     </script>

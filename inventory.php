@@ -21,6 +21,40 @@ if (isset($_SESSION['role']) && !in_array($_SESSION['role'], ['manager', 'owner'
     exit();
 }
 
+// Helper function to insert notifications
+function add_notification($conn, $user_id, $title, $description, $type = 'info') {
+    $stmt = $conn->prepare("INSERT INTO notifications (user_id, title, description, type, is_read) VALUES (?, ?, ?, ?, 0)");
+    $stmt->bind_param("isss", $user_id, $title, $description, $type);
+    $stmt->execute();
+    $stmt->close();
+}
+
+// Helper function to get owner users
+function getOwnerUsers($conn) {
+    $owners = array();
+    $stmt = $conn->prepare("SELECT id FROM users WHERE role = 'owner' AND status = 'active'");
+    $stmt->execute();
+    $result = $stmt->get_result();
+    while ($row = $result->fetch_assoc()) {
+        $owners[] = $row['id'];
+    }
+    $stmt->close();
+    return $owners;
+}
+
+// Helper function to check if low stock notification already exists
+function lowStockNotificationExists($conn, $item_name, $item_type) {
+    $stmt = $conn->prepare("SELECT id FROM notifications WHERE title LIKE ? AND description LIKE ? AND is_read = 0 ORDER BY created_at DESC LIMIT 1");
+    $title_pattern = "%Low Stock%";
+    $desc_pattern = "%{$item_name}%";
+    $stmt->bind_param("ss", $title_pattern, $desc_pattern);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $exists = $result->num_rows > 0;
+    $stmt->close();
+    return $exists;
+}
+
 /* =========================================================
    SETTINGS
 ========================================================= */
@@ -292,6 +326,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         "
                     );
 
+                    // Check for low stock and notify owners
+                    $low_stock_threshold = 10;
+                    if ($new_stock <= $low_stock_threshold && !lowStockNotificationExists($conn, $egg_size, 'egg')) {
+                        $owners = getOwnerUsers($conn);
+                        foreach ($owners as $owner_id) {
+                            add_notification(
+                                $conn,
+                                $owner_id,
+                                "Low Stock Alert",
+                                "{$egg_size} egg stock is currently {$new_stock}, below the threshold of {$low_stock_threshold}.",
+                                "warning"
+                            );
+                        }
+                    }
+
                 }
 
             }
@@ -430,6 +479,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 )
                 "
             );
+
+            // Check for low stock and notify owners
+            $low_stock_threshold = 10;
+            if ($new_stock <= $low_stock_threshold && !lowStockNotificationExists($conn, $egg_size, 'egg')) {
+                $owners = getOwnerUsers($conn);
+                foreach ($owners as $owner_id) {
+                    add_notification(
+                        $conn,
+                        $owner_id,
+                        "Low Stock Alert",
+                        "{$egg_size} egg stock is currently {$new_stock}, below the threshold of {$low_stock_threshold}.",
+                        "warning"
+                    );
+                }
+            }
 
         }
 
@@ -701,6 +765,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         "
                     );
 
+                    // Check for low stock and notify owners
+                    $low_stock_threshold = 10;
+                    if ($new_stock <= $low_stock_threshold && !lowStockNotificationExists($conn, $item_name, 'supply')) {
+                        $owners = getOwnerUsers($conn);
+                        foreach ($owners as $owner_id) {
+                            add_notification(
+                                $conn,
+                                $owner_id,
+                                "Low Stock Alert",
+                                "{$item_name} ({$category}) stock is currently {$new_stock}, below the threshold of {$low_stock_threshold}.",
+                                "warning"
+                            );
+                        }
+                    }
+
                 }
 
             }
@@ -915,6 +994,21 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 )
                 "
             );
+
+            // Check for low stock and notify owners
+            $low_stock_threshold = 10;
+            if ($new_stock <= $low_stock_threshold && !lowStockNotificationExists($conn, $item_name, 'supply')) {
+                $owners = getOwnerUsers($conn);
+                foreach ($owners as $owner_id) {
+                    add_notification(
+                        $conn,
+                        $owner_id,
+                        "Low Stock Alert",
+                        "{$item_name} ({$category}) stock is currently {$new_stock}, below the threshold of {$low_stock_threshold}.",
+                        "warning"
+                    );
+                }
+            }
 
         }
 

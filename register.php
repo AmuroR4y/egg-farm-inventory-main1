@@ -68,7 +68,7 @@
 
         overflow: hidden;
 
-        background-image: url('/EggFarm/loginbg.PNG');
+        background-image: url('/egg-farm-inventory-main1/loginbg.PNG');
 
         background-size: cover;
 
@@ -826,7 +826,7 @@
     <div class="logo-container">
 
         <img
-            src="/EggFarm/vdvclogo.png"
+            src="/egg-farm-inventory-main1/vdvclogo.png"
             alt="VDVC Egg Farm Logo"
             class="logo-img"
         >

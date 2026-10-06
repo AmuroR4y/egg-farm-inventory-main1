@@ -21,6 +21,30 @@ function getCustomerUserId($conn, $reservation_code) {
     $stmt->close();
     return $row ? $row['user_id'] : null;
 }
+
+// Helper function to get owner users
+function getOwnerUsers($conn) {
+    $owners = array();
+    $stmt = $conn->prepare("SELECT id FROM users WHERE role = 'owner' AND status = 'active'");
+    $stmt->execute();
+    $result = $stmt->get_result();
+    while ($row = $result->fetch_assoc()) {
+        $owners[] = $row['id'];
+    }
+    $stmt->close();
+    return $owners;
+}
+
+// Helper function to get reservation details
+function getReservationDetails($conn, $reservation_code) {
+    $stmt = $conn->prepare("SELECT customer_name, egg_type, quantity FROM reservations WHERE reservation_code = ? LIMIT 1");
+    $stmt->bind_param("s", $reservation_code);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $row = $result->fetch_assoc();
+    $stmt->close();
+    return $row;
+}
 date_default_timezone_set('Asia/Manila');
 
 /*
@@ -370,6 +394,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
         }
 
+        // Notify all owners
+        $reservation_details = getReservationDetails($conn, $reservation_code);
+        if ($reservation_details) {
+            $owners = getOwnerUsers($conn);
+            foreach ($owners as $owner_id) {
+                add_notification(
+                    $conn,
+                    $owner_id,
+                    "Reservation Confirmed",
+                    "Reservation {$reservation_code} for {$reservation_details['customer_name']} ({$reservation_details['quantity']} {$reservation_details['egg_type']}) has been confirmed.",
+                    "success"
+                );
+            }
+        }
+
         // Commit transaction
         $conn->commit();
 
@@ -425,6 +464,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             "Your reservation {$reservation_code} has been cancelled by the farm manager.",
             "alert"
         );
+    }
+
+    // Notify all owners
+    $reservation_details = getReservationDetails($conn, $reservation_code);
+    if ($reservation_details) {
+        $owners = getOwnerUsers($conn);
+        foreach ($owners as $owner_id) {
+            add_notification(
+                $conn,
+                $owner_id,
+                "Reservation Cancelled",
+                "Reservation {$reservation_code} for {$reservation_details['customer_name']} ({$reservation_details['quantity']} {$reservation_details['egg_type']}) has been cancelled.",
+                "alert"
+            );
+        }
     }
 
     header(
@@ -497,6 +551,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $notification_type
             );
         }
+
+        // Notify all owners for important status changes
+        if ($new_status === 'Completed' || $new_status === 'Cancelled') {
+            $reservation_details = getReservationDetails($conn, $reservation_code);
+            if ($reservation_details) {
+                $owners = getOwnerUsers($conn);
+                foreach ($owners as $owner_id) {
+                    add_notification(
+                        $conn,
+                        $owner_id,
+                        "Reservation Status Updated",
+                        "Reservation {$reservation_code} for {$reservation_details['customer_name']} is now {$new_status}.",
+                        $new_status === 'Completed' ? 'success' : 'alert'
+                    );
+                }
+            }
+        }
     }
 
     header(
@@ -550,6 +621,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 "Your delivery for reservation {$reservation_code} has been scheduled on {$formatted_date}.",
                 "success"
             );
+        }
+
+        // Notify all owners
+        $reservation_details = getReservationDetails($conn, $reservation_code);
+        if ($reservation_details) {
+            $owners = getOwnerUsers($conn);
+            foreach ($owners as $owner_id) {
+                add_notification(
+                    $conn,
+                    $owner_id,
+                    "Delivery Scheduled",
+                    "Delivery for reservation {$reservation_code} ({$reservation_details['customer_name']}) scheduled for {$formatted_date}.",
+                    "info"
+                );
+            }
         }
     }
 

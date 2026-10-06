@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>VDVC Enterprise Dashboard</title>
+    <title>VDVC Dashboard Content</title>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <link rel="stylesheet" href="vdvc/styles.css" />
@@ -19,16 +19,27 @@
             <i class="fa-solid fa-chart-pie" aria-hidden="true"></i>
   Dashboard
 </button>
-        
+
           <button class="nav-item" type="button" data-page="users">
             <i class="fa-solid fa-users" aria-hidden="true"></i>
             User Management
           </button>
-          
-          <button class="nav-item" type="button" data-page="reports" data-section="reports-filters">
-            <i class="fa-solid fa-filter" aria-hidden="true"></i>
-            Report Filters
+
+          <button class="nav-item" type="button" data-page="analytics">
+            <i class="fa-solid fa-chart-line" aria-hidden="true"></i>
+            Data Analytics
           </button>
+
+          <button class="nav-item" type="button" data-page="forecasting">
+            <i class="fa-solid fa-timeline" aria-hidden="true"></i>
+            Demand Forecasting
+          </button>
+
+          <button class="nav-item" type="button" data-page="reports" data-section="reports-filters">
+            <i class="fa-solid fa-file-invoice" aria-hidden="true"></i>
+            Reports
+          </button>
+
           <button class="nav-item" type="button" data-page="profile">
             <i class="fa-solid fa-user-gear" aria-hidden="true"></i>
             Profile
@@ -50,13 +61,22 @@
             <button class="sidebar-toggle" type="button" aria-label="Toggle navigation">
               <i class="fa-solid fa-bars" aria-hidden="true"></i>
             </button>
-            <span class="topbar-title">VDVC Enterprise Dashboard • Owner Access</span>
+            <span class="topbar-title">VDVC Dashboard</span>
           </div>
           <div class="topbar-right">
-            <button class="notif-btn" type="button" aria-label="Notifications">
-              <i class="fa-regular fa-bell" aria-hidden="true"></i>
-              <span class="badge" id="notif-badge" aria-live="polite">0</span>
-            </button>
+            <div class="avatar-area">
+              <div class="avatar">A</div>
+              <div class="avatar-info">
+                <div class="avatar-name">Admin</div>
+                <div class="avatar-role">Owner</div>
+              </div>
+            </div>
+          </div>
+        </header>
+                  <!-- Notifications will be loaded here via JavaScript -->
+                </div>
+              </div>
+            </div>
             <div class="avatar-area">
               <div class="avatar">A</div>
               <div class="avatar-info">
@@ -71,9 +91,9 @@
   <div class="dashboard-page">
     <section class="dashboard-hero" aria-labelledby="dashboard-heading">
       <div>
-        <div class="eyebrow">BUSINESS ANALYTICS</div>
-        <h1 id="dashboard-heading">Operational Overview</h1>
-        <p>Monitor reservations, deliveries, inventory, demand, and operational activity from one place.</p>
+        <div class="eyebrow">FARM OVERVIEW</div>
+        <h1 id="dashboard-heading">Operational Status</h1>
+        <p>Current farm status, key metrics, and recent activity at a glance.</p>
       </div>
       <div class="dashboard-hero-meta">
         <div class="live-status"><span class="live-dot"></span><span id="dashboard-live-status">Live operational data</span></div>
@@ -84,30 +104,6 @@
     <section class="dashboard-kpis" id="dashboard-stats" aria-label="Key performance indicators"></section>
 
     <section class="dashboard-grid dashboard-main-grid">
-      <article class="dashboard-card chart-card reservation-performance-card">
-        <div class="card-heading">
-          <div>
-            <span class="card-kicker">DEMAND ACTIVITY</span>
-            <h2>Reservation &amp; Delivery Performance</h2>
-            <p>Daily activity across the last 7 days.</p>
-          </div>
-          <div class="chart-legend" aria-label="Chart legend">
-            <span><i class="legend-line reservation"></i>Reservations</span>
-            <span><i class="legend-line delivery"></i>Completed deliveries</span>
-          </div>
-        </div>
-        <div class="performance-summary">
-          <div class="summary-metric"><span>Total reservations</span><strong id="reservation-kpi">0</strong></div>
-          <div class="summary-metric"><span>7-day trend</span><strong class="trend-value" id="reservation-trend-value">Stable</strong></div>
-          <div class="summary-metric"><span>Top channel</span><strong id="reservation-top-channel">—</strong></div>
-        </div>
-        <div class="large-chart" id="reservation-trend-chart"></div>
-        <div class="chart-axis" id="reservation-axis-labels"></div>
-        <div class="channel-breakdown" id="reservation-source-bars"></div>
-        <p class="chart-insight" id="reservation-insight">Booking activity insights will appear here.</p>
-        <div class="card-foot"><span>Reservation records</span><span>Last 7 days</span></div>
-      </article>
-
       <aside class="dashboard-card alerts-card" aria-labelledby="alerts-title">
         <div class="card-heading compact">
           <div>
@@ -118,81 +114,43 @@
         </div>
         <div id="alerts-list" class="alerts-list"></div>
       </aside>
-    </section>
 
-    <section class="dashboard-grid dashboard-secondary-grid">
-      <article class="dashboard-card inventory-card">
-        <div class="card-heading">
-          <div>
-            <span class="card-kicker">INVENTORY HEALTH</span>
-            <h2>Egg Stock Position</h2>
-            <p>Current stock compared with reservations and 30-day movement.</p>
-          </div>
-          <div class="health-badge" id="inventory-health-badge">Healthy</div>
-        </div>
-        <div class="inventory-metrics">
-          <div><span>Total stock</span><strong id="inventory-kpi">0</strong><small>eggs</small></div>
-          <div><span>Available</span><strong id="inventory-available">0</strong><small>after reservations</small></div>
-          <div><span>Reserved</span><strong id="inventory-reserved">0</strong><small>allocated</small></div>
-        </div>
-        <div class="inventory-flow" id="inventory-flow-chart"></div>
-        <div class="flow-labels" id="inventory-flow-labels"></div>
-        <p class="chart-insight" id="inventory-insight">Inventory movement insights will appear here.</p>
-        <div class="card-foot"><span>Inventory movement</span><span>Last 30 days</span></div>
-      </article>
-
-      <article class="dashboard-card product-card">
-        <div class="card-heading">
-          <div>
-            <span class="card-kicker">PRODUCT MIX</span>
-            <h2>Best-selling Egg Sizes</h2>
-            <p>Share of completed delivery volume.</p>
-          </div>
-          <div class="product-leader" id="product-leader">—</div>
-        </div>
-        <div class="product-highlight">
-          <div class="product-share"><strong id="product-kpi">0%</strong><span>top product share</span></div>
-          <div class="product-trend" id="product-trend"><span id="product-trend-icon">→</span><span id="product-trend-value">No data</span></div>
-        </div>
-        <div id="product-insight-gauge" class="product-gauge"></div>
-        <div id="product-insight-bars" class="product-bars"></div>
-        <p class="chart-insight" id="product-insight-note">Product insights will appear once deliveries are completed.</p>
-        <div class="card-foot"><span>Completed deliveries</span><span>Top 6 sizes</span></div>
-      </article>
-    </section>
-
-    <section class="dashboard-card forecast-card">
-      <div class="card-heading forecast-heading">
-        <div>
-          <span class="card-kicker">FORECASTING</span>
-          <h2>Demand Forecast &amp; Inventory Readiness</h2>
-          <p>Historical reservation demand with a forward-looking trend estimate.</p>
-        </div>
-        <div class="forecast-headline"><span>Next forecast</span><strong id="forecast-kpi">0</strong><small>units</small></div>
-      </div>
-      <div class="forecast-layout">
-        <div class="forecast-visual">
-          <div class="forecast-chart-wrap" id="forecast-summary-chart">
-            <svg id="forecast-summary-svg" viewBox="0 0 760 240" preserveAspectRatio="none" aria-hidden="true" focusable="false"></svg>
-            <div class="empty-state hidden" id="forecast-summary-empty">Forecasting data is unavailable until reservations are recorded.</div>
-          </div>
-          <div class="chart-axis forecast-axis" id="forecast-axis-labels"></div>
-          <div class="forecast-legend"><span><i class="legend-line actual"></i>Historical demand</span><span><i class="legend-line forecast"></i>Trend estimate</span></div>
-          <div class="forecast-note" id="forecast-predictions"></div>
-        </div>
-        <div class="forecast-readiness" id="forecast-inventory-section"></div>
-      </div>
-      <p class="chart-insight" id="forecast-insight">Demand forecasting is based on historical reservation patterns.</p>
-      <div class="card-foot"><span>Forecast horizon</span><span>6 months</span></div>
-    </section>
-
-    <section class="dashboard-grid dashboard-bottom-grid">
       <article class="dashboard-card activity-card">
         <div class="card-heading compact">
-          <div><span class="card-kicker">OPERATIONS</span><h2>Recent Activity</h2></div>
+          <div><span class="card-kicker">RECENT ACTIVITY</span><h2>What's Happening</h2></div>
           <div class="live-metric-pill" id="live-metric">0 active reservations</div>
         </div>
         <div id="activity-log-list" class="timeline-list"></div>
+      </article>
+    </section>
+
+    <section class="dashboard-grid dashboard-secondary-grid">
+      <article class="dashboard-card quick-status-card">
+        <div class="card-heading">
+          <div>
+            <span class="card-kicker">QUICK STATUS</span>
+            <h2>Farm Status Summary</h2>
+            <p>Current operational status across key areas.</p>
+          </div>
+        </div>
+        <div class="quick-status-grid">
+          <div class="status-item">
+            <span class="status-label">Inventory</span>
+            <span class="status-value" id="quick-inventory-status">Healthy</span>
+          </div>
+          <div class="status-item">
+            <span class="status-label">Reservations</span>
+            <span class="status-value" id="quick-reservation-status">Active</span>
+          </div>
+          <div class="status-item">
+            <span class="status-label">Deliveries</span>
+            <span class="status-value" id="quick-delivery-status">On Schedule</span>
+          </div>
+          <div class="status-item">
+            <span class="status-label">Forecast</span>
+            <span class="status-value" id="quick-forecast-status">Stable</span>
+          </div>
+        </div>
       </article>
 
       <article class="dashboard-card notifications-card">
@@ -204,19 +162,32 @@
       </article>
     </section>
 
-    <section class="dashboard-grid dashboard-operations-grid">
-      <article class="dashboard-card supplies-card">
-        <div class="card-heading compact">
-          <div><span class="card-kicker">SUPPLIES</span><h2>Supply Inventory</h2><p>Current supply position from the inventory ledger.</p></div>
+    <section class="dashboard-grid dashboard-bottom-grid">
+      <article class="dashboard-card quick-links-card">
+        <div class="card-heading">
+          <div>
+            <span class="card-kicker">QUICK ACCESS</span>
+            <h2>Detailed Analysis</h2>
+            <p>Access in-depth analytics and forecasting tools.</p>
+          </div>
         </div>
-        <div id="supplies-overview" class="supplies-modern"></div>
-      </article>
-
-      <article class="dashboard-card sms-card">
-        <div class="card-heading compact">
-          <div><span class="card-kicker">ALERT MONITORING</span><h2>SMS &amp; Alert Status</h2><p>Operational signals that may require notification.</p></div>
+        <div class="quick-links-grid">
+          <button class="btn-secondary quick-link-item" data-page="analytics">
+            <i class="fa-solid fa-chart-line"></i>
+            <span>Data Analytics</span>
+            <i class="fa-solid fa-chevron-right"></i>
+          </button>
+          <button class="btn-secondary quick-link-item" data-page="forecasting">
+            <i class="fa-solid fa-timeline"></i>
+            <span>Demand Forecasting</span>
+            <i class="fa-solid fa-chevron-right"></i>
+          </button>
+          <button class="btn-secondary quick-link-item" data-page="reports">
+            <i class="fa-solid fa-file-invoice"></i>
+            <span>Reports</span>
+            <i class="fa-solid fa-chevron-right"></i>
+          </button>
         </div>
-        <div id="sms-monitoring-content" class="sms-modern-grid"></div>
       </article>
     </section>
   </div>
@@ -439,7 +410,7 @@
                 <div id="users-pagination" class="pagination"></div>
               </div>
 
-              <div>
+              <div class="um-panel">
                 <div class="global-controls">
                   <div class="gc-title">Manager Account Controls</div>
                   <div class="gc-row">
@@ -454,6 +425,121 @@
                 <div id="customer-accounts-content" class="customer-readonly-table"></div>
                 <p style="font-size:11px;color:var(--text-soft);margin-top:12px;font-style:italic;">Customer accounts are self-managed and cannot be modified by administrators.</p>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="page-analytics" class="page">
+          <div class="page-shell">
+            <div class="page-subtitle">Data Analytics Center</div>
+            <div class="dashboard-page">
+              <section class="dashboard-grid dashboard-main-grid">
+                <article class="dashboard-card chart-card reservation-performance-card">
+                  <div class="card-heading">
+                    <div>
+                      <span class="card-kicker">DEMAND ACTIVITY</span>
+                      <h2>Reservation &amp; Delivery Performance</h2>
+                      <p>Daily activity across the last 7 days.</p>
+                    </div>
+                    <div class="chart-legend" aria-label="Chart legend">
+                      <span><i class="legend-line reservation"></i>Reservations</span>
+                      <span><i class="legend-line delivery"></i>Completed deliveries</span>
+                    </div>
+                  </div>
+                  <div class="performance-summary">
+                    <div class="summary-metric"><span>Total reservations</span><strong id="analytics-reservation-kpi">0</strong></div>
+                    <div class="summary-metric"><span>7-day trend</span><strong class="trend-value" id="analytics-reservation-trend-value">Stable</strong></div>
+                    <div class="summary-metric"><span>Top channel</span><strong id="analytics-reservation-top-channel">—</strong></div>
+                  </div>
+                  <div class="large-chart" id="analytics-reservation-trend-chart"></div>
+                  <div class="chart-axis" id="analytics-reservation-axis-labels"></div>
+                  <div class="channel-breakdown" id="analytics-reservation-source-bars"></div>
+                  <p class="chart-insight" id="analytics-reservation-insight">Booking activity insights will appear here.</p>
+                  <div class="card-foot"><span>Reservation records</span><span>Last 7 days</span></div>
+                </article>
+              </section>
+
+              <section class="dashboard-grid dashboard-secondary-grid">
+                <article class="dashboard-card inventory-card">
+                  <div class="card-heading">
+                    <div>
+                      <span class="card-kicker">INVENTORY ANALYSIS</span>
+                      <h2>Egg Stock Position</h2>
+                      <p>Current stock compared with reservations and 30-day movement.</p>
+                    </div>
+                    <div class="health-badge" id="analytics-inventory-health-badge">Healthy</div>
+                  </div>
+                  <div class="inventory-metrics">
+                    <div><span>Total stock</span><strong id="analytics-inventory-kpi">0</strong><small>eggs</small></div>
+                    <div><span>Available</span><strong id="analytics-inventory-available">0</strong><small>after reservations</small></div>
+                    <div><span>Reserved</span><strong id="analytics-inventory-reserved">0</strong><small>allocated</small></div>
+                  </div>
+                  <div class="inventory-flow" id="analytics-inventory-flow-chart"></div>
+                  <div class="flow-labels" id="analytics-inventory-flow-labels"></div>
+                  <p class="chart-insight" id="analytics-inventory-insight">Inventory movement insights will appear here.</p>
+                  <div class="card-foot"><span>Inventory movement</span><span>Last 30 days</span></div>
+                </article>
+
+                <article class="dashboard-card product-card">
+                  <div class="card-heading">
+                    <div>
+                      <span class="card-kicker">PRODUCT MIX</span>
+                      <h2>Best-selling Egg Sizes</h2>
+                      <p>Share of completed delivery volume.</p>
+                    </div>
+                    <div class="product-leader" id="analytics-product-leader">—</div>
+                  </div>
+                  <div class="product-highlight">
+                    <div class="product-share"><strong id="analytics-product-kpi">0%</strong><span>top product share</span></div>
+                    <div class="product-trend" id="analytics-product-trend"><span id="analytics-product-trend-icon">→</span><span id="analytics-product-trend-value">No data</span></div>
+                  </div>
+                  <div id="analytics-product-insight-gauge" class="product-gauge"></div>
+                  <div id="analytics-product-insight-bars" class="product-bars"></div>
+                  <p class="chart-insight" id="analytics-product-insight-note">Product insights will appear once deliveries are completed.</p>
+                  <div class="card-foot"><span>Completed deliveries</span><span>Top 6 sizes</span></div>
+                </article>
+              </section>
+
+              <section class="dashboard-grid dashboard-operations-grid">
+                <article class="dashboard-card supplies-card">
+                  <div class="card-heading compact">
+                    <div><span class="card-kicker">SUPPLY ANALYSIS</span><h2>Supply Inventory</h2><p>Current supply position from the inventory ledger.</p></div>
+                  </div>
+                  <div id="analytics-supplies-overview" class="supplies-modern"></div>
+                </article>
+              </section>
+            </div>
+          </div>
+        </div>
+
+        <div id="page-forecasting" class="page">
+          <div class="page-shell">
+            <div class="page-subtitle">Demand Forecasting Center</div>
+            <div class="dashboard-page">
+              <section class="dashboard-card forecast-card">
+                <div class="card-heading forecast-heading">
+                  <div>
+                    <span class="card-kicker">FORECASTING</span>
+                    <h2>Demand Forecast &amp; Inventory Readiness</h2>
+                    <p>Historical reservation demand with a forward-looking trend estimate.</p>
+                  </div>
+                  <div class="forecast-headline"><span>Next forecast</span><strong id="forecasting-kpi">0</strong><small>units</small></div>
+                </div>
+                <div class="forecast-layout">
+                  <div class="forecast-visual">
+                    <div class="forecast-chart-wrap" id="forecasting-summary-chart">
+                      <svg id="forecasting-summary-svg" viewBox="0 0 760 240" preserveAspectRatio="none" aria-hidden="true" focusable="false"></svg>
+                      <div class="empty-state hidden" id="forecasting-summary-empty">Forecasting data is unavailable until reservations are recorded.</div>
+                    </div>
+                    <div class="chart-axis forecast-axis" id="forecasting-axis-labels"></div>
+                    <div class="forecast-legend"><span><i class="legend-line actual"></i>Historical demand</span><span><i class="legend-line forecast"></i>Trend estimate</span></div>
+                    <div class="forecast-note" id="forecasting-predictions"></div>
+                  </div>
+                  <div class="forecast-readiness" id="forecasting-inventory-section"></div>
+                </div>
+                <p class="chart-insight" id="forecasting-insight">Demand forecasting is based on historical reservation patterns.</p>
+                <div class="card-foot"><span>Forecast horizon</span><span>6 months</span></div>
+              </section>
             </div>
           </div>
         </div>
