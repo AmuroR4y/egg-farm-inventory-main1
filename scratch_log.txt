@@ -1,0 +1,20 @@
+14:20:56 Script started
+14:20:56 Loading customer_dashboard.php
+14:20:57 Finished customer_dashboard.php
+14:20:57 Loading customer_reservation.php
+14:20:58 Finished customer_reservation.php
+14:20:58 Loading customer_history.php
+14:20:59 Finished customer_history.php
+14:20:59 Loading customer_profile.php
+14:21:00 Finished customer_profile.php
+14:21:00 All done and saved
+14:21:44 Loading customer_dashboard.php
+14:21:44 Finished customer_dashboard.php
+14:21:44 Loading customer_reservation.php
+14:21:45 Finished customer_reservation.php
+14:21:45 Loading customer_history.php
+14:21:46 Finished customer_history.php
+14:21:46 Loading customer_profile.php
+14:21:47 Finished customer_profile.php
+14:21:47 Detailed audit finished and saved
+14:23:02 Right probe finished

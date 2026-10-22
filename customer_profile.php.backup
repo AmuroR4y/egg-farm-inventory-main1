@@ -1,8 +1,10 @@
 <?php
+// Include standardized session configuration FIRST
+require_once 'session_config.php';
 
-if (!isset($_SESSION)) {
-    session_start();
-}
+date_default_timezone_set('Asia/Manila');
+
+include 'db.php';
 
 /*
 |--------------------------------------------------------------------------
@@ -12,17 +14,46 @@ if (!isset($_SESSION)) {
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
-    exit();
+    exit;
 }
 
-include 'db.php';
-
 $user_id = $_SESSION['user_id'];
+$user_role = isset($_SESSION['role']) ? $_SESSION['role'] : 'customer';
 
-$user_role = isset($_SESSION['role'])
-    ? $_SESSION['role']
-    : 'Customer';
+$customer_name = isset($_SESSION['fullname'])
+    ? $_SESSION['fullname']
+    : (isset($_SESSION['customer_name']) ? $_SESSION['customer_name'] : (isset($_SESSION['name']) ? $_SESSION['name'] : 'Customer'));
+$active_page = 'profile';
 
+$unread_notifications = 0;
+$notification_count_result = $conn->query("SELECT COUNT(*) AS total FROM notifications WHERE user_id = " . (int)$user_id . " AND is_read = 0");
+if ($notification_count_result && ($notification_count_row = $notification_count_result->fetch_assoc())) {
+    $unread_notifications = (int)$notification_count_row['total'];
+}
+
+if ($user_role !== 'customer') {
+    header("Location: login.php");
+    exit;
+}
+
+
+/* =========================================================
+   CUSTOMER LOGOUT TOKEN
+   PHP 5.5 COMPATIBLE
+========================================================= */
+
+if (empty($_SESSION['customer_logout_token'])) {
+    if (function_exists('random_bytes')) {
+        $_SESSION['customer_logout_token'] = bin2hex(random_bytes(32));
+    } elseif (function_exists('openssl_random_pseudo_bytes')) {
+        $_SESSION['customer_logout_token'] = bin2hex(openssl_random_pseudo_bytes(32));
+    } else {
+        $_SESSION['customer_logout_token'] = hash(
+            'sha256',
+            uniqid(mt_rand(), true) . session_id()
+        );
+    }
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -79,6 +110,18 @@ if ($column_query) {
 
 /*
 |--------------------------------------------------------------------------
+| NOTIFICATION COUNT
+|--------------------------------------------------------------------------
+*/
+
+$unread_notifications = 0;
+$notification_count_result = $conn->query("SELECT COUNT(*) AS total FROM notifications WHERE user_id = " . (int)$user_id . " AND is_read = 0");
+if ($notification_count_result && ($notification_count_row = $notification_count_result->fetch_assoc())) {
+    $unread_notifications = (int)$notification_count_row['total'];
+}
+
+/*
+|--------------------------------------------------------------------------
 | FETCH USER INFORMATION
 |--------------------------------------------------------------------------
 */
@@ -127,6 +170,11 @@ if ($stmt = mysqli_prepare($conn, $sql)) {
         $db_fullname = isset($user['fullname'])
             ? $user['fullname']
             : '';
+
+        // Use session customer_name for display
+        $customer_name = isset($_SESSION['fullname'])
+            ? $_SESSION['fullname']
+            : (isset($_SESSION['customer_name']) ? $_SESSION['customer_name'] : (isset($_SESSION['name']) ? $_SESSION['name'] : 'Customer'));
 
         $db_username = isset($user['username'])
             ? $user['username']
@@ -927,1010 +975,844 @@ if (
         rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
     >
+
+    <link rel="stylesheet" href="customer_styles.css">
+
 <style>
+* {
+    box-sizing: border-box;
+}
 
-    body {
-        min-height: 100vh;
+/* =========================================================
+   CUSTOMER NAVIGATION — USE SHARED STYLES FROM customer_styles.css
+========================================================= */
 
-    font-family:
-        Arial,
-        Helvetica,
-        sans-serif;
-
-    background: #f3f1eb;
-
-    color: #3f4b45;
-    }
-
-    .main-content {
-        min-height: 100vh;
-        padding: 25px;
-    }
-
-    .profile-page {
-        max-width: 1450px;
-        margin: 0 auto;
-    }
+/* Remove duplicate navbar styles - using shared stylesheet */
 
 
-    /*
-    |--------------------------------------------------------------------------
-    | OUTER PROFILE CARD
-    |--------------------------------------------------------------------------
-    */
+
+/* ==================== PROFILE BANNER ==================== */
+
+.profile-banner {
+    position: relative;
+    min-height: 143px;
+    width: 100%;
+    padding: 24px 5%;
+    display: flex;
+    align-items: center;
+      justify-content: space-between;
+    gap: 20px;
+
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+  background-image: url("profile.jpg");
+       background-position: center, center 52%;
+    background-size: cover;
+    background-repeat: no-repeat;
+
+    border-bottom: 1px solid #e4e8dc;
+}
+  
+.profile-banner-content {
+    width: 100%;
+    max-width: 1450px;
+    margin: 0 auto;
+}
+
+.profile-banner h1 {
+      margin: 0 0 7px;
+    color: #17472d;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(27px, 3.1vw, 28px);
+    font-weight: 700;
+    line-height: 1.12;
+    letter-spacing: -0.5px;
+}
+
+.profile-banner p {
+     margin: 0;
+    color: #303a32;
+    font-size: 15px;
+    line-height: 1.45;
+}
+
+/* ==================== PAGE LAYOUT ==================== */
+
+.main-content {
+    min-height: calc(100vh - 160px);
+    padding: 20px 4% 25px;
+}
+
+.profile-page {
+    width: 100%;
+    max-width: 1450px;
+    margin: 0 auto;
+}
+
 .profile-outer-card {
     width: 100%;
-    background: #ffffff;
-    border: 1px solid #dfe5e1;
-    border-radius: 14px;
-    padding: 0;
     overflow: hidden;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-}
-.customer-dashboard-topbar {
-
-    min-height: 86px;
-
-    width: 100%;
-
-    display: flex;
-
-    align-items: center;
-
-    justify-content: space-between;
-
-    padding: 0 28px;
-
-    background: #f7f6f2;
-
-    border-bottom: 1px solid #dddcd6;
-
-    box-sizing: border-box;
-
-    border-radius: 13px 13px 0 0;
+    background: #fff;
+    border: 1px solid #e0e7de;
+    border-radius: 9px;
+    box-shadow: 0 3px 12px rgba(35, 67, 41, .05);
 }
 
-
-/* =========================================================
-   HEADER TITLE
-========================================================= */
-
-.customer-page-title {
-
-    margin:
-        0;
-
-    font-size:
-        1.35rem;
-
-    font-weight:
-        700;
-
-    color:
-        #3f4b45;
-
-    letter-spacing:
-        -0.3px;
-}
-
-
-/* =========================================================
-   HEADER RIGHT
-========================================================= */
-
-.customer-topbar-right {
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    gap:
-        18px;
-
-    height:
-        100%;
-}
-
-
-/* =========================================================
-   NOTIFICATION
-========================================================= */
-
-.customer-top-notification {
-
-    position:
-        relative;
-
-    width:
-        40px;
-
-    height:
-        40px;
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    justify-content:
-        center;
-
-    text-decoration:
-        none;
-
-    color:
-        #65716b;
-
-    font-size:
-        1.2rem;
-
-    transition:
-        0.2s ease;
-}
-
-
-.customer-top-notification:hover {
-
-    color:
-        #527d59;
-}
-
-
-/* =========================================================
-   NOTIFICATION BADGE
-========================================================= */
-
-.customer-notification-badge {
-
-    position:
-        absolute;
-
-    top:
-        1px;
-
-    right:
-        0;
-
-    min-width:
-        17px;
-
-    height:
-        17px;
-
-    padding:
-        0 4px;
-
-    border-radius:
-        50%;
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    justify-content:
-        center;
-
-    background:
-        #527d59;
-
-    color:
-        #ffffff;
-
-    font-size:
-        0.58rem;
-
-    font-weight:
-        700;
-
-    border:
-        2px solid #f7f6f2;
-}
-
-
-/* =========================================================
-   HEADER DIVIDER
-========================================================= */
-
-.customer-topbar-divider {
-
-    width:
-        1px;
-
-    height:
-        42px;
-
-    background:
-        #deded8;
-}
-
-
-/* =========================================================
-   CUSTOMER PROFILE
-========================================================= */
-
-.customer-top-profile {
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    gap:
-        11px;
-
-    min-width:
-        190px;
-
-    text-decoration:
-        none;
-
-    color:
-        #3f4b45;
-}
-
-
-/* =========================================================
-   CUSTOMER AVATAR
-========================================================= */
-
-.customer-avatar {
-
-    width:
-        54px;
-
-    height:
-        54px;
-
-    min-width:
-        54px;
-
-    border-radius:
-        50%;
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    justify-content:
-        center;
-
-    background:
-        #e8ebe7;
-
-    border:
-        1px solid #d9ddd8;
-
-    color:
-        #527d59;
-
-    font-size:
-        1.25rem;
-
-    box-shadow:
-        0 2px 6px
-        rgba(
-            0,
-            0,
-            0,
-            0.04
-        );
-}
-
-
-/* =========================================================
-   CUSTOMER ACCOUNT DETAILS
-========================================================= */
-
-.customer-account-details {
-
-    display:
-        flex;
-
-    flex-direction:
-        column;
-
-    justify-content:
-        center;
-
-    min-width:
-        100px;
-}
-
-
-/* =========================================================
-   CUSTOMER NAME
-========================================================= */
-
-.customer-top-name {
-
-    display:
-        block;
-
-    margin:
-        0;
-
-    color:
-        #3f4b45;
-
-    font-size:
-        0.88rem;
-
-    font-weight:
-        700;
-
-    line-height:
-        1.2;
-}
-
-
-/* =========================================================
-   DATE AND LIVE TIME
-========================================================= */
-
-.customer-date-time {
-
-    display:
-        flex;
-
-    flex-direction:
-        column;
-
-    align-items:
-        flex-start;
-
-    gap:
-        2px;
-
-    margin-top:
-        5px;
-
-    white-space:
-        nowrap;
-}
-
-
-.customer-date {
-
-    font-size:
-        0.63rem;
-
-    color:
-        #8a9590;
-
-    line-height:
-        1.2;
-}
-
-
-.customer-time {
-
-    font-size:
-        0.63rem;
-
-    color:
-        #527d59;
-
-    font-weight:
-        600;
-
-    line-height:
-        1.2;
-
-    white-space:
-        nowrap;
-}
-
-
-/* =========================================================
-   DROPDOWN ICON
-========================================================= */
-
-.customer-dropdown-icon {
-
-    width:
-        28px;
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    justify-content:
-        center;
-
-    color:
-        #65716b;
-
-    font-size:
-        0.7rem;
-}
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | PROFILE LAYOUT
-    |--------------------------------------------------------------------------
-    */
-
-  .profile-layout {
+.profile-layout {
     display: grid;
-    grid-template-columns: 270px minmax(0, 1fr);
-    gap: 18px;
+    grid-template-columns: 260px minmax(0, 1fr);
     align-items: stretch;
-    padding: 25px;
+    gap: 14px;
+    padding: 14px;
+}
+
+/* ==================== PROFILE SIDEBAR ==================== */
+
+.profile-sidebar-card {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid #e7ebe5;
+    border-radius: 7px;
+    margin-top: 35px;
+}
+.profile-address-item {
+    align-items: flex-start;
+    min-width: 0;
+}
+
+.profile-address-item .contact-icon {
+    flex-shrink: 0;
+}
+
+.profile-address-item span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.profile-user-section {
+    padding: 15px 12px 14px;
+    text-align: center;
+    border-bottom: 1px solid #edf0eb;
+}
+
+.profile-avatar-wrapper {
+    position: relative;
+    width: 68px;
+    height: 68px;
+    margin: 0 auto 10px;
+}
+
+.profile-avatar {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    border: 3px solid #edf4e9;
+    border-radius: 50%;
+    background: #edf4e9;
+}
+
+.edit-photo-button {
+    position: absolute;
+    right: -1px;
+    bottom: 0;
+    width: 23px;
+    height: 23px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: #28623b;
+    color: #fff;
+    font-size: 9px;
+    cursor: pointer;
+}
+
+.profile-name {
+    margin-bottom: 5px;
+    color: #35483a;
+    font-size: 15px;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.role-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background: #eaf3e8;
+    color: #3e7048;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.contact-section {
+    padding: 12px 13px;
+    border-bottom: 1px solid #edf0eb;
+}
+
+.contact-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 10px;
+    color: #647166;
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.contact-item:last-child {
+    margin-bottom: 0;
+}
+
+.contact-icon {
+    width: 13px;
+    min-width: 13px;
+    margin-top: 2px;
+    color: #397348;
+}
+
+.status-box {
+    margin: 12px;
+    padding: 12px;
+    border-radius: 6px;
+    background: #f1f7ef;
+}
+
+.status-title {
+    margin-bottom: 8px;
+    color: #536456;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.active-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #327345;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #49a765;
+}
+
+/* ==================== MAIN PROFILE CARD ==================== */
+
+.profile-main-card {
+    min-width: 0;
+    padding: 17px;
+    background: #fff;
+    border: 1px solid #e7ebe5;
+    border-radius: 7px;
+}
+
+.profile-tabs {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    margin-bottom: 17px;
+    border-bottom: 1px solid #e4e9e1;
+}
+
+.profile-tab {
+    position: relative;
+    padding: 0 2px 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    color: #69766b;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.profile-tab.active {
+    border-bottom-color: #28623b;
+    color: #285e38;
+}
+
+.section-title {
+    margin: 0 0 5px;
+    color: #35483a;
+    font-size: 17px;
+    font-weight: 700;
+}
+
+.section-subtitle {
+    margin: 0 0 16px;
+    color: #7b877d;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+/* ==================== PROFILE FORM ==================== */
+
+.form-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 16px 18px;
+}
+
+.form-group {
+    min-width: 0;
+}
+
+.form-group.third-width {
+    grid-column: span 2;
+}
+
+.form-group.half-width {
+    grid-column: span 3;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 5px;
+    color: #506054;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.required {
+    color: #cf5149;
+}
+
+.form-input {
+    display: block;
+    width: 100%;
+      min-width: 0;
+    box-sizing: border-box;
+    height: 37px;
+    padding: 0 10px;
+    border: 1px solid #dfe5dd;
+    border-radius: 4px;
+    outline: none;
+    background: #fff;
+    color: #455448;
+    font-size: 13px;
+    transition: border-color .2s, box-shadow .2s;
+}
+
+.form-input:focus {
+    border-color: #6c9871;
+    box-shadow: 0 0 0 2px rgba(70, 125, 79, .09);
+}
+
+.readonly-input {
+    background: #f1f3f0;
+    color: #7c867e;
+    cursor: not-allowed;
+}
+
+.button-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 15px;
+}
+
+.save-button {
+    min-height: 37px;
+    padding: 0 14px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border: 0;
+    border-radius: 4px;
+    background: #245b35;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .2s;
+}
+
+.save-button:hover {
+    background: #194729;
+}
+
+/* SECURITY NOTE */
+.security-note {
+    margin-top: 15px;
+    padding: 16px 18px;
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid #dce9d7;
+    border-radius: 10px;
+    background: #f4f8f1;
+    color: #476354;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+/* INSTRUCTION */
+.security-note-heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #476354;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.security-note-heading > i {
+    flex-shrink: 0;
+    color: #247047;
+    font-size: 16px;
+}
+
+/* PASSWORD CHECKLIST */
+.security-note .password-requirements {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    align-items: stretch;
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 22px;
+    padding: 0;
+    row-gap: 22px;
+}
+
+/* EACH REQUIREMENT */
+.security-note .password-requirement {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 18px;
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+
+/* LARGER STATUS ICONS */
+.security-note .password-requirement i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin: 0;
+    font-size: 20px;
+}
+
+/* FIRST ROW: THREE EVENLY SPACED ITEMS */
+.security-note .password-requirement:nth-child(1) {
+    grid-column: 1 / 3;
+    border-right: 2px solid #dce9d7;
+}
+
+.security-note .password-requirement:nth-child(2) {
+    grid-column: 3 / 5;
+    border-right: 2px solid #dce9d7;
+}
+
+.security-note .password-requirement:nth-child(3) {
+    grid-column: 5 / 7;
+}
+
+/* SECOND ROW: TWO ITEMS CENTERED */
+.security-note .password-requirement:nth-child(4) {
+    grid-column: 2 / 4;
+    border-right: 2px solid #dce9d7;
+}
+
+.security-note .password-requirement:nth-child(5) {
+    grid-column: 4 / 6;
+}
+
+/* INCOMPLETE REQUIREMENTS */
+.security-note .password-requirement.invalid {
+    color: #c94f4f;
+}
+
+.security-note .password-requirement.invalid i {
+    color: #c94f4f;
+}
+
+/* COMPLETED REQUIREMENTS */
+.security-note .password-requirement.valid {
+    color: #247047;
+}
+
+.security-note .password-requirement.valid i {
+    color: #247047;
+}
+
+/* MOBILE LAYOUT */
+@media (max-width: 700px) {
+    .security-note .password-requirements {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        row-gap: 12px;
+        margin-top: 16px;
+    }
+
+    .security-note .password-requirement {
+        grid-column: auto !important;
+        justify-content: flex-start;
+        padding: 4px 6px;
+        font-size: 12px;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        border-right: none !important;
+    }
+
+    .security-note .password-requirement:nth-child(5) {
+        grid-column: 1 / -1 !important;
+    }
 }
 
 
-    /*
-    |--------------------------------------------------------------------------
-    | LEFT PROFILE CARD
-    |--------------------------------------------------------------------------
-    */
 
-    .profile-sidebar-card {
-        width: 100%;
-        height: 100%;
-
-        background: #ffffff;
-        border: 1px solid #dfe5e1;
-        border-radius: 10px;
-        overflow: hidden;
-
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-    }
-
-    .profile-user-section {
-        padding: 30px 22px;
-        text-align: center;
-        border-bottom: 1px solid #edf0ee;
-    }
-
-    .profile-avatar-wrapper {
-        position: relative;
-        width: 100px;
-        height: 100px;
-        margin: 0 auto 15px;
-    }
-
-    .profile-avatar {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        border-radius: 50%;
-        background: #e8f1eb;
-        border: 5px solid #edf4ef;
-    }
-
-    .edit-photo-button {
-        position: absolute;
-        right: 0;
-        bottom: 0;
-
-        width: 30px;
-        height: 30px;
-
-        border-radius: 50%;
-        background: #356b4b;
-        color: white;
-
-        display: flex;
-        align-items: center;
-        justify-content: center;
-
-        cursor: pointer;
-        font-size: 11px;
-        border: 3px solid white;
-    }
-
-    .profile-name {
-        font-size: 18px;
-        font-weight: 700;
-        color: #415049;
-        margin-bottom: 7px;
-    }
-
-    .role-badge {
-        display: inline-block;
-        padding: 5px 12px;
-        border-radius: 20px;
-
-        background: #e8f1eb;
-        color: #4d745b;
-
-        font-size: 11px;
-        font-weight: 600;
-    }
-
-    .contact-section {
-        padding: 20px;
-        border-bottom: 1px solid #edf0ee;
-    }
-
-    .contact-item {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-
-        font-size: 11px;
-        color: #5d6a64;
-
-        margin-bottom: 14px;
-        word-break: break-word;
-    }
-
-    .contact-item:last-child {
-        margin-bottom: 0;
-    }
-
-    .contact-icon {
-        width: 15px;
-        color: #527d59;
-    }
-
-    .status-box {
-        margin: 14px;
-        padding: 17px;
-
-        border-radius: 7px;
-
-        background: linear-gradient(
-            90deg,
-            #f3faf5,
-            #eaf2ed
-        );
-    }
-
-    .status-title {
-        font-size: 11px;
-        font-weight: 600;
-        color: #52615a;
-        margin-bottom: 12px;
-    }
-
-    .active-status {
-        display: flex;
-        align-items: center;
-        gap: 7px;
-
-        color: #3f7a53;
-        font-size: 11px;
-        font-weight: 600;
-    }
-
-    .status-dot {
-        width: 7px;
-        height: 7px;
-
-        border-radius: 50%;
-        background: #4caf70;
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | RIGHT PROFILE MAIN CARD
-    |--------------------------------------------------------------------------
-    */
-
-    .profile-main-card {
-        width: 100%;
-        height: 100%;
-
-        background: #ffffff;
-        border: 1px solid #dfe5e1;
-        border-radius: 10px;
-
-        padding: 20px;
-
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | TABS
-    |--------------------------------------------------------------------------
-    */
-
-    .profile-tabs {
-        display: flex;
-        align-items: center;
-        gap: 25px;
-
-        border-bottom: 1px solid #dce5df;
-        margin-bottom: 20px;
-    }
-
-    .profile-tab {
-        padding: 0 8px 12px;
-
-        font-size: 12px;
-        font-weight: 600;
-
-        color: #6d7772;
-        border: none;
-        border-bottom: 3px solid transparent;
-
-        cursor: pointer;
-        background: transparent;
-    }
-
-    .profile-tab.active {
-        color: #356b4b;
-        border-bottom: 3px solid #356b4b;
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | FORM
-    |--------------------------------------------------------------------------
-    */
-
-    .section-title {
-        font-size: 16px;
-        font-weight: 700;
-        color: #435149;
-        margin-bottom: 4px;
-    }
-
-    .section-subtitle {
-        font-size: 11px;
-        color: #6c7771;
-        margin-bottom: 22px;
-    }
-
-    .form-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 18px;
-    }
-
-    .form-group.full-width {
-        grid-column: 1 / -1;
-    }
-
-    .form-label {
-        display: block;
-
-        font-size: 11px;
-        font-weight: 600;
-
-        color: #526059;
-        margin-bottom: 7px;
-    }
-
-    .required {
-        color: #d9534f;
-    }
-
-    .form-input {
-        width: 100%;
-        height: 43px;
-
-        border: 1px solid #d6ded9;
-        border-radius: 6px;
-
-        padding: 0 13px;
-
-        font-size: 12px;
-        color: #48554e;
-
-        outline: none;
-        background: #ffffff;
-
-        transition: 0.2s;
-    }
-
-    .form-input:focus {
-        border-color: #527d59;
-
-        box-shadow:
-            0 0 0 3px
-            rgba(82, 125, 89, 0.10);
-    }
-
-    .readonly-input {
-        background: #f7f9f8;
-        color: #7a8580;
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | SAVE BUTTON
-    |--------------------------------------------------------------------------
-    */
-
-    .button-row {
-        display: flex;
-        justify-content: flex-end;
-        margin-top: 28px;
-    }
-
-    .save-button {
-        background: #356b4b;
-        color: white;
-
-        border: none;
-        border-radius: 6px;
-
-        padding: 12px 21px;
-
-        font-size: 11px;
-        font-weight: 600;
-
-        cursor: pointer;
-        transition: 0.2s;
-
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .save-button:hover {
-        background: #2d5b40;
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | INFORMATION BOX
-    |--------------------------------------------------------------------------
-    */
-
-    .security-note {
-        margin-top: 25px;
-        padding: 14px;
-
-        background: linear-gradient(
-            90deg,
-            #f2faf5,
-            #eaf2ed
-        );
-
-        border-radius: 7px;
-
-        color: #587064;
-        font-size: 10px;
-
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | PASSWORD
-    |--------------------------------------------------------------------------
-    */
-
-    .password-wrapper {
-        position: relative;
-    }
-
-    .toggle-password {
-        position: absolute;
-        right: 13px;
-        top: 50%;
-
-        transform: translateY(-50%);
-
-        border: none;
-        background: transparent;
-
-        color: #839089;
-        cursor: pointer;
-    }
-
-    .password-input {
-        padding-right: 40px;
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | TAB CONTENT
-    |--------------------------------------------------------------------------
-    */
-
-    .tab-content {
-        display: none;
-    }
-
-    .tab-content.active {
-        display: block;
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | ALERTS
-    |--------------------------------------------------------------------------
-    */
-
-    .alert {
-        padding: 14px 17px;
-        margin-bottom: 18px;
-
-        border-radius: 7px;
-
-        font-size: 12px;
-
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-
-    .alert-success {
-        background: #eaf7ee;
-        border: 1px solid #b9dfc3;
-        color: #2f7045;
-    }
-
-    .alert-error {
-        background: #fff0f0;
-        border: 1px solid #efc4c4;
-        color: #b84444;
-    }
-
-
-    /*
-    |--------------------------------------------------------------------------
-    | RESPONSIVE DESIGN
-    |--------------------------------------------------------------------------
-    */
-
-    @media (max-width: 900px) {
-
-        .profile-layout {
-            grid-template-columns: 1fr;
-        }
-
-    }
-@media (max-width: 650px) {
-
+/* ==================== PASSWORD CONTROLS ==================== */
+
+.password-wrapper {
+    position: relative;
+}
+
+.password-input {
+    padding-right: 36px;
+}
+
+.toggle-password {
+    position: absolute;
+    top: 50%;
+    right: 10px;
+    transform: translateY(-50%);
+    padding: 4px;
+    border: 0;
+    background: transparent;
+    color: #778579;
+    cursor: pointer;
+}
+
+/* ==================== TABS AND ALERTS ==================== */
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.alert {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 12px 14px 0;
+    padding: 10px 12px;
+    border-radius: 5px;
+    font-size: 10px;
+    line-height: 1.5;
+}
+
+.alert-success {
+    border: 1px solid #c9e5ce;
+    background: #edf8ef;
+    color: #2e7140;
+}
+
+.alert-error {
+    border: 1px solid #edceca;
+    background: #fff1ef;
+    color: #a53f38;
+}
+
+
+@media (min-width: 1500px) {
     .main-content {
-        padding: 15px;
-    }
-
-    .profile-outer-card {
-        padding: 0;
-        border-radius: 12px;
-    }
-
-    .customer-dashboard-topbar {
-        min-height: 78px;
-        padding: 0 18px;
+        padding-top: 24px;
     }
 
     .profile-layout {
+        grid-template-columns: 280px minmax(0, 1fr);
+        gap: 18px;
         padding: 18px;
     }
 
-    .alert {
-        margin-left: 18px;
-        margin-right: 18px;
+    .profile-main-card {
+        padding: 22px;
+    }
+}
+
+@media (max-width: 900px) {
+    .profile-layout {
+        grid-template-columns: 220px minmax(0, 1fr);
+        padding: 10px;
+        gap: 10px;
     }
 
-    .form-grid {
-        grid-template-columns: 1fr;
+    .profile-main-card {
+        padding: 13px;
     }
 
     .profile-tabs {
-        gap: 10px;
+        gap: 14px;
         overflow-x: auto;
+    }
+
+    .profile-tab {
+        font-size: 9px;
+    }
+
+    .form-grid {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 12px;
+    }
+
+    .form-group.full-width {
+        grid-column: auto;
     }
 
 }
 
+@media (max-width: 380px) {
+    .profile-sidebar-card {
+        grid-template-columns: 1fr;
+    }
+
+    .profile-user-section {
+        grid-row: auto;
+    }
+
+    .profile-tabs {
+        gap: 10px;
+    }
+
+    .profile-tab {
+        white-space: normal;
+        text-align: left;
+    }
+}
+
+/* =========================================
+   PROFILE PAGE — LARGE OUTER CARD
+========================================= */
+
+.main-content {
+    width: 100%;
+    min-height: 0;
+    padding: 24px 25px 26px;
+    box-sizing: border-box;
+    background: #ffffff;
+}
+
+.profile-page {
+    width: calc(100% - 60px);
+    max-width: 1740px;
+    margin: 14px auto 18px;
+}
+
+.profile-outer-card {
+    width: 100%;
+    overflow: hidden;
+    background: #ffffff;
+    border: 1px solid #dfe5e1;
+    border-radius: 26px;
+    box-shadow: 0 8px 24px rgba(35, 55, 38, 0.08);
+}
+
+/* BANNER BUILT INTO THE OUTER CARD */
+.profile-banner {
+    width: 100%;
+    min-height: 100px;
+    padding: 20px 5%;
+    display: flex;
+    align-items: center;
+    background: url("profile.jpg") center 48% / cover no-repeat;
+    border: 0;
+    border-bottom: 1px solid #e0e8da;
+    border-radius: 0;
+}
+
+.profile-banner-content {
+    width: 100%;
+    max-width: 1450px;
+    margin: 0 auto;
+}
+
+/* EXISTING PROFILE LAYOUT */
+.profile-layout {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+    gap: 22px;
+    align-items: start;
+    padding: 25px;
+}
+
+/* TABLET */
+@media (max-width: 900px) {
+    .profile-page {
+        width: calc(100% - 36px);
+        margin: 12px auto 16px;
+    }
+
+    .main-content {
+        padding: 18px;
+    }
+
+    .profile-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* MOBILE */
+@media (max-width: 680px) {
+    .profile-page {
+        width: calc(100% - 20px);
+        margin: 10px auto 14px;
+    }
+
+    .profile-outer-card {
+        border-radius: 18px;
+    }
+
+    .profile-banner {
+        min-height: 80px;
+        padding: 16px 18px;
+    }
+
+    .main-content {
+        padding: 12px;
+    }
+
+    .profile-layout {
+        padding: 10px;
+    }
+}
+
+
+.profile-sidebar-card,
+.profile-main-card {
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.profile-sidebar-card {
+    height: auto;
+}
+
+.profile-main-card {
+    height: auto;
+    padding: 25px;
+}
+
+.form-input {
+    box-sizing: border-box;
+    max-width: 100%;
+}
+
+@media (max-width: 900px) {
+    .main-content {
+        padding: 18px;
+    }
+
+    .profile-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 650px) {
+    .main-content {
+        padding: 12px;
+    }
+
+    .profile-layout {
+        padding: 15px;
+    }
+
+    .profile-main-card {
+        padding: 16px;
+    }
+/* =========================================================
+   SECURITY SETTINGS — THREE EQUAL PASSWORD FIELDS
+========================================================= */
+
+#security .form-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    align-items: start;
+}
+
+#security .form-group,
+#security .password-wrapper {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+#security .password-wrapper {
+    display: flex;
+    align-items: center;
+    position: relative;
+}
+
+#security .password-input {
+    width: 100%;
+    min-width: 0;
+    height: 46px;
+    box-sizing: border-box;
+    padding-right: 42px;
+}
+
+#security .toggle-password {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
 </style>
+
 
 </head>
 
 <body>
 
-<?php include('customer_panel.php'); ?>
+<?php require 'customer_header.php'; ?>
 
-<div class="main-content">
+<!-- PROFILE PAGE OUTER CARD -->
+<div class="profile-page">
 
-    <div class="profile-page">
+    <div class="profile-outer-card">
 
-        <!-- LARGE OUTER CARD -->
-        <div class="profile-outer-card">
-
-       <!-- =====================================================
-     CUSTOMER DASHBOARD TOPBAR
-===================================================== -->
-
-<div class="customer-dashboard-topbar">
-
-    <div class="customer-page-title">
-        Profile Management
-    </div>
-
-    <div class="customer-topbar-right">
-
-        <!-- NOTIFICATION -->
-
-        <a
-            href="customer_notifications.php"
-            class="customer-top-notification"
-            title="Notifications"
-        >
-            <i class="fa-regular fa-bell"></i>
-        </a>
-
-        <!-- DIVIDER -->
-
-        <div class="customer-topbar-divider"></div>
-
-        <!-- CUSTOMER PROFILE -->
-
-        <a
-            href="customer_profile.php"
-            class="customer-top-profile"
-        >
-
-            <!-- AVATAR -->
-
-            <div class="customer-avatar">
-                <i class="fa-solid fa-user"></i>
+        <!-- PROFILE BANNER BUILT INTO OUTER CARD -->
+        <section class="profile-banner">
+            <div class="profile-banner-content">
+                <h1>
+                    <i class="fa-solid fa-user-gear"></i>
+                    Manage Your Account
+                </h1>
+                <p>Update your personal information and keep your profile secure.</p>
             </div>
+        </section>
 
-            <!-- CUSTOMER DETAILS -->
+        <!-- MAIN PROFILE CONTENT -->
+        <div class="main-content">
 
-            <div class="customer-account-details">
-
-                <span class="customer-top-name">
-                    Customer
-                </span>
-
-                <div class="customer-date-time">
-
-                    <span
-                        class="customer-date"
-                        id="customer-live-date"
-                    >
-                        <?php echo date('F j, Y'); ?>
-                    </span>
-
-                    <span
-                        class="customer-time"
-                        id="customer-live-time"
-                    >
-                        <?php echo date('h:i:s A'); ?>
-                    </span>
-
-                </div>
-
-            </div>
-
-            <!-- DROPDOWN -->
-
-            <div class="customer-dropdown-icon">
-                <i class="fa-solid fa-chevron-down"></i>
-            </div>
-
-        </a>
-
-    </div>
-
-</div>
+  
 
 
-            <!-- HORIZONTAL DIVIDER -->
-            <div class="profile-header-divider"></div>
+        
 
 
             <!-- SUCCESS MESSAGE -->
@@ -2056,7 +1938,26 @@ if (
                             </span>
 
                         </div>
+                        <!-- CUSTOMER ADDRESS -->
+                        <div class="contact-item profile-address-item">
 
+                            <i class="fa-solid fa-location-dot contact-icon"></i>
+
+                            <span>
+                                <?php
+                                if (!empty($db_address)) {
+                                    echo htmlspecialchars(
+                                        $db_address,
+                                        ENT_QUOTES,
+                                        'UTF-8'
+                                    );
+                                } else {
+                                    echo "No address provided";
+                                }
+                                ?>
+                            </span>
+
+                        </div>
                     </div>
 
 
@@ -2150,7 +2051,7 @@ if (
 
 
                                 <!-- FULL NAME -->
-                                <div class="form-group">
+                              <div class="form-group third-width">
 
                                     <label class="form-label">
 
@@ -2175,7 +2076,7 @@ if (
 
 
                                 <!-- EMAIL -->
-                                <div class="form-group">
+                               <div class="form-group third-width">
 
                                     <label class="form-label">
 
@@ -2200,8 +2101,7 @@ if (
 
 
                                 <!-- PHONE -->
-                                <div class="form-group">
-
+                               <div class="form-group third-width">
                                     <label class="form-label">
                                         Phone Number
                                     </label>
@@ -2217,27 +2117,8 @@ if (
 
                                 </div>
 
-
-                                <!-- ROLE -->
-                                <div class="form-group">
-
-                                    <label class="form-label">
-                                        Role
-                                    </label>
-
-
-                                    <input
-                                        type="text"
-                                        class="form-input readonly-input"
-                                        value="Customer"
-                                        readonly
-                                    >
-
-                                </div>
-
-
                                 <!-- ADDRESS -->
-                                <div class="form-group full-width">
+                              <div class="form-group half-width">
 
                                     <label class="form-label">
                                         Address
@@ -2253,6 +2134,24 @@ if (
                                     >
 
                                 </div>
+
+                                <!-- ROLE -->
+                               <div class="form-group half-width">
+                                    <label class="form-label">
+                                        Role
+                                    </label>
+
+
+                                    <input
+                                        type="text"
+                                        class="form-input readonly-input"
+                                        value="Customer"
+                                        readonly
+                                    >
+
+                                </div>
+
+
 
                             </div>
 
@@ -2315,7 +2214,7 @@ if (
 
 
                                 <!-- CURRENT PASSWORD -->
-                                <div class="form-group full-width">
+                             <div class="form-group">
 
                                     <label class="form-label">
 
@@ -2408,13 +2307,17 @@ if (
 
                                     <div class="password-wrapper">
 
-                                        <input
-                                            type="password"
-                                            id="confirmPassword"
-                                            name="confirm_password"
-                                            class="form-input password-input"
-                                            required
-                                        >
+                                      
+<input
+    type="password"
+    id="confirmPassword"
+    name="confirm_password"
+    class="form-input password-input"
+    minlength="8"
+    required
+    disabled
+>
+
 
 
                                         <button
@@ -2444,16 +2347,50 @@ if (
 
 
                             <!-- SECURITY INFORMATION -->
-                            <div class="security-note">
+                          
+<!-- SECURITY INFORMATION -->
+<div class="security-note">
 
-                                <i
-                                    class="fa-solid fa-shield-halved"
-                                ></i>
+    <div class="security-note-heading">
+        <i class="fa-solid fa-shield-halved"></i>
 
-                                Use a strong password with at least
-                                8 characters to help protect your account.
+        <span>
+            Use a strong password with at least
+            8 characters to help protect your account.
+        </span>
+    </div>
 
-                            </div>
+    <!-- PASSWORD REQUIREMENTS -->
+    <div class="password-requirements" id="passwordRequirements">
+
+        <div class="password-requirement" id="reqLength">
+            <i class="fa-solid fa-circle-xmark"></i>
+            <span>At least 8 characters long.</span>
+        </div>
+
+        <div class="password-requirement" id="reqUppercase">
+            <i class="fa-solid fa-circle-xmark"></i>
+            <span>Includes one uppercase letter (A–Z).</span>
+        </div>
+
+        <div class="password-requirement" id="reqLowercase">
+            <i class="fa-solid fa-circle-xmark"></i>
+            <span>Includes one lowercase letter (a–z).</span>
+        </div>
+
+        <div class="password-requirement" id="reqNumber">
+            <i class="fa-solid fa-circle-xmark"></i>
+            <span>Includes one number (0–9).</span>
+        </div>
+
+        <div class="password-requirement" id="reqSpecial">
+            <i class="fa-solid fa-circle-xmark"></i>
+            <span>Includes one special character (@, #, !).</span>
+        </div>
+
+    </div>
+
+</div>
 
 
                             <!-- UPDATE PASSWORD BUTTON -->
@@ -2490,368 +2427,14 @@ if (
 </div>
 
 
-<script>
 
-
-function updateCustomerDateTime() {
-
-    var now = new Date();
-
-    var options = {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric'
-    };
-
-    var dateText = now.toLocaleDateString(
-        'en-US',
-        options
-    );
-
-    var timeText = now.toLocaleTimeString(
-        'en-US',
-        {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: true
-        }
-    );
-
-    var dateElement = document.getElementById(
-        'customer-live-date'
-    );
-
-    var timeElement = document.getElementById(
-        'customer-live-time'
-    );
-
-    if (dateElement) {
-        dateElement.textContent = dateText;
-    }
-
-    if (timeElement) {
-        timeElement.textContent = timeText;
-    }
-}
-
-updateCustomerDateTime();
-
-setInterval(
-    updateCustomerDateTime,
-    1000
-);
-/*
-|--------------------------------------------------------------------------
-| TAB SWITCHING
-|--------------------------------------------------------------------------
-*/
-
-var tabs =
-    document.querySelectorAll(
-        ".profile-tab"
-    );
-
-
-var tabContents =
-    document.querySelectorAll(
-        ".tab-content"
-    );
-
-
-for (
-    var i = 0;
-    i < tabs.length;
-    i++
-) {
-
-    tabs[i].addEventListener(
-        "click",
-        function () {
-
-            var target =
-                this.getAttribute(
-                    "data-tab"
-                );
-
-
-            for (
-                var x = 0;
-                x < tabs.length;
-                x++
-            ) {
-
-                tabs[x].classList.remove(
-                    "active"
-                );
-
-            }
-
-
-            for (
-                var y = 0;
-                y < tabContents.length;
-                y++
-            ) {
-
-                tabContents[y].classList.remove(
-                    "active"
-                );
-
-            }
-
-
-            this.classList.add(
-                "active"
-            );
-
-
-            document
-                .getElementById(target)
-                .classList.add(
-                    "active"
-                );
-
-        }
-    );
-
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| PASSWORD VISIBILITY
-|--------------------------------------------------------------------------
-*/
-
-var toggleButtons =
-    document.querySelectorAll(
-        ".toggle-password"
-    );
-
-
-for (
-    var i = 0;
-    i < toggleButtons.length;
-    i++
-) {
-
-    toggleButtons[i].addEventListener(
-        "click",
-        function () {
-
-            var input =
-                this.parentNode.querySelector(
-                    "input"
-                );
-
-
-            var icon =
-                this.querySelector(
-                    "i"
-                );
-
-
-            if (
-                input.type ==
-                "password"
-            ) {
-
-                input.type =
-                    "text";
-
-
-                icon.classList.remove(
-                    "fa-eye"
-                );
-
-
-                icon.classList.add(
-                    "fa-eye-slash"
-                );
-
-            } else {
-
-                input.type =
-                    "password";
-
-
-                icon.classList.remove(
-                    "fa-eye-slash"
-                );
-
-
-                icon.classList.add(
-                    "fa-eye"
-                );
-
-            }
-
-        }
-    );
-
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| PASSWORD MATCHING
-|--------------------------------------------------------------------------
-*/
-
-var newPassword =
-    document.getElementById(
-        "newPassword"
-    );
-
-
-var confirmPassword =
-    document.getElementById(
-        "confirmPassword"
-    );
-
-
-var passwordMessage =
-    document.getElementById(
-        "passwordMessage"
-    );
-
-
-function checkPasswords() {
-
-
-    if (
-        !confirmPassword.value
-    ) {
-
-        passwordMessage.innerHTML =
-            "";
-
-
-        confirmPassword.setCustomValidity(
-            ""
-        );
-
-
-        return;
-
-    }
-
-
-    if (
-        newPassword.value ==
-        confirmPassword.value
-    ) {
-
-        passwordMessage.innerHTML =
-            "Passwords match.";
-
-
-        passwordMessage.style.color =
-            "#2f7a4b";
-
-
-        confirmPassword.setCustomValidity(
-            ""
-        );
-
-    } else {
-
-        passwordMessage.innerHTML =
-            "Passwords do not match.";
-
-
-        passwordMessage.style.color =
-            "#c94f4f";
-
-
-        confirmPassword.setCustomValidity(
-            "Passwords must match."
-        );
-
-    }
-
-}
-
-
-if (newPassword) {
-
-    newPassword.addEventListener(
-        "input",
-        checkPasswords
-    );
-
-}
-
-
-if (confirmPassword) {
-
-    confirmPassword.addEventListener(
-        "input",
-        checkPasswords
-    );
-
-}
-
-
-/*
-|--------------------------------------------------------------------------
-| PROFILE IMAGE PREVIEW
-|--------------------------------------------------------------------------
-*/
-
-var profilePhotoInput =
-    document.getElementById(
-        "profilePhotoInput"
-    );
-
-
-var avatarPreview =
-    document.getElementById(
-        "avatarPreview"
-    );
-
-
-if (profilePhotoInput) {
-
-    profilePhotoInput.addEventListener(
-        "change",
-        function () {
-
-            var file =
-                this.files[0];
-
-
-            if (file) {
-
-                var reader =
-                    new FileReader();
-
-
-                reader.onload =
-                    function (event) {
-
-                        avatarPreview.src =
-                            event.target.result;
-
-                    };
-
-
-                reader.readAsDataURL(
-                    file
-                );
-
-            }
-
-        }
-    );
-
-}
 
 
 </script>
 
+<?php require 'customer_modal.php'; ?>
+
+<?php require 'customer_footer.php'; ?>
 
 </body>
-
 </html>

@@ -1,0 +1,662 @@
+/* =========================================================
+   STABLE FONT & BOX SIZING RESET FOR NAVBAR
+========================================================= */
+
+html {
+    scrollbar-gutter: stable;
+    overflow-y: scroll;
+}
+
+/* =========================================================
+   FONT FAMILY RESET - Exclude Font Awesome icon elements
+========================================================= */
+
+.customer-navbar,
+.customer-navbar *:not(i):not(i *):not(i::before):not(i::after),
+.customer-navbar *::before:not(i::before),
+.customer-navbar *::after:not(i::after) {
+    box-sizing: border-box !important;
+    font-family: Arial, Helvetica, sans-serif !important;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Preserve Font Awesome icon font family */
+.customer-navbar i,
+.customer-navbar i::before,
+.customer-navbar i::after {
+    font-family: "Font Awesome 6 Free", "Font Awesome 6 Brands" !important;
+}
+
+.customer-navbar i.fa-solid,
+.customer-navbar i.fas {
+    font-weight: 900;
+}
+
+.customer-navbar i.fa-regular,
+.customer-navbar i.far,
+.customer-navbar i.fa-brands,
+.customer-navbar i.fab {
+    font-weight: 400;
+}
+/* =========================================================
+   VDVC EGG FARM MANAGEMENT SYSTEM
+   Standardized Customer Navbar Stylesheet
+   Shared across Dashboard, Reservation, History, and Profile
+   ========================================================= */
+
+/* =========================================================
+   NAVBAR CONTAINER
+========================================================= */
+
+.customer-navbar {
+    width: 100%;
+    height: 84px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 48px;
+    background: #0d4828;
+    border-top: 1px solid #dddddd;
+    border-bottom: 1px solid #e6e6e6;
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 1000;
+    box-sizing: border-box;
+    gap: 0 !important;
+}
+
+/* =========================================================
+   LOGO
+========================================================= */
+
+.customer-navbar-logo {
+    display: flex;
+    align-items: center;
+    width: 190px;
+    flex-shrink: 0;
+}
+
+.customer-navbar-logo a {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+}
+
+.customer-navbar-logo img {
+    width: 145px;
+    height: auto;
+    display: block;
+}
+
+/* =========================================================
+   NAVIGATION CENTER
+========================================================= */
+
+.customer-navbar-center {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 38px;
+    margin-left: 80px;
+}
+
+.customer-nav-link {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    position: relative;
+    padding: 0 2px;
+    text-decoration: none;
+    color: #e8f1e9;
+    font-size: 14px;
+    font-weight: 600 !important;
+    line-height: 84px !important;
+    white-space: nowrap;
+    transition: color 0.15s ease;
+}
+
+.customer-nav-link:hover {
+    color: #b9e4c3;
+}
+
+.customer-nav-link.active {
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}
+
+.customer-nav-link.active::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 20px;
+    height: 2px;
+    background: #175c31;
+    border-radius: 2px;
+}
+
+/* =========================================================
+   NAVBAR RIGHT
+========================================================= */
+
+.customer-navbar-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 240px;
+    justify-content: flex-end;
+}
+
+/* =========================================================
+   NOTIFICATION BELL & BADGE
+========================================================= */
+
+.customer-notification-wrapper {
+    position: relative;
+}
+
+.customer-top-notification {
+    width: 38px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: #eaf2e8;
+    font-size: 17px;
+    cursor: pointer;
+    position: relative;
+    padding: 0;
+    transition: color 0.2s ease;
+}
+
+.customer-top-notification:hover {
+    color: #bfe3c7;
+}
+
+.customer-notification-badge {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    min-width: 15px;
+    height: 15px;
+    padding: 0 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #eaf2e8;
+    color: #0d4828;
+    border: 2px solid #0d4828;
+    border-radius: 50%;
+    font-size: 8px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+/* =========================================================
+   NOTIFICATION DROPDOWN
+========================================================= */
+
+.customer-notification-dropdown {
+    position: absolute;
+    top: 48px;
+    right: 0;
+    width: 355px;
+    background: #ffffff;
+    border: 1px solid #dedede;
+    border-radius: 10px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+    overflow: hidden;
+    z-index: 1000;
+}
+
+.customer-notification-dropdown.hidden {
+    display: none;
+}
+
+.customer-notification-dropdown-header {
+    min-height: 52px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #eeeeee;
+    background: #ffffff;
+}
+
+.customer-panel-title-group {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.customer-panel-title-icon {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #edf5ee;
+    color: #39704c;
+    font-size: 13px;
+}
+
+.customer-dashboard-panel-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #34483d;
+}
+
+.customer-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.customer-view-all-header-link {
+    font-size: 11px;
+    font-weight: 700;
+    color: #39704c;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.customer-view-all-header-link:hover {
+    text-decoration: underline;
+}
+
+.customer-header-action-divider {
+    color: #c8d2cb;
+    font-size: 10px;
+}
+
+.customer-mark-all-link {
+    font-size: 10px;
+    font-weight: 700;
+    color: #39704c;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.customer-mark-all-link:hover {
+    text-decoration: underline;
+}
+
+.customer-notification-list {
+    max-height: 390px;
+    overflow-y: auto;
+}
+
+.customer-notification-dropdown-footer {
+    padding: 10px 14px;
+    background: #f8faf8;
+    border-top: 1px solid #eef2ee;
+    text-align: center;
+}
+
+.customer-view-all-btn {
+    width: 100%;
+    padding: 8px 16px;
+    background: #214f2c;
+    color: #ffffff;
+    border: 1px solid #214f2c;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    text-decoration: none;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.customer-view-all-btn:hover {
+    background: #175c31;
+    border-color: #175c31;
+    color: #ffffff;
+}
+
+.customer-view-all-btn:focus-visible {
+    outline: 2px solid #214f2c;
+    outline-offset: 2px;
+}
+
+.customer-view-all-btn:active {
+    background: #0f3d1f;
+    border-color: #0f3d1f;
+    color: #ffffff;
+    transform: translateY(1px);
+}
+
+/* =========================================================
+   CUSTOMER ACCOUNT
+========================================================= */
+
+.customer-account-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.customer-account-link {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    text-decoration: none;
+    color: #263d32;
+    cursor: default;
+}
+
+.customer-avatar {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e1e9df;
+    border-radius: 50%;
+    background-color: #dcebdd;
+    color: #0d4828;
+    font-size: 16px;
+}
+
+.customer-account-details {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 100px;
+}
+
+.customer-top-name {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 16px !important;
+    color: #ffffff;
+    white-space: nowrap;
+}
+
+.customer-date-time {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin-top: 2px;
+}
+
+.customer-date {
+    font-size: 9px;
+    line-height: 12px !important;
+    color: #d5e5d8;
+    white-space: nowrap;
+}
+
+.customer-time {
+    font-size: 9px;
+    line-height: 12px !important;
+    color: #d5e5d8;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.customer-account-toggle {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: #eaf2e8;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.customer-account-toggle:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.customer-account-dropdown {
+    position: absolute;
+    top: calc(100% + 13px);
+    right: 0;
+    width: 190px;
+    padding: 7px;
+    background: #ffffff;
+    border: 1px solid #e1e7e1;
+    border-radius: 10px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+    z-index: 1100;
+}
+
+.customer-account-dropdown.hidden {
+    display: none;
+}
+
+.customer-logout-option {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 12px 13px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: #b33a32;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.customer-logout-option:hover {
+    background: #fbeeed;
+}
+
+/* =========================================================
+   LOGOUT CONFIRMATION MODAL
+========================================================= */
+
+.customer-logout-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(15, 31, 21, 0.55);
+    z-index: 2000;
+}
+
+.customer-logout-overlay.hidden {
+    display: none;
+}
+
+.customer-logout-modal {
+    width: 100%;
+    max-width: 390px;
+    padding: 28px 25px 23px;
+    background: #ffffff;
+    border: 1px solid #e4e8e3;
+    border-radius: 15px;
+    box-shadow: 0 18px 55px rgba(0, 0, 0, 0.22);
+    text-align: center;
+    animation: logoutModalAppear 0.18s ease-out;
+}
+
+@keyframes logoutModalAppear {
+    from {
+        opacity: 0;
+        transform: scale(0.96) translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.customer-logout-icon {
+    width: 58px;
+    height: 58px;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #faeae8;
+    color: #bd3f36;
+    font-size: 24px;
+}
+
+.customer-logout-modal h2 {
+    margin: 0 0 8px;
+    font-size: 19px;
+    font-weight: 700;
+    color: #24352b;
+}
+
+.customer-logout-modal p {
+    margin: 0 0 22px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #68776f;
+}
+
+.customer-logout-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.customer-logout-cancel {
+    flex: 1;
+    height: 42px;
+    border: 1px solid #d7ded8;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #43544a;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.customer-logout-cancel:hover {
+    background: #f4f7f4;
+}
+
+.customer-logout-actions form {
+    flex: 1;
+    margin: 0;
+}
+
+.customer-logout-confirm {
+    width: 100%;
+    height: 42px;
+    border: none;
+    border-radius: 8px;
+    background: #b83d34;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.customer-logout-confirm:hover {
+    background: #9f3129;
+}
+
+/* =========================================================
+   RESPONSIVE MEDIA QUERIES
+========================================================= */
+
+@media screen and (max-width: 1200px) {
+    .customer-navbar {
+        padding: 0 30px;
+    }
+
+    .customer-navbar-center {
+        gap: 25px;
+        margin-left: 30px;
+    }
+}
+
+@media screen and (max-width: 900px) {
+    .customer-navbar {
+        height: auto;
+        min-height: 75px;
+        padding: 12px 22px;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .customer-navbar-logo {
+        width: auto;
+    }
+
+    .customer-navbar-logo img {
+        width: 120px;
+    }
+
+    .customer-navbar-center {
+        order: 3;
+        width: 100%;
+        height: 42px;
+        margin-left: 0;
+        gap: 28px;
+        justify-content: center;
+    }
+
+    .customer-navbar-right {
+        min-width: auto;
+    }
+}
+
+@media screen and (max-width: 600px) {
+    .customer-navbar {
+        padding: 10px 15px;
+    }
+
+    .customer-account-details,
+    .customer-account-toggle,
+    .customer-dropdown-icon {
+        display: none;
+    }
+
+    .customer-navbar-center {
+        gap: 18px;
+        overflow-x: auto;
+        justify-content: flex-start;
+    }
+
+    .customer-nav-link {
+        font-size: 12px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .customer-notification-dropdown {
+        position: fixed;
+        top: 75px;
+        left: 12px;
+        right: 12px;
+        width: auto;
+        max-width: none;
+    }
+}

@@ -7,31 +7,34 @@ require_once 'session_config.php';
 date_default_timezone_set('Asia/Manila');
 
 require 'db.php';
-require_once 'config_age_eligibility.php';
 
 // Helper function to get manager users
-function getManagerUsers($conn) {
-    $managers = array();
-    $stmt = $conn->prepare("SELECT id FROM users WHERE role = 'manager'");
-    $stmt->execute();
-    $result = $stmt->get_result();
-    while ($row = $result->fetch_assoc()) {
-        $managers[] = $row['id'];
+if (!function_exists('getManagerUsers')) {
+    function getManagerUsers($conn) {
+        $managers = array();
+        $stmt = $conn->prepare("SELECT id FROM users WHERE role = 'manager'");
+        $stmt->execute();
+        $result = $stmt->get_result();
+        while ($row = $result->fetch_assoc()) {
+            $managers[] = $row['id'];
+        }
+        $stmt->close();
+        return $managers;
     }
-    $stmt->close();
-    return $managers;
 }
 
-function getOwnerUsers($conn) {
-    $owners = array();
-    $stmt = $conn->prepare("SELECT id FROM users WHERE role = 'owner' AND status = 'active'");
-    $stmt->execute();
-    $result = $stmt->get_result();
-    while ($row = $result->fetch_assoc()) {
-        $owners[] = $row['id'];
+if (!function_exists('getOwnerUsers')) {
+    function getOwnerUsers($conn) {
+        $owners = array();
+        $stmt = $conn->prepare("SELECT id FROM users WHERE role = 'owner' AND status = 'active'");
+        $stmt->execute();
+        $result = $stmt->get_result();
+        while ($row = $result->fetch_assoc()) {
+            $owners[] = $row['id'];
+        }
+        $stmt->close();
+        return $owners;
     }
-    $stmt->close();
-    return $owners;
 }
 
 // Security Enforcement
@@ -43,6 +46,46 @@ if (!isset($_SESSION['user_id'])) {
 // Make sure only customers can access this page
 if (!isset($_SESSION['role']) || $_SESSION['role'] != 'customer') {
     header("Location: login.php");
+    exit();
+}
+
+/* =========================================================
+   LOGOUT HANDLER
+========================================================= */
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['customer_logout'])) {
+    $submitted_token = isset($_POST['logout_token']) ? $_POST['logout_token'] : '';
+    $session_token = isset($_SESSION['customer_logout_token']) ? $_SESSION['customer_logout_token'] : '';
+
+    if (
+        $submitted_token !== '' &&
+        $session_token !== '' &&
+        is_string($submitted_token) &&
+        is_string($session_token) &&
+        strlen($submitted_token) === strlen($session_token) &&
+        hash_equals($session_token, $submitted_token)
+    ) {
+        $_SESSION = array();
+
+        if (ini_get('session.use_cookies')) {
+            $cookie_params = session_get_cookie_params();
+            setcookie(
+                session_name(),
+                '',
+                time() - 42000,
+                $cookie_params['path'],
+                $cookie_params['domain'],
+                $cookie_params['secure'],
+                $cookie_params['httponly']
+            );
+        }
+
+        session_destroy();
+        header("Location: login.php");
+        exit();
+    }
+
+    header("Location: customer_reservation.php");
     exit();
 }
 
@@ -70,11 +113,13 @@ if (empty($_SESSION['customer_logout_token'])) {
 
 // Match the active logged-in parameters
 $user_id = $_SESSION['user_id'];
-$customer_name = isset($_SESSION['fullname'])
+$customer_name = !empty($_SESSION['fullname'])
     ? $_SESSION['fullname']
-    : (isset($_SESSION['customer_name']) ? $_SESSION['customer_name'] : (isset($_SESSION['name']) ? $_SESSION['name'] : 'Customer'));
-$user_role = isset($_SESSION['role']) ? $_SESSION['role'] : 'Customer';
+    : (!empty($_SESSION['customer_name'])
+        ? $_SESSION['customer_name']
+        : (!empty($_SESSION['username']) ? $_SESSION['username'] : 'Customer'));
 $active_page = 'reservation';
+$user_role = isset($_SESSION['role']) ? $_SESSION['role'] : 'Customer';
 
 // =========================================================
 // NOTIFICATION COUNT
@@ -87,11 +132,13 @@ if ($notification_count_result && ($notification_count_row = $notification_count
 }
 
 // Helper function to insert notifications easily into the database
-function add_notification($conn, $user_id, $title, $description, $type = 'info') {
-    $stmt = $conn->prepare("INSERT INTO notifications (user_id, title, description, type, is_read) VALUES (?, ?, ?, ?, 0)");
-    $stmt->bind_param("isss", $user_id, $title, $description, $type);
-    $stmt->execute();
-    $stmt->close();
+if (!function_exists('add_notification')) {
+    function add_notification($conn, $user_id, $title, $description, $type = 'info') {
+        $stmt = $conn->prepare("INSERT INTO notifications (user_id, title, description, type, is_read) VALUES (?, ?, ?, ?, 0)");
+        $stmt->bind_param("isss", $user_id, $title, $description, $type);
+        $stmt->execute();
+        $stmt->close();
+    }
 }
 
 // AJAX API Endpoint Processing
@@ -453,79 +500,940 @@ $paginated_reservations = array_slice(
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="customer_styles.css">
+    <link rel="stylesheet" href="shared_notifications.css?v=20261022">
+    <link rel="stylesheet" href="customer_navbar.css?v=20261022_viewall">
 </head>
 <style>
 
+
 /* =========================================================
-   RESERVATION PAGE SPECIFIC STYLES
+   VDVC CUSTOMER RESERVATION PAGE
+   Reference-based UI redesign
 ========================================================= */
 
-.reservation-hero {
-    background: linear-gradient(135deg, #214f2c 0%, #175c31 100%);
+:root {
+    --vdvc-green: #214f2c;
+    --vdvc-green-dark: #103f2d;
+    --vdvc-green-light: #eff5ef;
+    --vdvc-text: #202622;
+    --vdvc-muted: #69736d;
+    --vdvc-border: #dedfd9;
+    --vdvc-background: #f5f6f2;
+    --vdvc-white: #ffffff;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    min-height: 100%;
+    background: var(--vdvc-background);
+    color: var(--vdvc-text);
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+body {
+    min-height: 100vh;
+    overflow-x: hidden;
+}
+
+button,
+input,
+select,
+textarea {
+    font-family: inherit;
+}
+
+button {
+    cursor: pointer;
+}
+
+a {
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* =========================================================
+   CUSTOMER NAVBAR — MATCH CUSTOMER DASHBOARD
+========================================================= */
+
+.customer-navbar {
+    width: 100%;
+    height: 84px;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 0 48px;
+
+    background: #0d4828;
+
+    border-top: 1px solid #dddddd;
+    border-bottom: 1px solid #e6e6e6;
+
+     /* Keep navbar visible while scrolling */
+    position: sticky;
+    top: 0;
+    left: 0;
+
+    z-index: 1000;
+}
+
+/* LOGO */
+
+.customer-navbar-logo {
+    display: flex;
+    align-items: center;
+
+    width: 190px;
+    flex-shrink: 0;
+}
+
+.customer-navbar-logo a {
+    display: flex;
+    align-items: center;
+}
+
+.customer-navbar-logo img {
+    width: 145px;
+    height: auto;
+    display: block;
+}
+
+/* NAVIGATION LINKS */
+
+.customer-navbar-center {
+    height: 100%;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    gap: 38px;
+
+    margin-left: 80px;
+}
+
+.customer-nav-link {
+    height: 100%;
+
+    display: flex;
+    align-items: center;
+
+    position: relative;
+
+    padding: 0 2px;
+
+    text-decoration: none;
+
+    color: #e8f1e9;
+
+    font-size: 14px;
+    font-weight: 500;
+
+    white-space: nowrap;
+
+    transition: color 0.2s ease;
+}
+
+.customer-nav-link:hover {
+    color: #b9e4c3;
+}
+
+.customer-nav-link.active {
     color: #ffffff;
-    padding: 35px 25px;
-    text-align: center;
-}
-
-.reservation-card {
-    padding-top: 0;
-}
-
-.reservation-hero h1 {
-    margin: 0 0 12px;
-    font-size: 26px;
     font-weight: 700;
 }
 
-.reservation-hero h1 i {
-    margin-right: 10px;
+.customer-nav-link.active::after {
+    content: "";
+
+    position: absolute;
+
+    left: 0;
+    right: 0;
+    bottom: 20px;
+
+    height: 2px;
+
+    background: #175c31;
 }
 
-.reservation-hero p {
-    margin: 0;
-    font-size: 14px;
-    line-height: 1.6;
-    opacity: 0.9;
-}
+/* RIGHT SIDE */
 
-.reservation-progress {
+.customer-navbar-right {
     display: flex;
+    align-items: center;
+
+    gap: 16px;
+
+    min-width: 240px;
+
+    justify-content: flex-end;
+}
+
+/* NOTIFICATION */
+
+.customer-notification-wrapper {
+    position: relative;
+}
+
+.customer-top-notification {
+    width: 38px;
+    height: 38px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border: none;
+    background: transparent;
+
+    color: #eaf2e8;
+
+    font-size: 17px;
+
+    cursor: pointer;
+
+    position: relative;
+
+    padding: 0;
+}
+
+.customer-top-notification:hover {
+    color: #bfe3c7;
+}
+
+.customer-notification-badge {
+    position: absolute;
+
+    top: 1px;
+    right: 1px;
+
+    min-width: 15px;
+    height: 15px;
+
+    padding: 0 3px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+   background-color: #eaf2e8;
+    color: #0d4828;
+    border: 2px solid #0d4828;
+
+    border-radius: 50%;
+
+
+    font-size: 8px;
+    font-weight: 700;
+}
+
+/* NOTIFICATION DROPDOWN */
+
+.customer-notification-dropdown {
+    position: absolute;
+
+    top: 48px;
+    right: 0;
+
+    width: 355px;
+
+    background: #ffffff;
+
+    border: 1px solid #dedede;
+
+    border-radius: 10px;
+
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+
+    overflow: hidden;
+
+    z-index: 1000;
+}
+
+.customer-notification-dropdown.hidden {
+    display: none !important;
+}
+
+.customer-notification-dropdown-header {
+    min-height: 52px;
+
+    padding: 0 16px;
+
+    display: flex;
+    align-items: center;
     justify-content: space-between;
-    align-items: center;
-    padding: 25px 30px;
-    background: #f8f9f6;
-    border-bottom: 1px solid #e8e9e6;
+
+    border-bottom: 1px solid #eeeeee;
 }
 
-.reservation-progress-step {
+.customer-panel-title-group {
     display: flex;
     align-items: center;
-    gap: 12px;
-    flex: 1;
+    gap: 9px;
 }
 
-.reservation-progress-number {
-    width: 32px;
-    height: 32px;
+.customer-panel-title-icon {
+    width: 30px;
+    height: 30px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 50%;
+
+    background: #edf5ee;
+    color: #39704c;
+
+    font-size: 13px;
+}
+
+.customer-dashboard-panel-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #34483d;
+}
+
+.customer-mark-all-link {
+    font-size: 10px;
+    font-weight: 700;
+
+    color: #39704c;
+
+    text-decoration: none;
+
+    cursor: pointer;
+}
+
+.customer-mark-all-link:hover {
+    text-decoration: underline;
+}
+
+.customer-notification-list {
+    max-height: 390px;
+    overflow-y: auto;
+}
+
+.customer-notification-item {
+    display: flex;
+    align-items: flex-start;
+
+    gap: 10px;
+
+    padding: 12px 15px;
+
+    border-bottom: 1px solid #f0f0f0;
+
+    cursor: pointer;
+
+    transition: background 0.15s ease;
+}
+
+.customer-notification-item:hover {
+    background: #fafcf9;
+}
+
+.customer-notification-item.unread {
+    background: #f1f7f2;
+}
+
+.customer-notification-icon {
+    width: 34px;
+    height: 34px;
+
+    min-width: 34px;
+
+    border-radius: 50%;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    font-size: 13px;
+}
+
+.customer-notification-icon.success {
+    background: #e8f4e9;
+    color: #39834c;
+}
+
+.customer-notification-icon.alert {
+    background: #fbe9e7;
+    color: #c85448;
+}
+
+.customer-notification-icon.info {
+    background: #e7f0f5;
+    color: #46758a;
+}
+
+.customer-notification-icon.warning {
+    background: #fff2dc;
+    color: #bd8127;
+}
+
+.customer-notification-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.customer-notification-title {
+    font-size: 12px;
+    font-weight: 700;
+
+    color: #30473a;
+
+    margin-bottom: 3px;
+}
+
+.customer-notification-description {
+    font-size: 11px;
+    line-height: 1.4;
+
+    color: #718078;
+}
+
+.customer-notification-time {
+    font-size: 10px;
+    color: #9aa39e;
+
+    margin-top: 3px;
+}
+
+.customer-notification-empty {
+    padding: 40px 20px;
+
+    text-align: center;
+
+    color: #929b95;
+}
+
+.customer-notification-empty i {
+    font-size: 30px;
+    margin-bottom: 10px;
+    color: #ccd5cf;
+}
+
+.customer-notification-empty p {
+    margin: 0;
+    font-size: 12px;
+}
+
+/* CUSTOMER ACCOUNT */
+
+
+/* =========================================================
+   CUSTOMER ACCOUNT DROPDOWN
+========================================================= */
+
+.customer-account-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.customer-account-link {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    text-decoration: none;
+   color: #263d32;
+}
+
+
+
+.customer-account-toggle {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: #eaf2e8;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.customer-account-toggle:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+.customer-account-dropdown {
+    position: absolute;
+    top: calc(100% + 13px);
+    right: 0;
+    width: 190px;
+    padding: 7px;
+    background: #ffffff;
+    border: 1px solid #e1e7e1;
+    border-radius: 10px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+    z-index: 1100;
+}
+
+.customer-account-dropdown.hidden {
+    display: none;
+}
+
+.customer-logout-option {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 12px 13px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: #b33a32;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+}
+
+.customer-logout-option:hover {
+    background: #fff0ee;
+}
+
+.customer-logout-option i {
+    width: 16px;
+    text-align: center;
+}
+
+/* =========================================================
+   LOGOUT CONFIRMATION MODAL
+========================================================= */
+
+.customer-logout-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(15, 31, 21, 0.55);
+    z-index: 2000;
+}
+
+.customer-logout-overlay.hidden {
+    display: none;
+}
+
+.customer-logout-modal {
+    width: 100%;
+    max-width: 390px;
+    padding: 28px 25px 23px;
+    background: #ffffff;
+    border: 1px solid #e4e8e3;
+    border-radius: 15px;
+    box-shadow: 0 18px 55px rgba(0, 0, 0, 0.22);
+    text-align: center;
+    animation: logoutModalAppear 0.18s ease-out;
+}
+
+.customer-logout-icon {
+    width: 58px;
+    height: 58px;
+    margin: 0 auto 16px;
     display: flex;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: #e1e5e1;
-    color: #69736d;
+    background: #fff0ee;
+    color: #b33a32;
+    font-size: 23px;
+}
+
+.customer-logout-modal h2 {
+    margin: 0 0 10px;
+    color: #263d32;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.customer-logout-modal p {
+    margin: 0;
+    color: #737d75;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.customer-logout-actions {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 25px;
+}
+
+.customer-logout-cancel,
+.customer-logout-confirm {
+    min-height: 40px;
+    padding: 0 17px;
+    border-radius: 7px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.customer-logout-cancel {
+    border: 1px solid #d9dfd9;
+    background: #ffffff;
+    color: #46554d;
+}
+
+.customer-logout-cancel:hover {
+    background: #f3f5f2;
+}
+
+.customer-logout-confirm {
+    border: 1px solid #b33a32;
+    background: #b33a32;
+    color: #ffffff;
+}
+
+.customer-logout-confirm:hover {
+    background: #962e27;
+}
+
+.customer-logout-actions form {
+    margin: 0;
+}
+
+@keyframes logoutModalAppear {
+    from {
+        opacity: 0;
+        transform: translateY(7px) scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+
+.customer-avatar {
+    width: 43px;
+    height: 43px;
+
+    min-width: 43px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 50%;
+
+   background-color: #dcebdd;
+color: #0d4828;
+
+    border: 1px solid #e1e7e1;
+
+   
+
+    font-size: 16px;
+}
+
+.customer-account-details {
+    display: flex;
+    flex-direction: column;
+
+    justify-content: center;
+
+    min-width: 100px;
+}
+
+.customer-top-name {
+    display: block;
+
     font-size: 13px;
     font-weight: 700;
-    border: 2px solid transparent;
+
+    line-height: 1.2;
+
+    color: #ffffff;
+}
+
+.customer-date-time {
+    display: flex;
+    flex-direction: column;
+
+    gap: 1px;
+
+    margin-top: 3px;
+}
+
+.customer-date {
+    font-size: 9px;
+    color: #d5e5d8;
+}
+
+.customer-time {
+    font-size: 9px;
+
+    color: #d5e5d8;
+
+    font-weight: 600;
+}
+
+.customer-dropdown-icon {
+    color: #718079;
+    font-size: 9px;
+
+    margin-left: 3px;
+}
+
+/* =========================================================
+   RESPONSIVE NAVBAR — MATCH DASHBOARD
+========================================================= */
+
+@media screen and (max-width: 1200px) {
+    .customer-navbar {
+        padding: 0 30px;
+    }
+
+    .customer-navbar-center {
+        gap: 25px;
+        margin-left: 30px;
+    }
+}
+
+@media screen and (max-width: 900px) {
+    .customer-navbar {
+        height: auto;
+        min-height: 75px;
+
+        padding: 12px 22px;
+
+        flex-wrap: wrap;
+
+        gap: 10px;
+    }
+
+    .customer-navbar-logo {
+        width: auto;
+    }
+
+    .customer-navbar-logo img {
+        width: 120px;
+    }
+
+    .customer-navbar-center {
+        order: 3;
+
+        width: 100%;
+
+        height: 42px;
+
+        margin-left: 0;
+
+        gap: 28px;
+
+        justify-content: center;
+    }
+
+    .customer-navbar-right {
+        min-width: auto;
+    }
+}
+
+@media screen and (max-width: 600px) {
+    .customer-navbar {
+        padding: 10px 15px;
+    }
+
+    .customer-account-details,
+    .customer-dropdown-icon {
+        display: none;
+    }
+
+    .customer-navbar-center {
+        gap: 18px;
+        overflow-x: auto;
+        justify-content: flex-start;
+    }
+
+    .customer-nav-link {
+        font-size: 12px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+}
+
+
+/* =========================================================
+   MAIN PAGE LAYOUT
+   No sidebar or dashboard left margin
+========================================================= */
+
+.main-content {
+    width: 100%;
+    min-height: 0;
+    margin: 0;
+    padding: 15px;
+    background: #f3f1eb;
+}
+
+.main-content > .flex-1 {
+    width: 100%;
+    min-width: 0;
+    display: block;
+}
+
+.main-content > .flex-1 > .w-full,
+.main-content > .flex-1 > .max-w-7xl {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+}
+
+#reservation_form {
+    width: 100%;
+    margin: 0;
+}
+
+.reservation-card {
+    width: 100%;
+    overflow: visible;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+/* =========================================================
+   RESERVATION HERO BANNER
+
+   Uses reservation.jpg. Change the path only if your
+   actual banner image is stored in another location.
+========================================================= */
+
+.reservation-hero {
+    position: relative;
+    width: 100%;
+    min-height: 143px;
+    display: flex;
+    align-items: center;
+    padding: 24px 5%;
+    overflow: hidden;
+    
+    background-image:
+       
+        url("historyy.jpg");
+    background-position: center, center 52%;
+    background-size: cover;
+    background-repeat: no-repeat;
+}
+
+.reservation-hero-content {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.reservation-hero h1 {
+    margin: 0 0 7px;
+    color: #17472d;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(27px, 3.1vw, 35px);
+    font-weight: 700;
+    line-height: 1.12;
+    letter-spacing: -0.5px;
+}
+
+.reservation-hero h1 i {
+    margin-right: 5px;
+    font-size: 0.8em;
+}
+
+.reservation-hero p {
+    margin: 0;
+    color: #303a32;
+    font-size: 15px;
+    line-height: 1.45;
+}
+
+/* =========================================================
+   THREE-STEP PROGRESS BAR
+========================================================= */
+
+.reservation-progress {
+    width: calc(100% - 56px);
+    max-width: 1250px;
+    min-height: 76px;
+    margin: 14px auto 13px;
+    padding: 13px 20px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: center;
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid #eeefe9;
+    border-radius: 15px;
+    box-shadow: 0 2px 7px rgba(54, 66, 48, 0.025);
+}
+
+.reservation-progress-step {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: #303830;
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.reservation-progress-step:not(:last-child) {
+    border-right: 1px solid #e2e4de;
+}
+
+.reservation-progress-number {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #d3d9d2;
+    border-radius: 50%;
+    background: #ffffff;
+    color: #38453b;
+    font-size: 12px;
     transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.reservation-progress-step.active .reservation-progress-number {
+    border-color: var(--vdvc-green);
+    background: var(--vdvc-green);
+    color: #ffffff;
+}
+
 .reservation-progress-label {
-    font-size: 13px;
-    font-weight: 600;
-    color: #69736d;
+    max-width: 155px;
     transition: color 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* =========================================================
+   RESERVATION PROGRESS - COMPLETED STEPS
+========================================================= */
 
 .reservation-progress-step.completed .reservation-progress-number {
     background-color: #214f2c;
@@ -539,17 +1447,464 @@ $paginated_reservations = array_slice(
     font-weight: 700;
 }
 
-.reservation-progress-step.active .reservation-progress-number {
-    border-color: #214f2c;
-    background: #214f2c;
-    color: #ffffff;
+/* =========================================================
+   RESERVATION THREE-COLUMN GRID
+========================================================= */
+
+.reservation-card > .p-6 {
+    width: 100%;
+    max-width: 1300px;
+    margin: 0 auto;
+    padding: 0 28px 30px !important;
 }
 
+.reservation-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1.03fr) minmax(0, 1.03fr) minmax(0, 1fr);
+    align-items: stretch !important;
+    gap: 20px !important;
+}
+
+.step-column {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+}
+
+.step-card {
+    width: 100%;
+    min-width: 0;
+    min-height: 385px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    border: 1px solid #dedfd9;
+    border-radius: 15px;
+    box-shadow: 0 4px 12px rgba(46, 54, 43, 0.055);
+    overflow: visible;
+}
+
+.step-card h2 {
+    margin: 0 0 14px !important;
+    color: #242824 !important;
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    line-height: 1.35;
+}
+
+.step-scroll {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: visible;
+    padding-right: 0;
+}
+
+.step-1-content {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+}
+
+.step-1-content > div,
+.step-scroll > div {
+    min-width: 0;
+}
+
+/* =========================================================
+   FORM LABELS AND INPUTS
+========================================================= */
+
+.step-card label {
+    display: block;
+    margin-bottom: 4px !important;
+    color: #343a35 !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    line-height: 1.35;
+    letter-spacing: 0.15px;
+    text-transform: uppercase;
+}
+
+.step-card input:not([type="hidden"]):not([type="checkbox"]),
+.step-card select,
+.step-card textarea {
+    width: 100%;
+    min-width: 0;
+    min-height: 32px;
+    padding: 6px 10px !important;
+    border: 1px solid #d8dbd6 !important;
+    border-radius: 8px !important;
+    background: #ffffff;
+    color: #333a35;
+    font-size: 14px !important;
+    line-height: 1.35;
+    box-shadow: none;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.step-card input:focus,
+.step-card select:focus,
+.step-card textarea:focus {
+    border-color: #73967a !important;
+    box-shadow: 0 0 0 2px rgba(33, 79, 44, 0.08);
+}
+
+.step-card input::placeholder,
+.step-card textarea::placeholder {
+    color: #8b918c;
+    opacity: 1;
+}
+
+.step-card input[readonly] {
+    background: #f8f9f6 !important;
+}
+
+.step-card .relative > i.absolute {
+    top: 50% !important;
+    right: 11px !important;
+    transform: translateY(-50%);
+}
+
+.step-card .relative input {
+    padding-right: 30px !important;
+}
+
+/* =========================================================
+   RESERVATION CODE
+========================================================= */
+
+.step-1-card > .rounded-lg {
+    margin-bottom: 8px !important;
+    padding: 8px 12px !important;
+    border: 1px solid #cbd8cd !important;
+    border-radius: 8px !important;
+    background: #f1f6f2 !important;
+}
+
+.step-1-card > .rounded-lg label {
+    margin-bottom: 2px !important;
+    font-size: 11px !important;
+}
+
+.step-1-card > .rounded-lg .text-lg {
+    color: var(--vdvc-green) !important;
+    font-size: 17px !important;
+    font-weight: 800 !important;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+
+.step-1-card > .rounded-lg p {
+    margin-top: 2px !important;
+    font-size: 11px !important;
+}
+
+.copy-reservation-btn {
+    width: 30px !important;
+    height: 30px !important;
+    flex-shrink: 0;
+    border: none !important;
+    border-radius: 6px !important;
+    background: transparent !important;
+    color: #68746c !important;
+    cursor: pointer;
+}
+
+.copy-reservation-btn:hover {
+    background: #e5eee6 !important;
+    color: var(--vdvc-green) !important;
+}
+
+/* =========================================================
+   DELIVERY ADDRESS MAP
+========================================================= */
+
+#map {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    height: 136px !important;
+    min-height: 136px;
+    margin-top: 5px;
+    overflow: hidden;
+    border: 1px solid #d8ded8 !important;
+    border-radius: 8px !important;
+    background: #edf3ed;
+}
+
+.leaflet-container {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+}
+
+/* =========================================================
+   EGG SIZE SELECTION
+========================================================= */
+
+.step-column:nth-child(2) .step-scroll > div:first-child {
+    margin-bottom: 8px;
+}
+
+.step-column:nth-child(2) .grid.grid-cols-4 {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 5px !important;
+    margin-bottom: 7px !important;
+}
+
+.egg-btn {
+    min-width: 0;
+    min-height: 48px;
+    padding: 4px 2px !important;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border: 1px solid #e0e2dd !important;
+    border-radius: 8px !important;
+    background: #ffffff !important;
+    color: #323a33 !important;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.egg-btn:hover {
+    border-color: #9eb5a1 !important;
+    background: #f7faf6 !important;
+}
+
+.egg-btn.selected {
+    border-color: var(--vdvc-green) !important;
+    background: #f0f6f0 !important;
+    color: var(--vdvc-green) !important;
+    box-shadow: inset 0 0 0 1px rgba(33, 79, 44, 0.08);
+}
+
+.egg-btn > span:first-child {
+    width: 17px !important;
+    height: 21px !important;
+    margin-bottom: 1px !important;
+    display: inline-block;
+    border: 1px solid #c5cbc5 !important;
+    border-radius: 50% 50% 45% 45% !important;
+    background: linear-gradient(145deg, #f8f8f4, #e6e8e1) !important;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.035) !important;
+}
+
+.egg-btn > span:nth-child(2) {
+    color: #303731 !important;
+    font-size: 10px !important;
+    font-weight: 500 !important;
+    line-height: 1.1 !important;
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
+.egg-btn > span:nth-child(3) {
+    color: var(--vdvc-green) !important;
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    line-height: 1.1 !important;
+}
+
+/* =========================================================
+   QUANTITY AND METHOD
+========================================================= */
+
+#egg_type_select {
+    min-height: 29px !important;
+    padding: 5px 9px !important;
+    border-radius: 7px !important;
+}
+
+#quantity_input {
+    min-height: 30px !important;
+}
+
+#pickup_date_section,
+#delivery_schedule_info {
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+#delivery_schedule_info {
+    padding: 9px !important;
+    border: 1px solid #d5e2d8 !important;
+    border-radius: 8px !important;
+    background: #f1f6f2 !important;
+}
+
+#delivery_schedule_info p {
+    line-height: 1.45;
+}
+
+#method_description {
+    width: 100%;
+    margin-top: 7px !important;
+    color: #7a847d;
+    font-size: 12px;
+}
+
+#btn-delivery,
+#btn-pickup {
+    min-height: 43px;
+    padding: 7px !important;
+    gap: 3px !important;
+    border: 1px solid #e0e2dd !important;
+    border-radius: 8px !important;
+    background: #ffffff !important;
+    color: #515b53 !important;
+}
+
+#btn-delivery i,
+#btn-pickup i {
+    font-size: 17px !important;
+}
+
+#btn-delivery span,
+#btn-pickup span {
+    font-size: 12px !important;
+}
+
+#btn-delivery:hover,
+#btn-pickup:hover {
+    border-color: #9eb5a1 !important;
+    background: #f7faf6 !important;
+}
+
+#btn-delivery.selected,
+#btn-pickup.selected,
+#btn-delivery.active,
+#btn-pickup.active {
+    border-color: var(--vdvc-green) !important;
+    background: #eff5ef !important;
+    color: var(--vdvc-green) !important;
+}
+
+.step-column:nth-child(2) hr {
+    margin-top: 10px !important;
+    margin-bottom: 9px !important;
+    border-color: #eceee9 !important;
+}
+
+.step-column:nth-child(2) button[onclick="addItemToBundle()"] {
+    width: 100%;
+    min-height: 31px;
+    flex-shrink: 0;
+    margin-top: 2px;
+    padding: 7px 10px !important;
+    border: none !important;
+    border-radius: 7px !important;
+    background: #214f2c !important;
+    color: #ffffff !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+}
+
+.step-column:nth-child(2) button[onclick="addItemToBundle()"]:hover {
+    background: #173b20 !important;
+}
+
+/* =========================================================
+   STEP 3 - ITEMS TABLE AND SUMMARY
+========================================================= */
+
+.step-column:nth-child(3) .step-scroll {
+    display: flex;
+    flex-direction: column;
+    gap: 15px !important;
+}
+
+.step-column:nth-child(3) .step-scroll > div:first-child h3 {
+    display: none;
+}
+
+.step-column:nth-child(3) .border.border-gray-100.rounded-lg {
+    border: 1px solid #eceee9 !important;
+    border-radius: 8px !important;
+    overflow: hidden;
+}
+
+.step-column:nth-child(3) table {
+    width: 100%;
+    table-layout: auto;
+    border-collapse: collapse;
+}
+
+.step-column:nth-child(3) table thead {
+    background: #f5f6f4 !important;
+}
+
+.step-column:nth-child(3) table th {
+    padding: 9px 8px !important;
+    color: #424a43 !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.2px;
+}
+
+.step-column:nth-child(3) table td {
+    padding: 9px 8px !important;
+    color: #39413b;
+    font-size: 12px !important;
+}
+
+#bundle_table_body tr td[colspan] {
+    padding: 14px 5px !important;
+    color: #747d76 !important;
+    font-size: 12px !important;
+}
+
+.step-column:nth-child(3) .divide-y.divide-gray-100.bg-gray-50 {
+    padding: 9px 10px !important;
+    background: #fafbf9 !important;
+    border-top: 1px solid #eff0ec !important;
+}
+
+.step-column:nth-child(3) .divide-y.divide-gray-100.bg-gray-50 > div {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 3px 0;
+    font-size: 12px !important;
+}
+
+#summary_method,
+#summary_date,
+#summary_address_display {
+    max-width: 60%;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+.step-column:nth-child(3) .flex.justify-between.p-4.bg-slate-50 {
+    padding: 10px 12px !important;
+    background: #f4f6f3 !important;
+    border-top: 1px solid #e5e8e2 !important;
+}
+
+.step-column:nth-child(3) .flex.justify-between.p-4.bg-slate-50 > span:first-child {
+    color: #313a33 !important;
+    font-size: 14px !important;
+}
+
+#total_display {
+    color: var(--vdvc-green) !important;
+    font-size: 19px !important;
+}
+
+/* =========================================================
+   RESERVATION TIMELINE
+========================================================= */
+
 .timeline-progress {
-    background-color: #214f2c !important;
+    background-color: var(--vdvc-green) !important;
     height: 4px;
     border-radius: 9999px;
-    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     max-width: calc(100% - 2rem);
     pointer-events: none;
 }
@@ -565,116 +1920,632 @@ $paginated_reservations = array_slice(
     }
 }
 
-.step-card {
-    padding: 30px;
-    border-bottom: 1px solid #e8e9e6;
+.step-column:nth-child(3) .step-scroll h3 {
+    margin-bottom: 12px !important;
+    color: #4b554d !important;
+    font-size: 12px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
 }
 
-.step-card:last-child {
-    border-bottom: none;
+.step-column:nth-child(3) .relative.flex.items-center.justify-between {
+    padding-right: 9px !important;
+    padding-left: 9px !important;
 }
 
-.copy-reservation-btn {
-    background: #f0f2ef;
-    border: 1px solid #d4d8d3;
-    transition: all 0.2s ease;
+.step-column:nth-child(3) .relative.flex.items-center.justify-between > div.absolute {
+    height: 2px !important;
+    background: #e1e4de !important;
 }
 
-.copy-reservation-btn:hover {
-    background: #e5e7e4;
+.step-column:nth-child(3) #timeline_progress_bar {
+    height: 2px !important;
+    background: var(--vdvc-green) !important;
+    transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-#pickup_date_section.hidden {
-    display: none;
+.step-column:nth-child(3) .relative.flex.items-center.justify-between > div.z-10 {
+    gap: 1px;
 }
 
-.reservation-list {
-    max-height: 300px;
-    overflow-y: auto;
+.step-column:nth-child(3) .relative.flex.items-center.justify-between > div.z-10 > div {
+    width: 15px !important;
+    height: 15px !important;
+    border-width: 3px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
 }
 
-.step-scroll {
-    overflow-y: visible;
-    max-height: none;
+.step-column:nth-child(3) .relative.flex.items-center.justify-between > div.z-10 > span {
+    font-size: 11px !important;
+    white-space: nowrap;
 }
 
 /* =========================================================
-   STEP 2 — SCROLLABLE INNER CONTAINER
-   The h2 heading lives outside this div and stays pinned.
-   Only the content (egg grid, qty, method, add-to-cart)
-   scrolls independently within the column.
+   SUBMIT AND CANCEL BUTTONS
 ========================================================= */
 
-.step-2-card {
+button[name="submit_reservation"] {
+    min-height: 35px;
+    padding: 9px 12px !important;
+    border: none !important;
+    border-radius: 9px !important;
+    background: var(--vdvc-green) !important;
+    color: #ffffff !important;
+    box-shadow: 0 2px 4px rgba(33, 79, 44, 0.15) !important;
+    font-size: 14px !important;
+}
+
+button[name="submit_reservation"]:hover {
+    background: #173b20 !important;
+}
+
+button[onclick="openCancellationModal()"] {
+    padding: 7px 4px !important;
+    color: #5d655f !important;
+    font-size: 13px !important;
+}
+
+button[onclick="openCancellationModal()"]:hover {
+    color: #b33c35 !important;
+}
+
+/* =========================================================
+   MY RESERVATIONS & STATUS
+   Retain this entire section and its PHP functionality
+========================================================= */
+
+.reservation-card .mt-6 {
+    width: calc(100% - 56px);
+    max-width: 1244px;
+    margin: 0 auto 30px !important;
+    overflow: hidden;
+    border: 1px solid #dedfd9 !important;
+    border-radius: 13px !important;
+    background: #ffffff !important;
+    box-shadow: 0 3px 12px rgba(46, 54, 43, 0.045) !important;
+}
+
+.reservation-card .mt-6 > .px-5.py-4 {
+    min-height: 65px;
+    padding: 14px 18px !important;
+    background: #ffffff;
+}
+
+.reservation-card .mt-6 h2 {
+    margin: 0;
+    color: #27332b !important;
+    font-size: 16px !important;
+    font-weight: 700;
+}
+
+.reservation-card .mt-6 .reservation-list {
+    padding: 14px !important;
+}
+
+.reservation-card .reservation-list > div.border {
+    padding: 14px !important;
+    border-color: #e4e6e0 !important;
+    border-radius: 9px !important;
+}
+
+.reservation-card .reservation-list > div.border:hover {
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.045);
+}
+
+.reservation-card .reservation-list .text-base {
+    font-size: 13px !important;
+    overflow-wrap: anywhere;
+}
+
+.reservation-card .reservation-list .text-xl {
+    font-size: 18px !important;
+}
+
+.reservation-card .mt-6 > .px-5.py-4.border-t,
+.reservation-card .mt-6 > .px-5.py-3 {
+    padding: 12px 16px !important;
+}
+
+.reservation-card .mt-6 a,
+.reservation-card .mt-6 button {
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+/* =========================================================
+   FOOTER
+========================================================= */
+
+.customer-footer {
+    width: 100%;
+
+    min-height: 68px;
+
+    background: #0d4828;
+
+    color: #ffffff;
+
     display: flex;
-    flex-direction: column;
-    /* Let the card grow to fill the column height naturally */
-    min-height: 0;
+    align-items: center;
+
+    padding: 0 48px;
 }
 
-.step-2-scroll {
-    overflow-y: auto;
-    max-height: calc(100vh - 290px);
-    min-height: 200px;
-    padding-right: 6px; /* room for scrollbar */
-    /* Prevent nested horizontal overflow on small screens */
-    overflow-x: hidden;
+.customer-footer-inner {
+    width: 100%;
+
+    max-width: 1740px;
+
+    margin: 0 auto;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
-/* Responsive — tighter max-height on medium/small viewports */
-@media (max-width: 1023px) {
-    .step-2-scroll {
-        max-height: 520px;
+.customer-footer-left {
+    display: flex;
+    align-items: center;
+
+    gap: 17px;
+}
+
+.customer-footer-logo {
+    width: 110px;
+
+    padding-right: 15px;
+
+    border-right: 1px solid rgba(255,255,255,0.22);
+}
+
+.customer-footer-logo img {
+    width: 100px;
+    height: auto;
+
+    display: block;
+}
+
+.customer-footer-tagline {
+    font-size: 11px;
+
+    color: rgba(255,255,255,0.9);
+}
+
+.customer-footer-right {
+    display: flex;
+    align-items: center;
+
+    gap: 18px;
+}
+
+.customer-footer-social {
+    display: flex;
+    align-items: center;
+
+    gap: 17px;
+}
+
+.customer-footer-social a {
+    color: #ffffff;
+
+    font-size: 13px;
+
+    text-decoration: none;
+
+    opacity: 0.95;
+
+    transition: opacity 0.2s ease;
+}
+
+.customer-footer-social a:hover {
+    opacity: 0.7;
+}
+
+.customer-footer-copy {
+    font-size: 11px;
+
+    color: rgba(255,255,255,0.82);
+}
+
+/* =========================================================
+   MODALS
+   Preserve existing modal functionality
+========================================================= */
+
+#success_modal,
+#cancellation_modal{
+    z-index: 2000;
+}
+
+#success_modal > div,
+#cancellation_modal > div,
+#logout_modal > div {
+    max-width: 420px;
+    border-radius: 14px;
+}
+
+/* =========================================================
+   RESPONSIVE: SMALL DESKTOP / TABLET
+========================================================= */
+
+@media screen and (max-width: 1100px) {
+    .customer-navbar {
+        padding: 0 24px;
+        gap: 12px;
+    }
+
+    .customer-navbar-logo {
+        width: 145px;
+    }
+
+    .customer-navbar-logo img {
+        width: 120px;
+    }
+
+    .customer-navbar-center {
+        gap: 23px;
+    }
+
+    .customer-navbar-right {
+        gap: 8px;
+    }
+
+    .customer-account-details {
+        min-width: 78px;
+    }
+
+    .reservation-card > .p-6 {
+        padding-right: 18px !important;
+        padding-left: 18px !important;
+    }
+
+    .reservation-grid {
+        gap: 13px !important;
+    }
+
+    .step-card {
+        padding: 13px;
+    }
+
+    .step-card h2 {
+        font-size: 12px !important;
+    }
+
+    .reservation-card .mt-6 {
+        width: calc(100% - 36px);
     }
 }
 
-@media (max-width: 640px) {
-    .step-2-scroll {
-        max-height: 420px;
+/* =========================================================
+   RESPONSIVE: TABLET
+========================================================= */
+
+@media screen and (max-width: 850px) {
+    .customer-navbar {
+        height: auto;
+        min-height: 68px;
+        padding: 10px 18px;
+        flex-wrap: wrap;
+        row-gap: 7px;
+    }
+
+    .customer-navbar-logo {
+        width: auto;
+    }
+
+    .customer-navbar-logo img {
+        width: 112px;
+    }
+
+    .customer-navbar-right {
+        margin-left: auto;
+    }
+
+    .customer-navbar-center {
+        order: 3;
+        width: 100%;
+        height: 38px;
+        gap: clamp(18px, 7vw, 45px);
+        margin: 0;
+        justify-content: center;
+    }
+
+    .customer-nav-link {
+        font-size: 12px;
+    }
+
+    .customer-nav-link.active::after {
+        bottom: 2px;
+    }
+
+    .reservation-hero {
+        min-height: 132px;
+        padding: 22px 28px;
+    }
+
+    .reservation-hero h1 {
+        font-size: 30px;
+    }
+
+    .reservation-hero p {
+        font-size: 13px;
+    }
+
+    .reservation-progress {
+        width: calc(100% - 32px);
+        padding: 12px 8px;
+    }
+
+    .reservation-progress-step {
+        gap: 7px;
+        font-size: 10px;
+    }
+
+    .reservation-progress-number {
+        width: 27px;
+        height: 27px;
+        min-width: 27px;
+    }
+
+    .reservation-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 14px !important;
+    }
+
+    .step-column:nth-child(3) {
+        grid-column: 1 / -1;
+    }
+
+    .step-card {
+        min-height: 0;
+        padding: 16px;
+    }
+
+    .step-column:nth-child(3) .step-scroll {
+        overflow: visible;
+    }
+
+    #map {
+        height: 180px !important;
+    }
+
+    .customer-footer {
+        padding: 14px 22px;
+    }
+
+    .customer-footer-inner {
+        gap: 14px;
+    }
+
+    .customer-footer-right {
+        gap: 12px;
+    }
+
+    .customer-footer-copy {
+        white-space: normal;
+        text-align: right;
     }
 }
 
-/* ---- VDVC dark-green scrollbar (Webkit) ---- */
-.step-2-scroll::-webkit-scrollbar {
-    width: 5px;
+/* =========================================================
+   RESPONSIVE: MOBILE
+========================================================= */
+
+@media screen and (max-width: 560px) {
+    .customer-navbar {
+        padding: 10px 13px 7px;
+        gap: 9px;
+    }
+
+    .customer-navbar-logo img {
+        width: 100px;
+    }
+
+    .customer-avatar {
+        width: 35px;
+        height: 35px;
+        min-width: 35px;
+        font-size: 14px;
+    }
+
+    .customer-account-details,
+    .customer-dropdown-icon {
+        display: none;
+    }
+
+    .customer-navbar-right {
+        gap: 5px;
+    }
+
+    .customer-navbar-center {
+        justify-content: space-between;
+        gap: 13px;
+        overflow-x: auto;
+    }
+
+    .customer-nav-link {
+        flex-shrink: 0;
+        font-size: 11px;
+    }
+
+    .customer-notification-dropdown {
+        position: fixed;
+        top: 112px;
+        left: 12px;
+        right: 12px;
+        width: auto;
+        max-width: none;
+    }
+
+    .reservation-hero {
+        min-height: 125px;
+        padding: 20px 17px;
+        background-position: center, 62% center;
+    }
+
+    .reservation-hero h1 {
+        max-width: 290px;
+        font-size: 26px;
+    }
+
+    .reservation-hero p {
+        max-width: 270px;
+        font-size: 12px;
+    }
+
+    .reservation-progress {
+        width: calc(100% - 22px);
+        min-height: 65px;
+        margin: 10px auto;
+        padding: 9px 5px;
+        border-radius: 11px;
+    }
+
+    .reservation-progress-step {
+        flex-direction: column;
+        gap: 4px;
+        text-align: center;
+        font-size: 9px;
+    }
+
+    .reservation-progress-number {
+        width: 24px;
+        height: 24px;
+        min-width: 24px;
+        font-size: 10px;
+    }
+
+    .reservation-progress-label {
+        max-width: 95px;
+    }
+
+    .reservation-card > .p-6 {
+        padding: 0 11px 20px !important;
+    }
+
+    .reservation-grid {
+        grid-template-columns: minmax(0, 1fr) !important;
+        gap: 12px !important;
+    }
+
+    .step-column,
+    .step-column:nth-child(3) {
+        grid-column: auto;
+        width: 100%;
+    }
+
+    .step-card {
+        padding: 15px;
+        border-radius: 12px;
+    }
+
+    .step-card h2 {
+        font-size: 14px !important;
+    }
+
+    .step-1-content {
+        gap: 11px;
+    }
+
+    #map {
+        height: 190px !important;
+    }
+
+    .step-column:nth-child(2) .grid.grid-cols-4 {
+        gap: 7px !important;
+    }
+
+    .egg-btn {
+        min-height: 57px;
+    }
+
+    .egg-btn > span:nth-child(2),
+    .egg-btn > span:nth-child(3) {
+        font-size: 9px !important;
+    }
+
+    .reservation-card .mt-6 {
+        width: calc(100% - 22px);
+        margin-bottom: 20px !important;
+    }
+
+    .reservation-card .mt-6 > .px-5.py-4 {
+        padding: 13px !important;
+        gap: 10px;
+    }
+
+    .reservation-card .mt-6 h2 {
+        font-size: 14px !important;
+    }
+
+    .reservation-card .reservation-list {
+        padding: 10px !important;
+    }
+
+    .customer-footer {
+        padding: 16px;
+    }
+
+    .customer-footer-inner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
+
+    .customer-footer-left {
+        width: 100%;
+    }
+
+    .customer-footer-logo {
+        width: 100px;
+    }
+
+    .customer-footer-logo img {
+        width: 85px;
+    }
+
+    .customer-footer-tagline {
+        font-size: 10px;
+    }
+
+    .customer-footer-right {
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .customer-footer-copy {
+        font-size: 8px;
+        text-align: right;
+    }
 }
 
-.step-2-scroll::-webkit-scrollbar-track {
-    background: #f1f6f2;
-    border-radius: 8px;
+/* =========================================================
+   ACCESSIBILITY AND HIDDEN ELEMENTS
+========================================================= */
+
+.hidden {
+    display: none !important;
 }
 
-.step-2-scroll::-webkit-scrollbar-thumb {
-    background: #8db89a;
-    border-radius: 8px;
-    border: 1px solid #f1f6f2;
-}
-
-.step-2-scroll::-webkit-scrollbar-thumb:hover {
-    background: #214f2c;
-}
-
-/* Firefox */
-.step-2-scroll {
-    scrollbar-width: thin;
-    scrollbar-color: #8db89a #f1f6f2;
-}
-
-.reservation-add-to-cart {
-    background-color: #214f2c;
-}
-
-.reservation-add-to-cart:hover {
-    background-color: #175c31;
+button:focus-visible,
+a:focus-visible {
+    outline: 2px solid #6f9876;
+    outline-offset: 2px;
 }
 
 </style>
-<body>
+<body class="font-sans text-gray-700 antialiased min-h-screen">
 
+
+<!-- =========================================================
+     CUSTOMER NAVBAR (STANDARDIZED)
+========================================================= -->
 <?php require 'customer_header.php'; ?>
 
 
-<div class="main-content" style="padding-top: 72px;">
+<div class="main-content">
       
 
         <!-- Main Workspace -->
@@ -828,13 +2699,13 @@ $paginated_reservations = array_slice(
                     <!-- Step 2: Bundle Items Configurator -->
                  <div class="step-column">
 
-    <div class="step-card step-2-card">
+    <div class="step-card">
 
         <h2 class="text-lg font-bold text-slate-800 mb-5">
             Step 2: Add Items
         </h2>
 
-        <div class="step-2-scroll space-y-4">
+        <div class="step-scroll space-y-4">
                             <div>
                                 <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Egg Size Selection</label>
                                 <div class="grid grid-cols-4 gap-2 mb-3">
@@ -974,7 +2845,7 @@ $paginated_reservations = array_slice(
     <button
         type="button"
         onclick="addItemToBundle()"
-        class="w-full text-white font-medium py-2 px-4 rounded-lg text-xs transition flex items-center justify-center space-x-2 reservation-add-to-cart"
+        class="w-full bg-slate-800 hover:bg-slate-900 text-white font-medium py-2 px-4 rounded-lg text-xs transition flex items-center justify-center space-x-2"
     >
         <i class="fa-solid fa-plus"></i>
         <span>Add To Cart</span>
@@ -1036,8 +2907,8 @@ $paginated_reservations = array_slice(
                                     <div class="absolute left-4 right-4 h-1 bg-gray-200 top-1/2 -translate-y-1/2 z-0"></div>
                                     <div id="timeline_progress_bar" class="timeline-progress absolute left-4 h-1 top-1/2 -translate-y-1/2 z-0" data-submitted="<?= $is_submitted ? '1' : '0'; ?>" style="width: 0;"></div>
                                     <div class="z-10 flex flex-col items-center">
-                                        <div id="timeline_dot_draft" class="w-5 h-5 rounded-full border-4 border-white shadow transition-colors duration-500" style="background-color: #214f2c;"></div>
-                                        <span id="timeline_label_draft" class="text-xs font-semibold mt-1" style="color: #214f2c;">Draft</span>
+                                      <div id="timeline_dot_draft" class="w-5 h-5 rounded-full border-4 border-white shadow transition-colors duration-500" style="background-color: #214f2c;"></div>
+                                       <span id="timeline_label_draft" class="text-xs font-semibold mt-1" style="color: #214f2c;">Draft</span>
                                     </div>
                                     <div class="z-10 flex flex-col items-center">
                                         <div id="timeline_dot_processing" class="w-5 h-5 rounded-full border-4 border-white shadow transition-colors duration-500 bg-gray-300"></div>
@@ -1497,68 +3368,276 @@ $paginated_reservations = array_slice(
     </div>
 
 
-<!-- LOGOUT CONFIRMATION MODAL -->
 
-<div
-    class="customer-logout-overlay hidden"
-    id="customerLogoutModal"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="customerLogoutTitle"
-    aria-describedby="customerLogoutMessage"
->
-    <div class="customer-logout-modal">
 
-        <div class="customer-logout-icon">
-            <i class="fa-solid fa-right-from-bracket"></i>
-        </div>
 
-        <h2 id="customerLogoutTitle">Confirm Logout</h2>
+<!-- =========================================================
+     FOOTER
+========================================================= -->
 
-        <p id="customerLogoutMessage">
-            Are you sure you want to logout?
-        </p>
+<footer class="customer-footer">
 
-        <div class="customer-logout-actions">
 
-            <button
-                type="button"
-                class="customer-logout-cancel"
-                onclick="closeCustomerLogoutModal()"
-            >
-                Cancel
-            </button>
+    <div class="customer-footer-inner">
 
-        
-<form method="POST" action="customer_dashboard.php">
-    <input type="hidden" name="customer_logout" value="1">
 
-    <input
-        type="hidden"
-        name="logout_token"
-        value="<?php
-            echo isset($_SESSION['customer_logout_token'])
-                ? htmlspecialchars($_SESSION['customer_logout_token'], ENT_QUOTES, 'UTF-8')
-                : '';
-        ?>"
-    >
+        <!-- LEFT -->
 
-    <button type="submit" class="customer-logout-confirm">
-        Yes, Logout
-    </button>
-</form>
+        <div class="customer-footer-left">
+
+
+            <div class="customer-footer-logo">
+
+                <img
+                    src="vdvclogoo.png"
+                    alt="VDVC Egg Farm"
+                >
+
+            </div>
+
+
+            <div class="customer-footer-tagline">
+
+                Fresh Eggs. Trusted Farm. Better for You.
+
+            </div>
 
 
         </div>
+
+
+
+        <!-- RIGHT -->
+
+        <div class="customer-footer-right">
+
+
+            <div class="customer-footer-social">
+
+                <a
+                    href="#"
+                    aria-label="Facebook"
+                >
+                    <i class="fa-brands fa-facebook-f"></i>
+                </a>
+
+
+                <a
+                    href="#"
+                    aria-label="Instagram"
+                >
+                    <i class="fa-brands fa-instagram"></i>
+                </a>
+
+
+                <a
+                    href="#"
+                    aria-label="YouTube"
+                >
+                    <i class="fa-brands fa-youtube"></i>
+                </a>
+
+            </div>
+
+
+            <div class="customer-footer-copy">
+
+                © 2026 VDVC Egg Farm.
+                All rights reserved.
+
+            </div>
+
+
+        </div>
+
 
     </div>
-</div>
+
+</footer>
+
+    <script>
+  
+function updateCustomerDateTime() {
+
+    var now = new Date();
+
+    var options = {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+    };
+
+    var dateText = now.toLocaleDateString(
+        'en-US',
+        options
+    );
+
+    var timeText = now.toLocaleTimeString(
+        'en-US',
+        {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+        }
+    );
+
+    var dateElement = document.getElementById(
+        'customer-live-date'
+    );
+
+    var timeElement = document.getElementById(
+        'customer-live-time'
+    );
+
+    if (dateElement) {
+        dateElement.textContent = dateText;
+    }
+
+    if (timeElement) {
+        timeElement.textContent = timeText;
+    }
+}
+
+updateCustomerDateTime();
+
+setInterval(
+    updateCustomerDateTime,
+    1000
+);
 
 
 
+       
+/* =========================================================
+   CUSTOMER ACCOUNT DROPDOWN
+========================================================= */
 
-<script>
+function toggleCustomerAccountDropdown(event) {
+    event.stopPropagation();
 
+    var dropdown = document.getElementById(
+        'customerAccountDropdown'
+    );
+
+    var toggle = document.getElementById(
+        'customerAccountToggle'
+    );
+
+    if (!dropdown || !toggle) {
+        return;
+    }
+
+    var isOpen = !dropdown.classList.contains('hidden');
+
+    if (isOpen) {
+        dropdown.classList.add('hidden');
+        toggle.setAttribute('aria-expanded', 'false');
+    } else {
+        dropdown.classList.remove('hidden');
+        toggle.setAttribute('aria-expanded', 'true');
+    }
+}
+
+function closeCustomerAccountDropdown() {
+    var dropdown = document.getElementById(
+        'customerAccountDropdown'
+    );
+
+    var toggle = document.getElementById(
+        'customerAccountToggle'
+    );
+
+    if (dropdown) {
+        dropdown.classList.add('hidden');
+    }
+
+    if (toggle) {
+        toggle.setAttribute('aria-expanded', 'false');
+    }
+}
+
+/* =========================================================
+   LOGOUT CONFIRMATION MODAL
+========================================================= */
+
+function openCustomerLogoutModal() {
+    closeCustomerAccountDropdown();
+
+    var modal = document.getElementById(
+        'customerLogoutModal'
+    );
+
+    if (modal) {
+        modal.classList.remove('hidden');
+
+        var cancelButton = modal.querySelector(
+            '.customer-logout-cancel'
+        );
+
+        if (cancelButton) {
+            cancelButton.focus();
+        }
+    }
+}
+
+function closeCustomerLogoutModal() {
+    var modal = document.getElementById(
+        'customerLogoutModal'
+    );
+
+    if (modal) {
+        modal.classList.add('hidden');
+
+        var toggle = document.getElementById(
+            'customerAccountToggle'
+        );
+
+        if (toggle) {
+            toggle.focus();
+        }
+    }
+}
+
+/* =========================================================
+   CLOSE ACCOUNT DROPDOWN WHEN CLICKING OUTSIDE
+========================================================= */
+
+document.addEventListener('click', function(event) {
+    var accountWrapper = document.querySelector(
+        '.customer-account-wrapper'
+    );
+
+    if (
+        accountWrapper &&
+        !accountWrapper.contains(event.target)
+    ) {
+        closeCustomerAccountDropdown();
+    }
+
+    var modal = document.getElementById(
+        'customerLogoutModal'
+    );
+
+    if (modal && event.target === modal) {
+        closeCustomerLogoutModal();
+    }
+});
+
+/* =========================================================
+   CLOSE DROPDOWN AND MODAL WITH ESCAPE
+========================================================= */
+
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeCustomerLogoutModal();
+        closeCustomerAccountDropdown();
+    }
+});
+
+
+
+       
 const priceList = {
     'Extra Small': 140,
     'Small': 150,
@@ -1604,17 +3683,17 @@ function setReservationStepCompleted(stepNumber, isComplete) {
 
 
 function updateReservationProgress() {
-    var nameEl = document.getElementById('cust_name_input');
-    var contactEl = document.getElementById('contact_input');
-    var addressEl = document.getElementById('delivery_address_input');
-    var methodEl = document.getElementById('delivery_method_input');
-    var pickupDateEl = document.getElementById('reservation_date_input');
+    var nameInput = document.getElementById('cust_name_input');
+    var contactInput = document.getElementById('contact_input');
+    var addressInput = document.getElementById('delivery_address_input');
+    var methodInput = document.getElementById('delivery_method_input');
+    var pickupDateInput = document.getElementById('reservation_date_input');
 
-    var name = nameEl ? nameEl.value.trim() : '';
-    var contact = contactEl ? contactEl.value.trim() : '';
-    var address = addressEl ? addressEl.value.trim() : '';
-    var method = methodEl ? methodEl.value.trim().toLowerCase() : '';
-    var pickupDate = pickupDateEl ? pickupDateEl.value : '';
+    var name = nameInput ? nameInput.value.trim() : '';
+    var contact = contactInput ? contactInput.value.trim() : '';
+    var address = addressInput ? addressInput.value.trim() : '';
+    var method = methodInput ? methodInput.value.trim().toLowerCase() : '';
+    var pickupDate = pickupDateInput ? pickupDateInput.value : '';
 
     var validName = name.length > 0;
     var validContact = /^09[0-9]{9}$/.test(contact);
@@ -1629,26 +3708,50 @@ function updateReservationProgress() {
         validMethod &&
         validPickupDate;
 
-    var step2Complete = (typeof bundleItems !== 'undefined') && bundleItems.length > 0;
+    var step2Complete = (typeof bundleItems !== 'undefined' && Array.isArray(bundleItems)) && bundleItems.length > 0;
     var step3Complete = step1Complete && step2Complete;
 
-    setReservationStepCompleted(1, step1Complete);
-    setReservationStepCompleted(2, step2Complete);
-    setReservationStepCompleted(3, step3Complete);
-
-    // Update timeline progress bar and nodes
     var progressBar = document.getElementById('timeline_progress_bar');
+    var isSubmitted = progressBar && progressBar.getAttribute('data-submitted') === '1';
+
+    if (isSubmitted) {
+        setReservationStepCompleted(1, true);
+        setReservationStepCompleted(2, true);
+        setReservationStepCompleted(3, true);
+    } else {
+        setReservationStepCompleted(1, step1Complete);
+        setReservationStepCompleted(2, step2Complete);
+        setReservationStepCompleted(3, step3Complete);
+    }
+
     if (!progressBar) return;
 
-    var isSubmitted = progressBar.getAttribute('data-submitted') === '1';
     var dotProcessing = document.getElementById('timeline_dot_processing');
     var labelProcessing = document.getElementById('timeline_label_processing');
     var dotSubmitted = document.getElementById('timeline_dot_submitted');
     var labelSubmitted = document.getElementById('timeline_label_submitted');
 
+    var percentage = 0;
     if (isSubmitted) {
-        // Full submitted state
-        progressBar.style.width = 'calc(100% - 2rem)';
+        percentage = 100;
+    } else if (step3Complete) {
+        percentage = 50;
+    } else if (step1Complete || step2Complete) {
+        percentage = 25;
+    } else {
+        percentage = 0;
+    }
+
+    // Clamp percentage strictly between 0 and 100
+    percentage = Math.max(0, Math.min(100, isNaN(percentage) ? 0 : Number(percentage)));
+
+    if (percentage === 0) {
+        progressBar.style.width = '0%';
+    } else {
+        progressBar.style.width = 'calc((100% - 2rem) * ' + (percentage / 100) + ')';
+    }
+
+    if (percentage >= 50 || isSubmitted) {
         if (dotProcessing) {
             dotProcessing.style.backgroundColor = '#214f2c';
             dotProcessing.classList.remove('bg-gray-300');
@@ -1658,6 +3761,19 @@ function updateReservationProgress() {
             labelProcessing.classList.remove('text-gray-400');
             labelProcessing.classList.add('font-semibold');
         }
+    } else {
+        if (dotProcessing) {
+            dotProcessing.style.backgroundColor = '';
+            dotProcessing.classList.add('bg-gray-300');
+        }
+        if (labelProcessing) {
+            labelProcessing.style.color = '';
+            labelProcessing.classList.add('text-gray-400');
+            labelProcessing.classList.remove('font-semibold');
+        }
+    }
+
+    if (percentage >= 100 || isSubmitted) {
         if (dotSubmitted) {
             dotSubmitted.style.backgroundColor = '#214f2c';
             dotSubmitted.classList.remove('bg-gray-300');
@@ -1668,45 +3784,6 @@ function updateReservationProgress() {
             labelSubmitted.classList.add('font-semibold');
         }
     } else {
-        // Interactive Drafting / Processing state
-        if (step3Complete) {
-            // Step 1 and Step 2 complete: reaches Processing
-            progressBar.style.width = 'calc((100% - 2rem) * 0.5)';
-            if (dotProcessing) {
-                dotProcessing.style.backgroundColor = '#214f2c';
-                dotProcessing.classList.remove('bg-gray-300');
-            }
-            if (labelProcessing) {
-                labelProcessing.style.color = '#214f2c';
-                labelProcessing.classList.remove('text-gray-400');
-                labelProcessing.classList.add('font-semibold');
-            }
-        } else if (step1Complete || step2Complete) {
-            // Partial progress towards processing
-            progressBar.style.width = 'calc((100% - 2rem) * 0.25)';
-            if (dotProcessing) {
-                dotProcessing.style.backgroundColor = '';
-                dotProcessing.classList.add('bg-gray-300');
-            }
-            if (labelProcessing) {
-                labelProcessing.style.color = '';
-                labelProcessing.classList.add('text-gray-400');
-                labelProcessing.classList.remove('font-semibold');
-            }
-        } else {
-            // Pure draft
-            progressBar.style.width = '0%';
-            if (dotProcessing) {
-                dotProcessing.style.backgroundColor = '';
-                dotProcessing.classList.add('bg-gray-300');
-            }
-            if (labelProcessing) {
-                labelProcessing.style.color = '';
-                labelProcessing.classList.add('text-gray-400');
-                labelProcessing.classList.remove('font-semibold');
-            }
-        }
-
         if (dotSubmitted) {
             dotSubmitted.style.backgroundColor = '';
             dotSubmitted.classList.add('bg-gray-300');
@@ -2255,6 +4332,73 @@ function validateForm() {
             .then(res => res.json()).then(data => { if(data.status === 'success') location.reload(); });
         }
 
+        function toggleCustomerNotificationDropdown()
+        {
+            if (!customerNotificationDropdown) {
+                customerNotificationDropdown = document.getElementById('customerNotificationDropdown');
+            }
+
+            if (customerNotificationDropdown) {
+                isCustomerDropdownOpen = !isCustomerDropdownOpen;
+
+                if (isCustomerDropdownOpen) {
+                    customerNotificationDropdown.classList.remove('hidden');
+                } else {
+                    customerNotificationDropdown.classList.add('hidden');
+                }
+            }
+        }
+
+        function closeCustomerNotificationDropdown()
+        {
+            if (customerNotificationDropdown && isCustomerDropdownOpen) {
+                customerNotificationDropdown.classList.add('hidden');
+                isCustomerDropdownOpen = false;
+            }
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            if (customerNotificationDropdown && isCustomerDropdownOpen) {
+                var notificationButton = document.querySelector('.customer-top-notification');
+                var notificationContainer = customerNotificationDropdown.parentElement;
+                if (!notificationContainer.contains(event.target)) {
+                    closeCustomerNotificationDropdown();
+                }
+            }
+        });
+
+        function markAllCustomerAsRead(event)
+        {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+
+            var formData = new FormData();
+            formData.append('mark_all_read', '1');
+            formData.append('ajax', '1');
+
+            fetch('customer_notifications.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(function(response) {
+                return response.json();
+            })
+            .then(function(data) {
+                if (data.success) {
+                    window.location.reload();
+                }
+            })
+            .catch(function(error) {
+                console.error('Failed to mark all notifications as read:', error);
+            });
+        }
+
+        var customerNotificationDropdown = null;
+        var isCustomerDropdownOpen = false;
+
         <?php if (!empty($message)): ?>
             document.addEventListener('DOMContentLoaded', openSuccessModal);
         <?php endif; ?>
@@ -2265,7 +4409,7 @@ function matchReservationStepHeights() {
 
     const stepCards = document.querySelectorAll('.step-card');
     const step1Card = document.querySelector('.step-1-card');
-    const scrollAreas = document.querySelectorAll('.step-scroll, .step-2-scroll');
+    const scrollAreas = document.querySelectorAll('.step-scroll');
 
     if (!step1Card || stepCards.length === 0) {
         return;
@@ -2406,15 +4550,15 @@ function copyReservationCode() {
    AUTOMATIC RESERVATION PROGRESS UPDATES
 ========================================================= */
 
-document.getElementById('cust_name_input').addEventListener(
-    'input',
-    updateReservationProgress
-);
+var custNameInput = document.getElementById('cust_name_input');
+if (custNameInput) {
+    custNameInput.addEventListener('input', updateReservationProgress);
+}
 
-document.getElementById('contact_input').addEventListener(
-    'input',
-    updateReservationProgress
-);
+var contactInput = document.getElementById('contact_input');
+if (contactInput) {
+    contactInput.addEventListener('input', updateReservationProgress);
+}
 
 var dateInput = document.getElementById('reservation_date_input');
 if (dateInput) {
@@ -2439,13 +4583,187 @@ window.addEventListener('load', function() {
         updateReservationProgress();
     }
 });
+</script>
 
+<script>
+// Notification dropdown toggle (for shared system compatibility)
+function toggleCustomerNotificationDropdown() {
+    var dropdown = document.getElementById('customerNotificationDropdown');
+    if (dropdown) {
+        dropdown.classList.toggle('hidden');
+    }
+}
+</script>
 
-    </script>
+<script src="shared_notifications.js?v=20261022"></script>
+<script src="customer_scripts.js?v=20261022_2"></script>
 
-<?php require 'customer_modal.php'; ?>
+<script>
+// Load notifications using shared system
+document.addEventListener('DOMContentLoaded', function() {
+    var dropdown = document.getElementById('customerNotificationDropdown');
+    var list = document.getElementById('customerNotificationList');
+    
+    if (dropdown && list) {
+        fetch('customer_notifications.php?action=json')
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                var notifications = data.notifications || [];
+                if (notifications.length === 0) {
+                    list.innerHTML = '<div class="customer-notification-empty"><i class="fa-regular fa-bell-slash"></i><p>No notifications</p></div>';
+                } else {
+                    var html = '';
+                    notifications.forEach(function(n) {
+                        var iconClass = n.type || 'info';
+                        var iconName = 'fa-bell';
+                        var isUnread = !n.is_read;
+                        var time = n.created_at;
+                        
+                        // Map notification types to icons
+                        if (n.type === 'success') {
+                            iconClass = 'success';
+                            iconName = 'fa-check';
+                        } else if (n.type === 'alert') {
+                            iconClass = 'alert';
+                            iconName = 'fa-exclamation';
+                        } else if (n.type === 'warning') {
+                            iconClass = 'warning';
+                            iconName = 'fa-circle-exclamation';
+                        }
+                        
+                        html += '<div class="customer-notification-item' + (isUnread ? ' unread' : '') + '" data-id="' + n.id + '">';
+                        html += '<div class="customer-notification-icon ' + iconClass + '"><i class="fa-solid ' + iconName + '"></i></div>';
+                        html += '<div class="customer-notification-content">';
+                        html += '<div class="customer-notification-title">' + n.title + '</div>';
+                        html += '<div class="customer-notification-description">' + n.description + '</div>';
+                        html += '<div class="customer-notification-time">' + time + '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                    });
+                    list.innerHTML = html;
+                    
+                    // Add click handlers for marking as read
+                    var items = list.querySelectorAll('.customer-notification-item.unread');
+                    items.forEach(function(item) {
+                        item.addEventListener('click', function() {
+                            var notifId = item.getAttribute('data-id');
+                            markSingleNotificationAsRead(notifId, item);
+                        });
+                    });
+                }
+            })
+            .catch(function(error) {
+                list.innerHTML = '<div class="customer-notification-empty"><i class="fa-solid fa-exclamation-circle"></i><p>Failed to load notifications</p></div>';
+            });
+    }
+});
 
-<?php require 'customer_footer.php'; ?>
+// Mark single notification as read
+function markSingleNotificationAsRead(notificationId, itemElement) {
+    var formData = new FormData();
+    formData.append('mark_read', '1');
+    formData.append('notification_id', notificationId);
+
+    fetch('customer_notifications.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.success) {
+            itemElement.classList.remove('unread');
+            itemElement.classList.add('read');
+            
+            // Update badge count
+            var badge = document.querySelector('.customer-notification-badge');
+            if (badge) {
+                var currentCount = parseInt(badge.textContent);
+                if (!isNaN(currentCount) && currentCount > 1) {
+                    badge.textContent = currentCount - 1;
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        }
+    })
+    .catch(function(error) {
+        console.error('Failed to mark notification as read:', error);
+    });
+}
+</script>
+
+<?php require 'shared_notifications_modal.php'; ?>
+
+<!-- =========================================================
+     LOGOUT CONFIRMATION MODAL
+========================================================= -->
+
+<div
+    class="customer-logout-overlay hidden"
+    id="customerLogoutModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="customerLogoutTitle"
+    aria-describedby="customerLogoutMessage"
+>
+
+    <div class="customer-logout-modal">
+
+        <div class="customer-logout-icon">
+            <i class="fa-solid fa-right-from-bracket"></i>
+        </div>
+
+        <h2 id="customerLogoutTitle">Confirm Logout</h2>
+
+        <p id="customerLogoutMessage">
+            Are you sure you want to logout?
+        </p>
+
+        <div class="customer-logout-actions">
+
+            <button
+                type="button"
+                class="customer-logout-cancel"
+                onclick="closeCustomerLogoutModal()"
+            >
+                Cancel
+            </button>
+
+            <form method="POST" action="customer_reservation.php">
+
+                <input
+                    type="hidden"
+                    name="customer_logout"
+                    value="1"
+                >
+
+                <input
+                    type="hidden"
+                    name="logout_token"
+                    value="<?php echo htmlspecialchars(
+                        $_SESSION['customer_logout_token'],
+                        ENT_QUOTES,
+                        'UTF-8'
+                    ); ?>"
+                >
+
+                <button
+                    type="submit"
+                    class="customer-logout-confirm"
+                >
+                    Yes, Logout
+                </button>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
 
 </body>
+
 </html>

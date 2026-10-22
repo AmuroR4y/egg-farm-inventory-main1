@@ -2,11 +2,12 @@
 ob_start();
 
 // Include standardized session configuration FIRST
-require_once '../session_config.php';
+require_once 'session_config.php';
 
 date_default_timezone_set('Asia/Manila');
 
-require '../db.php';
+require 'db.php';
+require_once 'config_age_eligibility.php';
 
 /* =========================================================
    SECURITY CHECK
@@ -22,93 +23,35 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] != 'customer') {
     exit();
 }
 
-/* PHP 5.5 COMPATIBLE TOKEN COMPARISON */
-function customerTokenEquals($known, $submitted)
-{
-    if (!is_string($known) || !is_string($submitted)) {
-        return false;
-    }
-
-    if (strlen($known) !== strlen($submitted)) {
-        return false;
-    }
-
-    $result = 0;
-    $length = strlen($known);
-
-    for ($i = 0; $i < $length; $i++) {
-        $result |= ord($known[$i]) ^ ord($submitted[$i]);
-    }
-
-    return $result === 0;
-}
 /* =========================================================
-   SECURE CUSTOMER LOGOUT
+   LOGOUT HANDLER
 ========================================================= */
 
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['customer_logout'])) {
+    // Verify logout token
+    if (isset($_POST['logout_token']) && isset($_SESSION['customer_logout_token'])) {
+        if (hash_equals($_SESSION['customer_logout_token'], $_POST['logout_token'])) {
+            // Destroy session
+            $_SESSION = array();
 
-/* Create a logout token for form validation. */
-if (empty($_SESSION['customer_logout_token'])) {
-    if (function_exists('random_bytes')) {
-        $_SESSION['customer_logout_token'] = bin2hex(
-            random_bytes(32)
-        );
-    } elseif (function_exists('openssl_random_pseudo_bytes')) {
-        $_SESSION['customer_logout_token'] = bin2hex(
-            openssl_random_pseudo_bytes(32)
-        );
-    } else {
-        // Compatible fallback for older PHP installations.
-        $_SESSION['customer_logout_token'] = hash(
-            'sha256',
-            uniqid(mt_rand(), true) . session_id()
-        );
-    }
-}
+            if (ini_get("session.use_cookies")) {
+                $params = session_get_cookie_params();
+                setcookie(
+                    session_name(),
+                    '',
+                    time() - 42000,
+                    $params['path'],
+                    $params['domain'],
+                    $params['secure'],
+                    $params['httponly']
+                );
+            }
 
+            session_destroy();
 
-
-/* Process logout only after the customer confirms. */
-if (
-    $_SERVER['REQUEST_METHOD'] == 'POST' &&
-    isset($_POST['customer_logout'])
-) {
-    $submitted_token = isset($_POST['logout_token'])
-        ? $_POST['logout_token']
-        : '';
-
-    $session_token = isset($_SESSION['customer_logout_token'])
-        ? $_SESSION['customer_logout_token']
-        : '';
-
-    if (
-        $submitted_token !== '' &&
-        $session_token !== '' &&
-        is_string($submitted_token) &&
-        is_string($session_token) &&
-        strlen($submitted_token) === strlen($session_token) &&
-       customerTokenEquals($session_token, $submitted_token)
-    ) {
-        $_SESSION = array();
-
-        if (ini_get('session.use_cookies')) {
-            $cookie_params = session_get_cookie_params();
-
-            setcookie(
-                session_name(),
-                '',
-                time() - 42000,
-                $cookie_params['path'],
-                $cookie_params['domain'],
-                $cookie_params['secure'],
-                $cookie_params['httponly']
-            );
+            header("Location: login.php");
+            exit();
         }
-
-        session_destroy();
-
-        header("Location: login.php");
-        exit();
     }
 
     header("Location: customer_dashboard.php");
@@ -116,17 +59,9 @@ if (
 }
 
 $customer_id = $_SESSION['user_id'];
-$active_page = 'dashboard';
-
 $unread_notifications = 0;
 
-$notification_count_result = $conn->query(
-    "SELECT COUNT(*) AS total
-     FROM notifications
-     WHERE user_id = " . (int)$customer_id . "
-     AND is_read = 0"
-);
-
+$notification_count_result = $conn->query("SELECT COUNT(*) AS total FROM notifications WHERE user_id = " . (int)$customer_id . " AND is_read = 0");
 if ($notification_count_result && ($notification_count_row = $notification_count_result->fetch_assoc())) {
     $unread_notifications = (int)$notification_count_row['total'];
 }
@@ -135,6 +70,7 @@ $customer_name = isset($_SESSION['fullname'])
     ? $_SESSION['fullname']
     : (isset($_SESSION['customer_name']) ? $_SESSION['customer_name'] : (isset($_SESSION['name']) ? $_SESSION['name'] : 'Customer'));
 
+$active_page = 'dashboard';
 
 /* =========================================================
    TOTAL RESERVATIONS
@@ -198,6 +134,9 @@ if ($stmt) {
 
 $egg_stocks = array();
 
+// Get minimum eligible date
+$eligible_min_date = get_eligible_min_date();
+
 $stock_sql = "
     SELECT
         e.egg_size,
@@ -206,9 +145,10 @@ $stock_sql = "
     INNER JOIN (
         SELECT egg_size, MAX(id) AS id
         FROM egg_inventory
+        WHERE harvest_date >= '$eligible_min_date'
         GROUP BY egg_size
     ) latest ON latest.id = e.id
-    ORDER BY 
+    ORDER BY
         FIELD(
                 e.egg_size,
             'XS',
@@ -337,8 +277,15 @@ function getActivityIcon($status)
     );
 }
 
-?>
+/* =========================================================
+   GENERATE LOGOUT TOKEN
+========================================================= */
 
+if (!isset($_SESSION['customer_logout_token'])) {
+    $_SESSION['customer_logout_token'] = bin2hex(random_bytes(32));
+}
+
+?>
 <!DOCTYPE html>
 <html lang="en">
 
@@ -384,9 +331,7 @@ function getActivityIcon($status)
 
 <body>
 
-<?php require '../customer_header.php'; ?>
-
-
+<?php require 'customer_header.php'; ?>
 
 <!-- =========================================================
      WELCOME HERO
@@ -395,7 +340,6 @@ function getActivityIcon($status)
 
     <div class="customer-hero-content">
 
-
         <h1 class="customer-hero-title">
  Welcome back,
             <?php
@@ -403,7 +347,6 @@ function getActivityIcon($status)
             ?>!
 
         </h1>
-
 
         <p class="customer-hero-subtitle">
 
@@ -415,8 +358,6 @@ function getActivityIcon($status)
 
 </section>
 
-
-
 <!-- =========================================================
      MAIN CUSTOMER CONTENT
 ========================================================= -->
@@ -424,13 +365,11 @@ function getActivityIcon($status)
 <div class="customer-outer-card">
 <main class="customer-page">
 
-
     <!-- =====================================================
          SUMMARY CARDS
     ====================================================== -->
 
     <section class="summary-grid">
-
 
         <!-- ACCOUNT TYPE -->
 
@@ -441,7 +380,6 @@ function getActivityIcon($status)
                 <i class="fa-regular fa-user"></i>
 
             </div>
-
 
             <div class="summary-content">
 
@@ -461,8 +399,6 @@ function getActivityIcon($status)
 
         </div>
 
-
-
         <!-- TOTAL RESERVATIONS -->
 
         <div class="summary-card">
@@ -472,7 +408,6 @@ function getActivityIcon($status)
                 <i class="fa-regular fa-calendar-check"></i>
 
             </div>
-
 
             <div class="summary-content">
 
@@ -496,8 +431,6 @@ function getActivityIcon($status)
 
         </div>
 
-
-
         <!-- TRAYS ORDERED -->
 
         <div class="summary-card">
@@ -507,7 +440,6 @@ function getActivityIcon($status)
                 <i class="fa-solid fa-cube"></i>
 
             </div>
-
 
             <div class="summary-content">
 
@@ -531,10 +463,7 @@ function getActivityIcon($status)
 
         </div>
 
-
     </section>
-
-
 
     <!-- =====================================================
          MAIN DASHBOARD GRID
@@ -542,13 +471,11 @@ function getActivityIcon($status)
 
     <section class="dashboard-grid">
 
-
         <!-- =================================================
              AVAILABLE EGG STOCKS
         ================================================== -->
 
         <div class="dashboard-card">
-
 
             <!-- CARD HEADER -->
 
@@ -561,7 +488,6 @@ function getActivityIcon($status)
                         <i class="fa-solid fa-egg"></i>
 
                     </div>
-
 
                     <div class="card-title-text">
 
@@ -579,18 +505,13 @@ function getActivityIcon($status)
 
             </div>
 
-
-
             <!-- STOCK TABLE -->
 
             <div class="stock-table-container">
 
-
                 <?php if (count($egg_stocks) > 0) { ?>
 
-
                     <table class="stock-table">
-
 
                         <thead>
 
@@ -616,12 +537,9 @@ function getActivityIcon($status)
 
                         </thead>
 
-
                         <tbody>
 
-
                             <?php foreach ($egg_stocks as $stock) { ?>
-
 
                                 <?php
 
@@ -632,9 +550,7 @@ function getActivityIcon($status)
 
                                 ?>
 
-
                                 <tr>
-
 
                                     <!-- EGG SIZE -->
 
@@ -652,8 +568,6 @@ function getActivityIcon($status)
 
                                     </td>
 
-
-
                                     <!-- AVAILABLE STOCK -->
 
                                     <td>
@@ -668,8 +582,6 @@ function getActivityIcon($status)
 
                                     </td>
 
-
-
                                     <!-- UNIT -->
 
                                     <td>
@@ -678,15 +590,11 @@ function getActivityIcon($status)
 
                                     </td>
 
-
-
                                     <!-- STATUS -->
 
                                     <td>
 
-
                                         <?php if ($available_stock > 0) { ?>
-
 
                                             <span class="stock-status">
 
@@ -696,9 +604,7 @@ function getActivityIcon($status)
 
                                             </span>
 
-
                                         <?php } else { ?>
-
 
                                             <span
                                                 style="
@@ -719,27 +625,19 @@ function getActivityIcon($status)
 
                                             </span>
 
-
                                         <?php } ?>
-
 
                                     </td>
 
-
                                 </tr>
-
 
                             <?php } ?>
 
-
                         </tbody>
-
 
                     </table>
 
-
                 <?php } else { ?>
-
 
                     <div class="empty-state">
 
@@ -751,18 +649,13 @@ function getActivityIcon($status)
 
                     </div>
 
-
                 <?php } ?>
 
-
             </div>
-
-
 
             <!-- STOCK FOOTER -->
 
             <div class="stock-footer">
-
 
                 <div class="stock-info">
 
@@ -775,7 +668,6 @@ function getActivityIcon($status)
 
                 </div>
 
-
                 <a
                     href="customer_reservation.php"
                     class="reservation-button"
@@ -787,13 +679,9 @@ function getActivityIcon($status)
 
                 </a>
 
-
             </div>
 
-
         </div>
-
-
 
         <!-- =================================================
              RECENT ACTIVITY
@@ -801,11 +689,9 @@ function getActivityIcon($status)
 
         <div class="dashboard-card">
 
-
             <!-- CARD HEADER -->
 
             <div class="card-header">
-
 
                 <div class="card-title">
 
@@ -815,189 +701,94 @@ function getActivityIcon($status)
 
                     </div>
 
-
                     <div class="card-title-text">
 
                         <h2>
                             Recent Activity
                         </h2>
 
+                        <p>
+                            Your latest reservation activities.
+                        </p>
+
                     </div>
 
                 </div>
 
-
-                <a
-                    href="customer_history.php"
-                    class="view-all-btn"
-                >
-
-                    View All
-
-                </a>
-
-
             </div>
 
+            <!-- ACTIVITY LIST -->
 
-
-            <!-- ACTIVITY -->
-
-            <div class="activity-list">
-
+            <div class="activity-list-container">
 
                 <?php if (count($recent_activities) > 0) { ?>
 
+                    <ul class="activity-list">
 
-                    <?php foreach ($recent_activities as $activity) { ?>
+                        <?php foreach ($recent_activities as $activity) { ?>
 
+                            <?php
 
-                        <?php
+                            $iconData = getActivityIcon($activity['status']);
 
-                        $icon_data =
-                            getActivityIcon(
-                                $activity['status']
-                            );
+                            ?>
 
-                        ?>
+                            <li class="activity-item">
 
+                                <div class="activity-icon <?php echo $iconData['class']; ?>">
 
-                        <div class="activity-item">
+                                    <i class="fa-solid <?php echo $iconData['icon']; ?>"></i>
 
+                                </div>
 
-                            <!-- ICON -->
+                                <div class="activity-details">
 
-                            <div
-                                class="
-                                    activity-icon
-                                    <?php
-                                    echo $icon_data['class'];
-                                    ?>
-                                "
-                            >
+                                    <div class="activity-title">
 
-                                <i
-                                    class="
-                                        fa-solid
                                         <?php
-                                        echo $icon_data['icon'];
-                                        ?>
-                                    "
-                                ></i>
-
-                            </div>
-
-
-
-                            <!-- CONTENT -->
-
-                            <div class="activity-content">
-
-
-                                <h4>
-
-                                    Reservation
-                                    <?php
-                                    echo htmlspecialchars(
-                                        $activity['reservation_code']
-                                    );
-                                    ?>
-
-                                    <?php
-                                    echo htmlspecialchars(
-                                        strtolower(
-                                            $activity['status']
-                                        )
-                                    );
-                                    ?>
-
-                                </h4>
-
-
-                                <p>
-
-
-                                    <?php
-
-                                    if (
-                                        !empty(
-                                            $activity['reserved_at']
-                                        )
-                                    ) {
-
-                                        echo date(
-                                            "M d, Y",
-                                            strtotime(
-                                                $activity['reserved_at']
-                                            )
+                                        echo htmlspecialchars(
+                                            $activity['egg_size']
                                         );
+                                        ?>
 
-                                    }
+                                        -
 
-                                    ?>
+                                        <?php
+                                        echo (int)$activity['quantity'];
+                                        ?> trays
 
+                                    </div>
 
-                                    &nbsp;•&nbsp;
+                                    <div class="activity-meta">
 
+                                        <?php
+                                        echo htmlspecialchars(
+                                            $activity['reservation_code']
+                                        );
+                                        ?>
+
+                                    </div>
+
+                                </div>
+
+                                <div class="activity-time">
 
                                     <?php
-                                    echo $activity['quantity'];
-                                    ?>
-
-                                    trays
-
-
-                                    (
-                                    <?php
-                                    echo htmlspecialchars(
-                                        $activity['egg_size']
-                                    );
-                                    ?>
-                                    )
-
-                                </p>
-
-
-                            </div>
-
-
-
-                            <!-- TIME -->
-
-                            <div class="activity-time">
-
-
-                                <?php
-
-                                if (
-                                    !empty(
-                                        $activity['reserved_at']
-                                    )
-                                ) {
-
                                     echo date(
-                                        "g:i A",
-                                        strtotime(
-                                            $activity['reserved_at']
-                                        )
+                                        'M j',
+                                        strtotime($activity['reserved_at'])
                                     );
+                                    ?>
 
-                                }
+                                </div>
 
-                                ?>
+                            </li>
 
+                        <?php } ?>
 
-                            </div>
-
-
-                        </div>
-
-
-                    <?php } ?>
-
+                    </ul>
 
                 <?php } else { ?>
-
 
                     <div class="empty-state">
 
@@ -1009,26 +800,20 @@ function getActivityIcon($status)
 
                     </div>
 
-
                 <?php } ?>
-
 
             </div>
 
-
         </div>
 
-
     </section>
-
 
 </main>
 </div>
 
+<?php require 'customer_modal.php'; ?>
 
-<?php require '../customer_footer.php'; ?>
-
-<?php require '../customer_modal.php'; ?>
+<?php require 'customer_footer.php'; ?>
 
 </body>
 </html>

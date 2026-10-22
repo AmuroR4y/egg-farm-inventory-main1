@@ -35,7 +35,45 @@ if ($user_role !== 'customer') {
     header("Location: login.php");
     exit;
 }
+/* =========================================================
+   LOGOUT HANDLER
+========================================================= */
 
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['customer_logout'])) {
+    $submitted_token = isset($_POST['logout_token']) ? $_POST['logout_token'] : '';
+    $session_token = isset($_SESSION['customer_logout_token']) ? $_SESSION['customer_logout_token'] : '';
+
+    if (
+        $submitted_token !== '' &&
+        $session_token !== '' &&
+        is_string($submitted_token) &&
+        is_string($session_token) &&
+        strlen($submitted_token) === strlen($session_token) &&
+        hash_equals($session_token, $submitted_token)
+    ) {
+        $_SESSION = array();
+
+        if (ini_get('session.use_cookies')) {
+            $cookie_params = session_get_cookie_params();
+            setcookie(
+                session_name(),
+                '',
+                time() - 42000,
+                $cookie_params['path'],
+                $cookie_params['domain'],
+                $cookie_params['secure'],
+                $cookie_params['httponly']
+            );
+        }
+
+        session_destroy();
+        header("Location: login.php");
+        exit();
+    }
+
+    header("Location: customer_profile.php");
+    exit();
+}
 
 /* =========================================================
    CUSTOMER LOGOUT TOKEN
@@ -947,7 +985,6 @@ if (
 }
 
 ?>
-
 <!DOCTYPE html>
 
 <html lang="en">
@@ -976,19 +1013,415 @@ if (
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
     >
 
-    <link rel="stylesheet" href="customer_styles.css">
+    <link rel="stylesheet" href="shared_notifications.css?v=20261022">
 
 <style>
 * {
     box-sizing: border-box;
 }
 
+html, body {
+    margin: 0;
+    min-height: 100%;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: #f3f1eb;
+    color: #35463b;
+    font-size: 12px;
+}
+
+button, input {
+    font-family: inherit;
+}
+
+a {
+    -webkit-tap-highlight-color: transparent;
+}
+
+
 /* =========================================================
-   CUSTOMER NAVIGATION — USE SHARED STYLES FROM customer_styles.css
+   CUSTOMER NAVIGATION — MATCH CUSTOMER DASHBOARD
 ========================================================= */
 
-/* Remove duplicate navbar styles - using shared stylesheet */
+.customer-navbar {
+    width: 100%;
+    height: 84px;
+    padding: 0 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    background: #0d4828;
+    border-top: 1px solid #e7e8e2;
+    border-bottom: 1px solid #dedfd8;
+    /* Keep navbar visible while scrolling */
+    position: sticky;
+    top: 0;
+    left: 0;
 
+    z-index: 1000;
+}
+
+.customer-navbar-logo {
+    width: 190px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+
+.customer-navbar-logo a {
+    display: flex;
+    align-items: center;
+}
+
+.customer-navbar-logo img {
+    display: block;
+    width: 145px;
+    height: auto;
+    object-fit: contain;
+}
+
+.customer-navbar-center {
+    height: 84px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 38px;
+    margin-left: 80px;
+}
+
+.customer-nav-link {
+    height: 100%;
+    padding: 0 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    text-decoration: none;
+    white-space: nowrap;
+    color: #e8f1e9;
+    font-size: 14px;
+    font-weight: 500;
+    transition: color .2s ease;
+}
+
+.customer-nav-link:hover,
+.customer-nav-link.active {
+    color: #b9e4c3;
+}
+
+.customer-nav-link.active {
+    font-weight: 700;
+    color:#ffffff;
+}
+
+.customer-nav-link.active::after {
+    content: "";
+    height: 2px;
+    position: absolute;
+    bottom: 20px;
+    left: 0;
+    right: 0;
+    background: #14552d;
+    border-radius: 2px;
+}
+
+.customer-navbar-right {
+    min-width: 240px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 16px;
+}
+
+.customer-notification-wrapper {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.customer-top-notification {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: #eaf2e8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
+    position: relative;
+}
+
+.customer-top-notification:hover {
+
+    color: #bfe3c7;
+}
+
+.customer-notification-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 20px;
+     background-color: #eaf2e8;
+    color: #0d4828;
+    border: 2px solid #0d4828;
+    font-size: 9px;
+    font-weight: 700;
+}
+
+.customer-notification-dropdown {
+    position: absolute;
+    top: 46px;
+    right: -8px;
+    width: 350px;
+    max-width: calc(100vw - 24px);
+    max-height: 440px;
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid #e0e5df;
+    border-radius: 12px;
+    box-shadow: 0 12px 30px rgba(30, 50, 35, .15);
+    z-index: 1000;
+}
+
+.customer-notification-dropdown.hidden {
+    display: none;
+}
+
+.customer-notification-dropdown-header {
+    min-height: 50px;
+    padding: 12px 15px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: #f8faf7;
+    border-bottom: 1px solid #e9ede7;
+}
+
+.customer-panel-title-group {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.customer-panel-title-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #eaf3e9;
+    color: #286440;
+    font-size: 13px;
+}
+
+.customer-dashboard-panel-title {
+    color: #304b39;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.customer-mark-all-link {
+    color: #36704b;
+    font-size: 11px;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.customer-mark-all-link:hover {
+    text-decoration: underline;
+}
+
+.customer-notification-list {
+    max-height: 385px;
+    overflow-y: auto;
+}
+
+.customer-notification-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    padding: 13px 15px;
+    border-bottom: 1px solid #eff1ed;
+    cursor: pointer;
+}
+
+.customer-notification-item:hover {
+    background: #f8fbf7;
+}
+
+.customer-notification-item.unread {
+    background: #eff6ef;
+}
+
+.customer-notification-icon {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 13px;
+}
+
+.customer-notification-icon.success {
+    background: #e2f3e4;
+    color: #28713c;
+}
+
+.customer-notification-icon.alert {
+    background: #fae8e6;
+    color: #b84e45;
+}
+
+.customer-notification-icon.info {
+    background: #e5eff7;
+    color: #3b6d8a;
+}
+
+.customer-notification-icon.warning {
+    background: #fff2d9;
+    color: #a7741e;
+}
+
+.customer-notification-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.customer-notification-title {
+    margin-bottom: 4px;
+    color: #334b3a;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.customer-notification-description {
+    color: #6d7b71;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.customer-notification-time {
+    margin-top: 5px;
+    color: #929c94;
+    font-size: 10px;
+}
+
+.customer-notification-empty {
+    padding: 30px 16px;
+    text-align: center;
+    color: #89958c;
+}
+
+.customer-notification-empty i {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 25px;
+}
+
+.customer-notification-empty p {
+    margin: 0;
+    font-size: 12px;
+}
+
+/* CUSTOMER ACCOUNT */
+
+.customer-account-link {
+    display: flex;
+    align-items: center;
+
+    gap: 9px;
+
+    text-decoration: none;
+
+    color: #263d32;
+}
+
+.customer-avatar {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e1e9df;
+    border-radius: 50%;
+   background-color: #dcebdd;
+color: #0d4828;
+    font-size: 16px;
+}
+
+.customer-account-details {
+    display: flex;
+    flex-direction: column;
+
+    justify-content: center;
+
+    min-width: 100px;
+}
+
+.customer-top-name {
+    display: block;
+
+    font-size: 13px;
+    font-weight: 700;
+
+    line-height: 1.2;
+
+    color: #ffffff;
+}
+
+.customer-date-time {
+    display: flex;
+    flex-direction: column;
+
+    gap: 1px;
+
+    margin-top: 3px;
+}
+ 
+.customer-date{
+    font-size: 9px;
+    color: #d5e5d8;
+}
+
+.customer-time {
+    font-size: 9px;
+
+    color: #d5e5d8;
+
+    font-weight: 600;
+    
+}
+
+.customer-dropdown-icon {
+     color: #718079;
+    font-size: 9px;
+
+    margin-left: 3px;
+}
+
+/* Keep if used by existing notification JavaScript */
+.customer-mark-read-btn {
+    cursor: pointer;
+}
 
 
 /* ==================== PROFILE BANNER ==================== */
@@ -1536,6 +1969,101 @@ if (
     color: #a53f38;
 }
 
+/* =========================================================
+   FOOTER
+========================================================= */
+
+.customer-footer {
+    width: 100%;
+
+    min-height: 68px;
+
+    background: #0d4828;
+
+    color: #ffffff;
+
+    display: flex;
+    align-items: center;
+
+    padding: 0 48px;
+}
+
+.customer-footer-inner {
+    width: 100%;
+
+    max-width: 1740px;
+
+    margin: 0 auto;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.customer-footer-left {
+    display: flex;
+    align-items: center;
+
+    gap: 17px;
+}
+
+.customer-footer-logo {
+    width: 110px;
+
+    padding-right: 15px;
+
+    border-right: 1px solid rgba(255,255,255,0.22);
+}
+
+.customer-footer-logo img {
+    width: 100px;
+    height: auto;
+
+    display: block;
+}
+
+.customer-footer-tagline {
+    font-size: 11px;
+
+    color: rgba(255,255,255,0.9);
+}
+
+.customer-footer-right {
+    display: flex;
+    align-items: center;
+
+    gap: 18px;
+}
+
+.customer-footer-social {
+    display: flex;
+    align-items: center;
+
+    gap: 17px;
+}
+
+.customer-footer-social a {
+    color: #ffffff;
+
+    font-size: 13px;
+
+    text-decoration: none;
+
+    opacity: 0.95;
+
+    transition: opacity 0.2s ease;
+}
+
+.customer-footer-social a:hover {
+    opacity: 0.7;
+}
+
+.customer-footer-copy {
+    font-size: 11px;
+
+    color: rgba(255,255,255,0.82);
+}
+/* ==================== RESPONSIVE ==================== */
 
 @media (min-width: 1500px) {
     .main-content {
@@ -1554,10 +2082,121 @@ if (
 }
 
 @media (max-width: 900px) {
+    .customer-navbar {
+        padding: 0 20px;
+    }
+
+    .customer-navbar-logo {
+        width: auto;
+    }
+
+    .customer-navbar-center {
+        gap: 18px;
+    }
+
+    .customer-navbar-right {
+        min-width: auto;
+    }
+
     .profile-layout {
         grid-template-columns: 220px minmax(0, 1fr);
         padding: 10px;
         gap: 10px;
+    }
+
+    .profile-main-card {
+        padding: 14px;
+    }
+
+    .customer-footer-inner {
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 680px) {
+    .customer-navbar {
+        height: auto;
+        min-height: 60px;
+        padding: 10px 14px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .customer-navbar-logo img {
+        width: 85px;
+    }
+
+    .customer-navbar-center {
+        order: 3;
+        width: 100%;
+        height: 35px;
+        justify-content: space-around;
+        gap: 12px;
+    }
+
+    .customer-nav-link {
+        font-size: 10px;
+    }
+
+    .customer-nav-link.active::after {
+        bottom: 1px;
+    }
+
+    .customer-account-details,
+    .customer-dropdown-icon {
+        display: none;
+    }
+
+    .customer-navbar-right {
+        gap: 8px;
+    }
+
+    .customer-notification-dropdown {
+        position: fixed;
+        top: 65px;
+        left: 12px;
+        right: 12px;
+        width: auto;
+        max-width: none;
+    }
+
+    .profile-banner {
+        min-height: 80px;
+        padding: 16px 18px;
+    }
+
+    .profile-banner h1 {
+        font-size: 18px;
+    }
+
+    .main-content {
+        padding: 12px;
+    }
+
+    .profile-layout {
+        grid-template-columns: minmax(0, 1fr);
+        padding: 10px;
+    }
+
+    .profile-sidebar-card {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .profile-user-section {
+        grid-row: span 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .contact-section {
+        border-bottom: 1px solid #edf0eb;
+    }
+
+    .status-box {
+        align-self: start;
     }
 
     .profile-main-card {
@@ -1582,6 +2221,26 @@ if (
         grid-column: auto;
     }
 
+    .customer-footer {
+        padding: 14px;
+    }
+
+    .customer-footer-inner,
+    .customer-footer-left,
+    .customer-footer-right {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .customer-footer-left,
+    .customer-footer-right {
+        gap: 10px;
+    }
+
+    .customer-footer-logo {
+        border-right: 0;
+        padding-right: 0;
+    }
 }
 
 @media (max-width: 380px) {
@@ -1742,6 +2401,203 @@ if (
     .profile-main-card {
         padding: 16px;
     }
+
+    .customer-navbar {
+        flex-wrap: wrap;
+    }
+}
+
+
+/* =========================================================
+   CUSTOMER ACCOUNT DROPDOWN
+========================================================= */
+
+.customer-account-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.customer-account-toggle {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: #eaf2e8;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.customer-account-toggle:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+}
+
+.customer-account-dropdown {
+    position: absolute;
+    top: calc(100% + 12px);
+    right: 0;
+    width: 180px;
+    padding: 7px;
+    background: #fff;
+    border: 1px solid #e0e5df;
+    border-radius: 12px;
+    box-shadow: 0 12px 30px rgba(30, 50, 35, 0.16);
+    z-index: 1200;
+}
+
+.customer-account-dropdown.hidden {
+    display: none;
+}
+
+.customer-logout-option {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: #fff;
+    color: #a33b35;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.customer-logout-option:hover {
+    background: #fff0ee;
+}
+
+.customer-logout-option i {
+    width: 16px;
+    font-size: 13px;
+}
+
+/* =========================================================
+   CUSTOMER LOGOUT CONFIRMATION MODAL
+========================================================= */
+
+.customer-logout-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(15, 32, 20, 0.48);
+    z-index: 3000;
+}
+
+.customer-logout-overlay.hidden {
+    display: none;
+}
+
+.customer-logout-modal {
+    width: 100%;
+    max-width: 390px;
+    padding: 30px 28px 24px;
+    background: #fff;
+    border: 1px solid #e5e9e3;
+    border-radius: 18px;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
+    text-align: center;
+    animation: logoutModalAppear 0.22s ease;
+}
+
+.customer-logout-icon {
+    width: 58px;
+    height: 58px;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #fff0ee;
+    color: #b6423b;
+    font-size: 23px;
+}
+
+.customer-logout-modal h2 {
+    margin: 0 0 9px;
+    color: #2f4937;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.customer-logout-modal p {
+    margin: 0;
+    color: #7b877d;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.customer-logout-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 25px;
+}
+
+.customer-logout-actions form {
+    margin: 0;
+}
+
+.customer-logout-cancel,
+.customer-logout-confirm {
+    min-width: 115px;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: 9px;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.customer-logout-cancel {
+    border: 1px solid #dce3dc;
+    background: #fff;
+    color: #58665b;
+}
+
+.customer-logout-cancel:hover {
+    background: #f4f6f3;
+}
+
+.customer-logout-confirm {
+    border: 1px solid #a83b35;
+    background: #b6423b;
+    color: #fff;
+}
+
+.customer-logout-confirm:hover {
+    background: #9e342f;
+    transform: translateY(-1px);
+}
+
+@keyframes logoutModalAppear {
+    from {
+        opacity: 0;
+        transform: translateY(8px) scale(.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
 /* =========================================================
    SECURITY SETTINGS — THREE EQUAL PASSWORD FIELDS
 ========================================================= */
@@ -1784,10 +2640,16 @@ if (
 </style>
 
 
+    <link rel="stylesheet" href="customer_navbar.css?v=20261022_viewall">
 </head>
 
 <body>
 
+
+<!-- CUSTOMER NAVIGATION -->
+<!-- =========================================================
+     CUSTOMER NAVBAR (STANDARDIZED)
+========================================================= -->
 <?php require 'customer_header.php'; ?>
 
 <!-- PROFILE PAGE OUTER CARD -->
@@ -2426,15 +3288,887 @@ if (
 
 </div>
 
+<!-- =========================================================
+     FOOTER
+========================================================= -->
+
+<footer class="customer-footer">
 
 
+    <div class="customer-footer-inner">
+
+
+        <!-- LEFT -->
+
+        <div class="customer-footer-left">
+
+
+            <div class="customer-footer-logo">
+
+                <img
+                    src="vdvclogoo.png"
+                    alt="VDVC Egg Farm"
+                >
+
+            </div>
+
+
+            <div class="customer-footer-tagline">
+
+                Fresh Eggs. Trusted Farm. Better for You.
+
+            </div>
+
+
+        </div>
+
+
+
+        <!-- RIGHT -->
+
+        <div class="customer-footer-right">
+
+
+            <div class="customer-footer-social">
+
+                <a
+                    href="#"
+                    aria-label="Facebook"
+                >
+                    <i class="fa-brands fa-facebook-f"></i>
+                </a>
+
+
+                <a
+                    href="#"
+                    aria-label="Instagram"
+                >
+                    <i class="fa-brands fa-instagram"></i>
+                </a>
+
+
+                <a
+                    href="#"
+                    aria-label="YouTube"
+                >
+                    <i class="fa-brands fa-youtube"></i>
+                </a>
+
+            </div>
+
+
+            <div class="customer-footer-copy">
+
+                © 2026 VDVC Egg Farm.
+                All rights reserved.
+
+            </div>
+
+
+        </div>
+
+
+    </div>
+
+</footer>
+
+
+
+<script>
+
+
+function updateCustomerDateTime() {
+
+    var now = new Date();
+
+    var options = {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+    };
+
+    var dateText = now.toLocaleDateString(
+        'en-US',
+        options
+    );
+
+    var timeText = now.toLocaleTimeString(
+        'en-US',
+        {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+        }
+    );
+
+    var dateElement = document.getElementById(
+        'customer-live-date'
+    );
+
+    var timeElement = document.getElementById(
+        'customer-live-time'
+    );
+
+    if (dateElement) {
+        dateElement.textContent = dateText;
+    }
+
+    if (timeElement) {
+        timeElement.textContent = timeText;
+    }
+}
+
+updateCustomerDateTime();
+
+setInterval(
+    updateCustomerDateTime,
+    1000
+);
+/*
+|--------------------------------------------------------------------------
+| TAB SWITCHING
+|--------------------------------------------------------------------------
+*/
+
+var tabs =
+    document.querySelectorAll(
+        ".profile-tab"
+    );
+
+
+var tabContents =
+    document.querySelectorAll(
+        ".tab-content"
+    );
+
+
+for (
+    var i = 0;
+    i < tabs.length;
+    i++
+) {
+
+    tabs[i].addEventListener(
+        "click",
+        function () {
+
+            var target =
+                this.getAttribute(
+                    "data-tab"
+                );
+
+
+            for (
+                var x = 0;
+                x < tabs.length;
+                x++
+            ) {
+
+                tabs[x].classList.remove(
+                    "active"
+                );
+
+            }
+
+
+            for (
+                var y = 0;
+                y < tabContents.length;
+                y++
+            ) {
+
+                tabContents[y].classList.remove(
+                    "active"
+                );
+
+            }
+
+
+            this.classList.add(
+                "active"
+            );
+
+
+            document
+                .getElementById(target)
+                .classList.add(
+                    "active"
+                );
+
+        }
+    );
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| PASSWORD VISIBILITY
+|--------------------------------------------------------------------------
+*/
+
+var toggleButtons =
+    document.querySelectorAll(
+        ".toggle-password"
+    );
+
+
+for (
+    var i = 0;
+    i < toggleButtons.length;
+    i++
+) {
+
+    toggleButtons[i].addEventListener(
+        "click",
+        function () {
+
+            var input =
+                this.parentNode.querySelector(
+                    "input"
+                );
+
+
+            var icon =
+                this.querySelector(
+                    "i"
+                );
+
+
+            if (
+                input.type ==
+                "password"
+            ) {
+
+                input.type =
+                    "text";
+
+
+                icon.classList.remove(
+                    "fa-eye"
+                );
+
+
+                icon.classList.add(
+                    "fa-eye-slash"
+                );
+
+            } else {
+
+                input.type =
+                    "password";
+
+
+                icon.classList.remove(
+                    "fa-eye-slash"
+                );
+
+
+                icon.classList.add(
+                    "fa-eye"
+                );
+
+            }
+
+        }
+    );
+
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| PASSWORD STRENGTH AND MATCHING
+|--------------------------------------------------------------------------
+*/
+
+var newPassword = document.getElementById("newPassword");
+var confirmPassword = document.getElementById("confirmPassword");
+var passwordMessage = document.getElementById("passwordMessage");
+
+var passwordRequirements = {
+    length: document.getElementById("reqLength"),
+    uppercase: document.getElementById("reqUppercase"),
+    lowercase: document.getElementById("reqLowercase"),
+    number: document.getElementById("reqNumber"),
+    special: document.getElementById("reqSpecial")
+};
+
+function updatePasswordRequirement(element, isValid) {
+    if (!element) {
+        return;
+    }
+
+    var icon = element.querySelector("i");
+
+    if (isValid) {
+        element.classList.add("valid");
+        element.classList.remove("invalid");
+
+        if (icon) {
+            icon.classList.remove("fa-circle-xmark");
+            icon.classList.add("fa-circle-check");
+        }
+    } else {
+        element.classList.remove("valid");
+        element.classList.add("invalid");
+
+        if (icon) {
+            icon.classList.remove("fa-circle-check");
+            icon.classList.add("fa-circle-xmark");
+        }
+    }
+}
+
+function checkPasswords() {
+    if (!newPassword || !confirmPassword) {
+        return;
+    }
+
+    if (!passwordMessage) {
+        return;
+    }
+
+    if (confirmPassword.disabled) {
+        passwordMessage.innerHTML =
+            "Complete all password requirements first.";
+        passwordMessage.style.color = "#777";
+        confirmPassword.setCustomValidity("");
+        return;
+    }
+
+    if (confirmPassword.value === "") {
+        passwordMessage.innerHTML = "";
+        confirmPassword.setCustomValidity("");
+        return;
+    }
+
+    if (newPassword.value === confirmPassword.value) {
+        passwordMessage.innerHTML = "Passwords match.";
+        passwordMessage.style.color = "#2f7a4b";
+        confirmPassword.setCustomValidity("");
+    } else {
+        passwordMessage.innerHTML = "Passwords do not match.";
+        passwordMessage.style.color = "#c94f4f";
+        confirmPassword.setCustomValidity("Passwords must match.");
+    }
+}
+
+function checkPasswordStrength() {
+    if (!newPassword || !confirmPassword) {
+        return;
+    }
+
+    var password = newPassword.value;
+
+    var hasLength = password.length >= 8;
+    var hasUppercase = /[A-Z]/.test(password);
+    var hasLowercase = /[a-z]/.test(password);
+    var hasNumber = /[0-9]/.test(password);
+    var hasSpecial = /[^A-Za-z0-9\s]/.test(password);
+
+    updatePasswordRequirement(
+        passwordRequirements.length, hasLength
+    );
+
+    updatePasswordRequirement(
+        passwordRequirements.uppercase, hasUppercase
+    );
+
+    updatePasswordRequirement(
+        passwordRequirements.lowercase, hasLowercase
+    );
+
+    updatePasswordRequirement(
+        passwordRequirements.number, hasNumber
+    );
+
+    updatePasswordRequirement(
+        passwordRequirements.special, hasSpecial
+    );
+
+    var isStrong =
+        hasLength &&
+        hasUppercase &&
+        hasLowercase &&
+        hasNumber &&
+        hasSpecial;
+
+    if (isStrong) {
+        confirmPassword.disabled = false;
+    } else {
+        confirmPassword.disabled = true;
+        confirmPassword.value = "";
+        confirmPassword.setCustomValidity("");
+
+        if (passwordMessage) {
+            passwordMessage.innerHTML =
+                "Complete all password requirements first.";
+            passwordMessage.style.color = "#777";
+        }
+    }
+
+    checkPasswords();
+}
+
+if (newPassword && confirmPassword) {
+    confirmPassword.disabled = true;
+
+    newPassword.addEventListener(
+        "input",
+        checkPasswordStrength
+    );
+
+    confirmPassword.addEventListener(
+        "input",
+        checkPasswords
+    );
+
+    checkPasswordStrength();
+}
+
+
+/*
+|--------------------------------------------------------------------------
+| PROFILE IMAGE PREVIEW
+|--------------------------------------------------------------------------
+*/
+
+var profilePhotoInput =
+    document.getElementById(
+        "profilePhotoInput"
+    );
+
+
+var avatarPreview =
+    document.getElementById(
+        "avatarPreview"
+    );
+
+
+if (profilePhotoInput) {
+
+    profilePhotoInput.addEventListener(
+        "change",
+        function () {
+
+            var file =
+                this.files[0];
+
+
+            if (file) {
+
+                var reader =
+                    new FileReader();
+
+
+                reader.onload =
+                    function (event) {
+
+                        avatarPreview.src =
+                            event.target.result;
+
+                    };
+
+
+                reader.readAsDataURL(
+                    file
+                );
+
+            }
+
+        }
+    );
+
+}
+
+/* =========================================================
+   CUSTOMER NOTIFICATION DROPDOWN
+========================================================= */
+
+var customerNotificationDropdown = null;
+var isCustomerDropdownOpen = false;
+
+function toggleCustomerNotificationDropdown()
+{
+    if (!customerNotificationDropdown) {
+        customerNotificationDropdown = document.getElementById('customerNotificationDropdown');
+    }
+
+    if (customerNotificationDropdown) {
+        isCustomerDropdownOpen = !isCustomerDropdownOpen;
+
+        if (isCustomerDropdownOpen) {
+            customerNotificationDropdown.classList.remove('hidden');
+        } else {
+            customerNotificationDropdown.classList.add('hidden');
+        }
+    }
+}
+
+function closeCustomerNotificationDropdown()
+{
+    if (customerNotificationDropdown && isCustomerDropdownOpen) {
+        customerNotificationDropdown.classList.add('hidden');
+        isCustomerDropdownOpen = false;
+    }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(event) {
+    if (customerNotificationDropdown && isCustomerDropdownOpen) {
+        var notificationButton = document.querySelector('.customer-top-notification');
+        var notificationContainer = customerNotificationDropdown.parentElement;
+        if (!notificationContainer.contains(event.target)) {
+            closeCustomerNotificationDropdown();
+        }
+    }
+});
+
+// Mark All as Read function for dropdown header
+function markAllCustomerAsRead(event)
+{
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    var formData = new FormData();
+    formData.append('mark_all_read', '1');
+    formData.append('ajax', '1');
+
+    fetch('customer_notifications.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.success) {
+            // Reload page to update all notification states
+            window.location.reload();
+        }
+    })
+    .catch(function(error) {
+        console.error('Failed to mark all notifications as read:', error);
+    });
+}
+
+/* =========================================================
+   CUSTOMER ACCOUNT DROPDOWN
+========================================================= */
+
+function toggleCustomerAccountDropdown(event) {
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    var dropdown = document.getElementById(
+        'customerAccountDropdown'
+    );
+
+    var toggle = document.getElementById(
+        'customerAccountToggle'
+    );
+
+    if (!dropdown || !toggle) {
+        return;
+    }
+
+    var isOpen = !dropdown.classList.contains('hidden');
+
+    if (isOpen) {
+        dropdown.classList.add('hidden');
+        toggle.setAttribute('aria-expanded', 'false');
+    } else {
+        dropdown.classList.remove('hidden');
+        toggle.setAttribute('aria-expanded', 'true');
+    }
+}
+
+
+/* =========================================================
+   CUSTOMER LOGOUT CONFIRMATION
+========================================================= */
+
+function openCustomerLogoutModal() {
+    var dropdown = document.getElementById(
+        'customerAccountDropdown'
+    );
+
+    var toggle = document.getElementById(
+        'customerAccountToggle'
+    );
+
+    var modal = document.getElementById(
+        'customerLogoutModal'
+    );
+
+    if (dropdown) {
+        dropdown.classList.add('hidden');
+    }
+
+    if (toggle) {
+        toggle.setAttribute('aria-expanded', 'false');
+    }
+
+    if (modal) {
+        modal.classList.remove('hidden');
+    }
+}
+
+
+function closeCustomerLogoutModal() {
+    var modal = document.getElementById(
+        'customerLogoutModal'
+    );
+
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+
+/* =========================================================
+   CLOSE ACCOUNT DROPDOWN WHEN CLICKING OUTSIDE
+========================================================= */
+
+document.addEventListener('click', function(event) {
+    var wrapper = document.querySelector(
+        '.customer-account-wrapper'
+    );
+
+    var dropdown = document.getElementById(
+        'customerAccountDropdown'
+    );
+
+    var toggle = document.getElementById(
+        'customerAccountToggle'
+    );
+
+    if (
+        wrapper &&
+        dropdown &&
+        !wrapper.contains(event.target)
+    ) {
+        dropdown.classList.add('hidden');
+
+        if (toggle) {
+            toggle.setAttribute('aria-expanded', 'false');
+        }
+    }
+});
+
+
+/* =========================================================
+   CLOSE LOGOUT MODAL WHEN CLICKING OUTSIDE
+========================================================= */
+
+document.addEventListener('click', function(event) {
+    var modal = document.getElementById(
+        'customerLogoutModal'
+    );
+
+    if (
+        modal &&
+        !modal.classList.contains('hidden') &&
+        event.target === modal
+    ) {
+        closeCustomerLogoutModal();
+    }
+});
+
+
+/* =========================================================
+   CLOSE MENUS WITH ESCAPE KEY
+========================================================= */
+
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        var dropdown = document.getElementById(
+            'customerAccountDropdown'
+        );
+
+        var toggle = document.getElementById(
+            'customerAccountToggle'
+        );
+
+        if (dropdown) {
+            dropdown.classList.add('hidden');
+        }
+
+        if (toggle) {
+            toggle.setAttribute('aria-expanded', 'false');
+        }
+
+        closeCustomerLogoutModal();
+    }
+});
 
 
 </script>
 
-<?php require 'customer_modal.php'; ?>
+<script src="shared_notifications.js?v=20261022"></script>
+<script src="customer_scripts.js?v=20261022_2"></script>
 
-<?php require 'customer_footer.php'; ?>
+<script>
+// Load notifications using shared system
+document.addEventListener('DOMContentLoaded', function() {
+    var dropdown = document.getElementById('customerNotificationDropdown');
+    var list = document.getElementById('customerNotificationList');
+    
+    if (dropdown && list) {
+        fetch('customer_notifications.php?action=json')
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                var notifications = data.notifications || [];
+                if (notifications.length === 0) {
+                    list.innerHTML = '<div class="customer-notification-empty"><i class="fa-regular fa-bell-slash"></i><p>No notifications</p></div>';
+                } else {
+                    var html = '';
+                    notifications.forEach(function(n) {
+                        var iconClass = n.type || 'info';
+                        var iconName = 'fa-bell';
+                        var isUnread = !n.is_read;
+                        var time = n.created_at;
+                        
+                        // Map notification types to icons
+                        if (n.type === 'success') {
+                            iconClass = 'success';
+                            iconName = 'fa-check';
+                        } else if (n.type === 'alert') {
+                            iconClass = 'alert';
+                            iconName = 'fa-exclamation';
+                        } else if (n.type === 'warning') {
+                            iconClass = 'warning';
+                            iconName = 'fa-circle-exclamation';
+                        }
+                        
+                        html += '<div class="customer-notification-item' + (isUnread ? ' unread' : '') + '" data-id="' + n.id + '">';
+                        html += '<div class="customer-notification-icon ' + iconClass + '"><i class="fa-solid ' + iconName + '"></i></div>';
+                        html += '<div class="customer-notification-content">';
+                        html += '<div class="customer-notification-title">' + n.title + '</div>';
+                        html += '<div class="customer-notification-description">' + n.description + '</div>';
+                        html += '<div class="customer-notification-time">' + time + '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                    });
+                    list.innerHTML = html;
+                    
+                    // Add click handlers for marking as read
+                    var items = list.querySelectorAll('.customer-notification-item.unread');
+                    items.forEach(function(item) {
+                        item.addEventListener('click', function() {
+                            var notifId = item.getAttribute('data-id');
+                            markSingleNotificationAsRead(notifId, item);
+                        });
+                    });
+                }
+            })
+            .catch(function(error) {
+                list.innerHTML = '<div class="customer-notification-empty"><i class="fa-solid fa-exclamation-circle"></i><p>Failed to load notifications</p></div>';
+            });
+    }
+});
 
+// Mark single notification as read
+function markSingleNotificationAsRead(notificationId, itemElement) {
+    var formData = new FormData();
+    formData.append('mark_read', '1');
+    formData.append('notification_id', notificationId);
+
+    fetch('customer_notifications.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.success) {
+            itemElement.classList.remove('unread');
+            itemElement.classList.add('read');
+            
+            // Update badge count
+            var badge = document.querySelector('.customer-notification-badge');
+            if (badge) {
+                var currentCount = parseInt(badge.textContent);
+                if (!isNaN(currentCount) && currentCount > 1) {
+                    badge.textContent = currentCount - 1;
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        }
+    })
+    .catch(function(error) {
+        console.error('Failed to mark notification as read:', error);
+    });
+}
+</script>
+
+<?php require 'shared_notifications_modal.php'; ?>
+
+<!-- CUSTOMER LOGOUT CONFIRMATION MODAL -->
+<div
+    class="customer-logout-overlay hidden"
+    id="customerLogoutModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="customerLogoutTitle"
+    aria-describedby="customerLogoutMessage"
+>
+    <div class="customer-logout-modal">
+
+        <div class="customer-logout-icon">
+            <i class="fa-solid fa-right-from-bracket"></i>
+        </div>
+
+        <h2 id="customerLogoutTitle">Confirm Logout</h2>
+
+        <p id="customerLogoutMessage">
+            Are you sure you want to logout?
+        </p>
+
+        <div class="customer-logout-actions">
+
+            <button
+                type="button"
+                class="customer-logout-cancel"
+                onclick="closeCustomerLogoutModal()"
+            >
+                Cancel
+            </button>
+
+            <form method="POST" action="customer_profile.php">
+
+                <input
+                    type="hidden"
+                    name="customer_logout"
+                    value="1"
+                >
+
+                <input
+                    type="hidden"
+                    name="logout_token"
+                    value="<?php echo htmlspecialchars($_SESSION['customer_logout_token'], ENT_QUOTES, 'UTF-8'); ?>"
+                >
+
+                <button
+                    type="submit"
+                    class="customer-logout-confirm"
+                >
+                    Yes, Logout
+                </button>
+
+            </form>
+
+        </div>
+
+    </div>
+</div>
 </body>
 </html>

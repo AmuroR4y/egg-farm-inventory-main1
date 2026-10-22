@@ -1,0 +1,46 @@
+{
+  "customer_dashboard.php": {
+    "rightRect": null,
+    "acctWrapperRect": null,
+    "acctLinkRect": null,
+    "detailsRect": null,
+    "nameRect": null,
+    "dtRect": null,
+    "dateRect": null,
+    "timeRect": null,
+    "toggleRect": null
+  },
+  "customer_reservation.php": {
+    "rightRect": null,
+    "acctWrapperRect": null,
+    "acctLinkRect": null,
+    "detailsRect": null,
+    "nameRect": null,
+    "dtRect": null,
+    "dateRect": null,
+    "timeRect": null,
+    "toggleRect": null
+  },
+  "customer_history.php": {
+    "rightRect": null,
+    "acctWrapperRect": null,
+    "acctLinkRect": null,
+    "detailsRect": null,
+    "nameRect": null,
+    "dtRect": null,
+    "dateRect": null,
+    "timeRect": null,
+    "toggleRect": null
+  },
+  "customer_profile.php": {
+    "rightRect": null,
+    "acctWrapperRect": null,
+    "acctLinkRect": null,
+    "detailsRect": null,
+    "nameRect": null,
+    "dtRect": null,
+    "dateRect": null,
+    "timeRect": null,
+    "toggleRect": null
+  }
+}

@@ -30,6 +30,46 @@ if ($user_role !== 'customer') {
     exit;
 }
 /* =========================================================
+   LOGOUT HANDLER
+========================================================= */
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['customer_logout'])) {
+    $submitted_token = isset($_POST['logout_token']) ? $_POST['logout_token'] : '';
+    $session_token = isset($_SESSION['customer_logout_token']) ? $_SESSION['customer_logout_token'] : '';
+
+    if (
+        $submitted_token !== '' &&
+        $session_token !== '' &&
+        is_string($submitted_token) &&
+        is_string($session_token) &&
+        strlen($submitted_token) === strlen($session_token) &&
+        hash_equals($session_token, $submitted_token)
+    ) {
+        $_SESSION = array();
+
+        if (ini_get('session.use_cookies')) {
+            $cookie_params = session_get_cookie_params();
+            setcookie(
+                session_name(),
+                '',
+                time() - 42000,
+                $cookie_params['path'],
+                $cookie_params['domain'],
+                $cookie_params['secure'],
+                $cookie_params['httponly']
+            );
+        }
+
+        session_destroy();
+        header("Location: login.php");
+        exit();
+    }
+
+    header("Location: customer_history.php");
+    exit();
+}
+
+/* =========================================================
    CUSTOMER LOGOUT TOKEN
    PHP 5.5 COMPATIBLE
 ========================================================= */
@@ -50,17 +90,42 @@ if (empty($_SESSION['customer_logout_token'])) {
 // GET CURRENT USER INFORMATION
 // =========================================================
 
-$customer_name = isset($_SESSION['fullname'])
-    ? $_SESSION['fullname']
-    : (isset($_SESSION['customer_name']) ? $_SESSION['customer_name'] : (isset($_SESSION['name']) ? $_SESSION['name'] : 'Customer'));
+$current_user_name = 'Customer';
+
+$user_stmt = $conn->prepare("
+    SELECT fullname, username
+    FROM users
+    WHERE id = ?
+    LIMIT 1
+");
+
+if ($user_stmt) {
+    $user_stmt->bind_param("i", $user_id);
+    $user_stmt->execute();
+
+    $user_result = $user_stmt->get_result();
+
+    if ($user_result && $user_result->num_rows > 0) {
+        $user_data = $user_result->fetch_assoc();
+
+        if (!empty($user_data['fullname'])) {
+            $current_user_name = $user_data['fullname'];
+        } elseif (!empty($user_data['username'])) {
+            $current_user_name = $user_data['username'];
+        }
+    }
+
+    $user_stmt->close();
+}
+$customer_name = $current_user_name;
 $active_page = 'history';
 
 $unread_notifications = 0;
-$notification_count_result = $conn->query("SELECT COUNT(*) AS total FROM notifications WHERE user_id = " . (int)$user_id . " AND is_read = 0");
-if ($notification_count_result && ($notification_count_row = $notification_count_result->fetch_assoc())) {
-    $unread_notifications = (int)$notification_count_row['total'];
+$notif_res = $conn->query("SELECT COUNT(*) AS total FROM notifications WHERE user_id = " . (int)$user_id . " AND is_read = 0");
+if ($notif_res && ($row = $notif_res->fetch_assoc())) {
+    $unread_notifications = (int)$row['total'];
 }
-
+$unread_count = $unread_notifications;
 
 // =========================================================
 // FILTERS
@@ -540,7 +605,7 @@ function getPaginationUrl($page_num)
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
     >
 
-    <link rel="stylesheet" href="customer_styles.css">
+    <link rel="stylesheet" href="shared_notifications.css?v=20261022">
 
     <style>
 
@@ -548,13 +613,410 @@ function getPaginationUrl($page_num)
    VDVC CUSTOMER HISTORY — REFERENCE REDESIGN
 ========================================================= */
 
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+}
+
+body {
+    background: #f3f1eb;
+    color: #344c3d;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    
+}
+
+a {
+    -webkit-tap-highlight-color: transparent;
+}
+
 
 /* =========================================================
-   CUSTOMER NAVIGATION — USE SHARED STYLES FROM customer_styles.css
+   CUSTOMER NAVIGATION — MATCH CUSTOMER DASHBOARD
 ========================================================= */
 
-/* Remove duplicate navbar styles - using shared stylesheet */
+.customer-navbar {
+    width: 100%;
+    height: 84px;
+    padding: 0 48px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    background: #0d4828;
+    border-top: 1px solid #e7e8e2;
+    border-bottom: 1px solid #dedfd8;
+     /* Keep navbar visible while scrolling */
+    position: sticky;
+    top: 0;
+    left: 0;
 
+    z-index: 1000;
+}
+
+.customer-navbar-logo {
+    width: 190px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+
+.customer-navbar-logo a {
+    display: flex;
+    align-items: center;
+}
+
+.customer-navbar-logo img {
+    display: block;
+    width: 145px;
+    height: auto;
+    object-fit: contain;
+}
+
+.customer-navbar-center {
+    height: 84px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 38px;
+    margin-left: 80px;
+}
+
+.customer-nav-link {
+    height: 100%;
+    padding: 0 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    text-decoration: none;
+    white-space: nowrap;
+    color: #e8f1e9;
+    font-size: 14px;
+    font-weight: 500;
+    transition: color .2s ease;
+}
+
+.customer-nav-link:hover,
+.customer-nav-link.active {
+    color: #b9e4c3;
+}
+
+.customer-nav-link.active {
+    font-weight: 700;
+    color:#ffffff;
+}
+
+.customer-nav-link.active::after {
+    content: "";
+    height: 2px;
+    position: absolute;
+    bottom: 20px;
+    left: 0;
+    right: 0;
+    background: #14552d;
+    border-radius: 2px;
+}
+
+.customer-navbar-right {
+    min-width: 240px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 16px;
+}
+
+.customer-notification-wrapper {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.customer-top-notification {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: #eaf2e8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
+    position: relative;
+}
+
+.customer-top-notification:hover {
+ 
+    color: #bfe3c7;
+}
+
+.customer-notification-badge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 20px;
+    background-color: #eaf2e8;
+    color: #0d4828;
+    border: 2px solid #0d4828;
+    font-size: 9px;
+    font-weight: 700;
+}
+
+.customer-notification-dropdown {
+    position: absolute;
+    top: 46px;
+    right: -8px;
+    width: 350px;
+    max-width: calc(100vw - 24px);
+    max-height: 440px;
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid #e0e5df;
+    border-radius: 12px;
+    box-shadow: 0 12px 30px rgba(30, 50, 35, .15);
+    z-index: 1000;
+}
+
+.customer-notification-dropdown.hidden {
+    display: none;
+}
+
+.customer-notification-dropdown-header {
+    min-height: 50px;
+    padding: 12px 15px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    background: #f8faf7;
+    border-bottom: 1px solid #e9ede7;
+}
+
+.customer-panel-title-group {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.customer-panel-title-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #eaf3e9;
+    color: #286440;
+    font-size: 13px;
+}
+
+.customer-dashboard-panel-title {
+    color: #304b39;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.customer-mark-all-link {
+    color: #36704b;
+    font-size: 11px;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.customer-mark-all-link:hover {
+    text-decoration: underline;
+}
+
+.customer-notification-list {
+    max-height: 385px;
+    overflow-y: auto;
+}
+
+.customer-notification-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+    padding: 13px 15px;
+    border-bottom: 1px solid #eff1ed;
+    cursor: pointer;
+}
+
+.customer-notification-item:hover {
+    background: #f8fbf7;
+}
+
+.customer-notification-item.unread {
+    background: #eff6ef;
+}
+
+.customer-notification-icon {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 13px;
+}
+
+.customer-notification-icon.success {
+    background: #e2f3e4;
+    color: #28713c;
+}
+
+.customer-notification-icon.alert {
+    background: #fae8e6;
+    color: #b84e45;
+}
+
+.customer-notification-icon.info {
+    background: #e5eff7;
+    color: #3b6d8a;
+}
+
+.customer-notification-icon.warning {
+    background: #fff2d9;
+    color: #a7741e;
+}
+
+.customer-notification-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.customer-notification-title {
+    margin-bottom: 4px;
+    color: #334b3a;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.customer-notification-description {
+    color: #6d7b71;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.customer-notification-time {
+    margin-top: 5px;
+    color: #929c94;
+    font-size: 10px;
+}
+
+.customer-notification-empty {
+    padding: 30px 16px;
+    text-align: center;
+    color: #89958c;
+}
+
+.customer-notification-empty i {
+    display: block;
+    margin-bottom: 8px;
+    font-size: 25px;
+}
+
+.customer-notification-empty p {
+    margin: 0;
+    font-size: 12px;
+}
+
+/* CUSTOMER ACCOUNT */
+
+.customer-account-link {
+    display: flex;
+    align-items: center;
+
+    gap: 9px;
+
+    text-decoration: none;
+
+    color: #263d32;
+}
+
+.customer-avatar {
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e1e9df;
+    border-radius: 50%;
+    background-color: #dcebdd;
+color: #0d4828;
+    font-size: 16px;
+}
+
+.customer-account-details {
+    display: flex;
+    flex-direction: column;
+
+    justify-content: center;
+
+    min-width: 100px;
+}
+
+.customer-top-name {
+    display: block;
+
+    font-size: 13px;
+    font-weight: 700;
+
+    line-height: 1.2;
+
+    color: #ffffff;
+}
+
+.customer-date-time {
+   display: flex;
+    flex-direction: column;
+
+    gap: 1px;
+
+    margin-top: 3px;
+}
+
+.customer-date {
+   font-size: 9px;
+    color: #d5e5d8;
+}
+
+.customer-time {
+    font-size: 9px;
+
+    color: #d5e5d8;
+
+    font-weight: 600;
+}
+
+.customer-dropdown-icon {
+    color: #718079;
+    font-size: 9px;
+
+    margin-left: 3px;
+}
+
+/* Keep this rule if the existing notification JavaScript uses it. */
+.customer-mark-read-btn {
+    cursor: pointer;
+}
 
 
 /* =========================================================
@@ -1154,6 +1616,119 @@ the URL above with the correct image path in your project.
     background: #fff;
     color: #647369;
     text-decoration: none;
+    font-size: 9px;
+    font-weight: 600;
+}
+
+.pagination a:hover {
+    background: #eff4ee;
+}
+
+.pagination a.active {
+    border-color: #195633;
+    background: #195633;
+    color: #fff;
+}
+
+.pagination a.disabled {
+    background: #f7f8f6;
+    color: #bdc5be;
+    pointer-events: none;
+}
+
+/* =========================================================
+   FOOTER
+========================================================= */
+
+.customer-footer {
+    width: 100%;
+
+    min-height: 68px;
+
+    background: #0d4828;
+
+    color: #ffffff;
+
+    display: flex;
+    align-items: center;
+
+    padding: 0 48px;
+}
+
+.customer-footer-inner {
+    width: 100%;
+
+    max-width: 1740px;
+
+    margin: 0 auto;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.customer-footer-left {
+    display: flex;
+    align-items: center;
+
+    gap: 17px;
+}
+
+.customer-footer-logo {
+    width: 110px;
+
+    padding-right: 15px;
+
+    border-right: 1px solid rgba(255,255,255,0.22);
+}
+
+.customer-footer-logo img {
+    width: 100px;
+    height: auto;
+
+    display: block;
+}
+
+.customer-footer-tagline {
+    font-size: 11px;
+
+    color: rgba(255,255,255,0.9);
+}
+
+.customer-footer-right {
+    display: flex;
+    align-items: center;
+
+    gap: 18px;
+}
+
+.customer-footer-social {
+    display: flex;
+    align-items: center;
+
+    gap: 17px;
+}
+
+.customer-footer-social a {
+    color: #ffffff;
+
+    font-size: 13px;
+
+    text-decoration: none;
+
+    opacity: 0.95;
+
+    transition: opacity 0.2s ease;
+}
+
+.customer-footer-social a:hover {
+    opacity: 0.7;
+}
+
+.customer-footer-copy {
+    font-size: 11px;
+
+    color: rgba(255,255,255,0.82);
 }
 
 /* =========================================================
@@ -1184,6 +1759,98 @@ the URL above with the correct image path in your project.
 @media (max-width: 1100px) {
       .history-shell {
         width: calc(100% - 28px);
+    }
+    .customer-navbar {
+        padding: 0 20px;
+        gap: 12px;
+    }
+
+    .customer-navbar-logo {
+        width: 115px;
+    }
+
+    .customer-navbar-logo img {
+        width: 100px;
+    }
+
+    .customer-navbar-center {
+        gap: 20px;
+    }
+
+    .customer-navbar-right {
+        min-width: 160px;
+    }
+
+    .history-toolbar {
+        grid-template-columns: minmax(160px, 2fr) repeat(2, minmax(100px, 1fr));
+    }
+
+    .clear-filter-button {
+        width: 100%;
+    }
+
+    .history-body {
+        padding-right: 3%;
+        padding-left: 3%;
+    }
+}
+
+@media (max-width: 760px) {
+     .history-shell {
+        width: calc(100% - 20px);
+    }
+
+    .history-outer-card {
+        border-radius: 18px;
+    }
+    .customer-navbar {
+        min-height: 62px;
+        padding: 9px 15px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .customer-navbar-logo {
+        width: auto;
+    }
+
+    .customer-navbar-logo img {
+        width: 90px;
+    }
+
+    .customer-navbar-right {
+        min-width: 0;
+        margin-left: auto;
+    }
+
+    .customer-account-details,
+    .customer-dropdown-icon {
+        display: none;
+    }
+
+    .customer-navbar-center {
+        order: 3;
+        width: 100%;
+        height: 36px;
+        margin: 0;
+        justify-content: center;
+        gap: clamp(14px, 5vw, 30px);
+        overflow-x: auto;
+    }
+
+    .customer-nav-link {
+        font-size: 10px;
+    }
+
+    .customer-nav-link.active::after {
+        bottom: 1px;
+    }
+
+    .customer-notification-dropdown {
+        position: fixed;
+        top: 65px;
+        right: 12px;
+        width: 330px;
     }
 
     .customer-dashboard-topbar {
@@ -1227,9 +1894,32 @@ the URL above with the correct image path in your project.
         flex-wrap: wrap;
     }
 
+    .customer-footer {
+        padding: 12px 15px;
+    }
+
+    .customer-footer-inner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .customer-footer-right {
+        width: 100%;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        gap: 10px;
+    }
 }
 
 @media (max-width: 420px) {
+    .customer-navbar-center {
+        gap: 13px;
+    }
+
+    .customer-nav-link {
+        font-size: 9px;
+    }
 
     .customer-dashboard-topbar {
         min-height: 100px;
@@ -1247,6 +1937,21 @@ the URL above with the correct image path in your project.
         grid-column: 1 / -1;
     }
 
+    .customer-footer-left {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 7px;
+    }
+
+    .customer-footer-logo {
+        border-right: 0;
+    }
+
+    .customer-footer-tagline,
+    .customer-footer-copy {
+        white-space: normal;
+        line-height: 1.5;
+    }
 }
 
 /* =========================================================
@@ -1310,13 +2015,220 @@ the URL above with the correct image path in your project.
     }
 }
 
+
+/* =========================================================
+   CUSTOMER ACCOUNT DROPDOWN — MATCH DASHBOARD
+========================================================= */
+
+.customer-account-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.customer-account-link {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    text-decoration: none;
+    color: #263d32;
+}
+
+.customer-account-toggle {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: #eaf2e8;
+    font-size: 11px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.customer-account-toggle:hover {
+    background: rgba(255,255,255,0.12);
+    color: #ffffff;
+}
+
+.customer-account-dropdown {
+    position: absolute;
+    top: calc(100% + 12px);
+    right: 0;
+    width: 180px;
+    padding: 7px;
+    background: #ffffff;
+    border: 1px solid #e0e5df;
+    border-radius: 12px;
+    box-shadow: 0 12px 30px rgba(30, 50, 35, 0.16);
+    z-index: 1200;
+}
+
+.customer-account-dropdown.hidden {
+    display: none;
+}
+
+.customer-logout-option {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 12px;
+    border: 0;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #a33b35;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.customer-logout-option:hover {
+    background: #fff0ee;
+}
+
+.customer-logout-option i {
+    width: 16px;
+    font-size: 13px;
+}
+
+/* =========================================================
+   CUSTOMER LOGOUT CONFIRMATION MODAL — MATCH DASHBOARD
+========================================================= */
+
+.customer-logout-overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(15, 31, 21, 0.55);
+    z-index: 2000;
+}
+
+.customer-logout-overlay.hidden {
+    display: none;
+}
+
+.customer-logout-modal {
+    width: 100%;
+    max-width: 390px;
+    padding: 30px 28px 24px;
+    background: #ffffff;
+    border: 1px solid #e5e9e3;
+    border-radius: 18px;
+    box-shadow: 0 24px 70px rgba(0,0,0,0.22);
+    text-align: center;
+    animation: logoutModalAppear 0.22s ease;
+}
+
+.customer-logout-icon {
+    width: 58px;
+    height: 58px;
+    margin: 0 auto 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #fff0ee;
+    color: #b6423b;
+    font-size: 23px;
+}
+
+.customer-logout-modal h2 {
+    margin: 0 0 9px;
+    color: #2f4937;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.customer-logout-modal p {
+    margin: 0;
+    color: #7b877d;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.customer-logout-actions {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 25px;
+}
+
+.customer-logout-actions form {
+    margin: 0;
+}
+
+.customer-logout-cancel,
+.customer-logout-confirm {
+    min-width: 115px;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: 9px;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+
+.customer-logout-cancel {
+    border: 1px solid #dce3dc;
+    background: #ffffff;
+    color: #58665b;
+}
+
+.customer-logout-cancel:hover {
+    background: #f4f6f3;
+}
+
+.customer-logout-confirm {
+    border: 1px solid #a83b35;
+    background: #b6423b;
+    color: #ffffff;
+}
+
+.customer-logout-confirm:hover {
+    background: #9e342f;
+    transform: translateY(-1px);
+}
+
+@keyframes logoutModalAppear {
+    from {
+        opacity: 0;
+        transform: translateY(8px) scale(.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
     </style>
 
+    <link rel="stylesheet" href="customer_navbar.css?v=20261022_viewall">
 </head>
 
 <body>
 
+
+<!-- =========================================================
+     CUSTOMER NAVBAR (STANDARDIZED)
+========================================================= -->
 <?php require 'customer_header.php'; ?>
+
+
 <div class="main-content">
 
     <div class="history-shell">
@@ -2273,6 +3185,7 @@ if ($scheduled_timestamp !== false) {
 
 
 
+
 <!-- =========================================================
      CANCEL MODAL
 ========================================================= -->
@@ -2340,15 +3253,1195 @@ if ($scheduled_timestamp !== false) {
 
 </div>
 
+<!-- =========================================================
+     FOOTER
+========================================================= -->
+
+<footer class="customer-footer">
+
+
+    <div class="customer-footer-inner">
+
+
+        <!-- LEFT -->
+
+        <div class="customer-footer-left">
+
+
+            <div class="customer-footer-logo">
+
+                <img
+                    src="vdvclogoo.png"
+                    alt="VDVC Egg Farm"
+                >
+
+            </div>
+
+
+            <div class="customer-footer-tagline">
+
+                Fresh Eggs. Trusted Farm. Better for You.
+
+            </div>
+
+
+        </div>
 
 
 
+        <!-- RIGHT -->
+
+        <div class="customer-footer-right">
+
+
+            <div class="customer-footer-social">
+
+                <a
+                    href="#"
+                    aria-label="Facebook"
+                >
+                    <i class="fa-brands fa-facebook-f"></i>
+                </a>
+
+
+                <a
+                    href="#"
+                    aria-label="Instagram"
+                >
+                    <i class="fa-brands fa-instagram"></i>
+                </a>
+
+
+                <a
+                    href="#"
+                    aria-label="YouTube"
+                >
+                    <i class="fa-brands fa-youtube"></i>
+                </a>
+
+            </div>
+
+
+            <div class="customer-footer-copy">
+
+                © 2026 VDVC Egg Farm.
+                All rights reserved.
+
+            </div>
+
+
+        </div>
+
+
+    </div>
+
+</footer>
+
+
+<script>
+
+function updateCustomerDateTime() {
+
+    var now = new Date();
+
+    var options = {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+    };
+
+    var dateText = now.toLocaleDateString(
+        'en-US',
+        options
+    );
+
+    var timeText = now.toLocaleTimeString(
+        'en-US',
+        {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+        }
+    );
+
+    var dateElement = document.getElementById(
+        'customer-live-date'
+    );
+
+    var timeElement = document.getElementById(
+        'customer-live-time'
+    );
+
+    if (dateElement) {
+        dateElement.textContent = dateText;
+    }
+
+    if (timeElement) {
+        timeElement.textContent = timeText;
+    }
+}
+
+updateCustomerDateTime();
+
+setInterval(
+    updateCustomerDateTime,
+    1000
+);
+
+
+/* =========================================================
+   CLEAR FILTERS
+   LIST ICON DOES NOT OPEN ANY OLD FILTER PANEL
+========================================================= */
+
+function clearHistoryFilters() {
+
+    window.location.href = 'customer_history.php';
+}
+
+
+/* =========================================================
+   NOTIFICATIONS
+========================================================= */
+
+function toggleNotifications(event) {
+
+    if (event) {
+        event.stopPropagation();
+    }
+
+    var dropdown =
+        document.getElementById(
+            'notification_dropdown'
+        );
+
+    if (!dropdown) {
+        return;
+    }
+
+    dropdown.classList.toggle('hidden');
+
+    if (!dropdown.classList.contains('hidden')) {
+
+        var badge =
+            document.getElementById(
+                'bell_badge'
+            );
+
+        if (badge) {
+            badge.style.display = 'none';
+        }
+
+        var unreadCount =
+            document.getElementById(
+                'unread_count'
+            );
+
+        if (unreadCount) {
+
+            unreadCount.innerText =
+                '0 New';
+
+            unreadCount.className =
+                'notification-new-count bg-gray-100 text-gray-400';
+        }
+    }
+}
+
+
+/* =========================================================
+   CLOSE NOTIFICATIONS WHEN CLICKING OUTSIDE
+========================================================= */
+
+document.addEventListener(
+    'click',
+    function(event) {
+
+        var area =
+            document.querySelector(
+                '.notification-area'
+            );
+
+        var dropdown =
+            document.getElementById(
+                'notification_dropdown'
+            );
+
+        if (
+            area &&
+            dropdown &&
+            !area.contains(event.target)
+        ) {
+
+            dropdown.classList.add('hidden');
+        }
+
+    }
+);
+
+
+/* =========================================================
+   CANCEL MODAL
+========================================================= */
+
+function openCancelModal(idString) {
+
+    document.getElementById(
+        'cancelId'
+    ).value = idString;
+
+    var modal =
+        document.getElementById(
+            'cancelModal'
+        );
+
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+}
+
+
+function closeCancelModal() {
+
+    var modal =
+        document.getElementById(
+            'cancelModal'
+        );
+
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+
+/* =========================================================
+   CLOSE CANCEL MODAL OUTSIDE
+========================================================= */
+
+document.addEventListener(
+    'click',
+    function(event) {
+
+        var modal =
+            document.getElementById(
+                'cancelModal'
+            );
+
+        if (
+            event.target === modal
+        ) {
+
+            closeCancelModal();
+        }
+
+    }
+);
+
+
+/* =========================================================
+   CUSTOMER ACCOUNT DROPDOWN
+========================================================= */
+
+function toggleCustomerAccountDropdown(event) {
+    if (event) {
+        event.stopPropagation();
+    }
+
+    var dropdown = document.getElementById('customerAccountDropdown');
+    var toggle = document.getElementById('customerAccountToggle');
+
+    if (!dropdown || !toggle) {
+        return;
+    }
+
+    var isOpen = !dropdown.classList.contains('hidden');
+
+    if (isOpen) {
+        dropdown.classList.add('hidden');
+        toggle.setAttribute('aria-expanded', 'false');
+    } else {
+        dropdown.classList.remove('hidden');
+        toggle.setAttribute('aria-expanded', 'true');
+    }
+}
+
+function closeCustomerAccountDropdown() {
+    var dropdown = document.getElementById('customerAccountDropdown');
+    var toggle = document.getElementById('customerAccountToggle');
+
+    if (dropdown) {
+        dropdown.classList.add('hidden');
+    }
+
+    if (toggle) {
+        toggle.setAttribute('aria-expanded', 'false');
+    }
+}
+
+
+/* =========================================================
+   CUSTOMER LOGOUT CONFIRMATION
+========================================================= */
+
+function openCustomerLogoutModal() {
+    closeCustomerAccountDropdown();
+
+    var modal = document.getElementById('customerLogoutModal');
+
+    if (modal) {
+        modal.classList.remove('hidden');
+
+        var cancelButton = modal.querySelector('.customer-logout-cancel');
+
+        if (cancelButton) {
+            cancelButton.focus();
+        }
+    }
+}
+
+function closeCustomerLogoutModal() {
+    var modal = document.getElementById('customerLogoutModal');
+
+    if (modal) {
+        modal.classList.add('hidden');
+
+        var toggle = document.getElementById('customerAccountToggle');
+
+        if (toggle) {
+            toggle.focus();
+        }
+    }
+}
+
+
+/* =========================================================
+   CLOSE ACCOUNT DROPDOWN / MODAL
+========================================================= */
+
+document.addEventListener('click', function(event) {
+    var accountWrapper = document.querySelector('.customer-account-wrapper');
+
+    if (accountWrapper && !accountWrapper.contains(event.target)) {
+        closeCustomerAccountDropdown();
+    }
+
+    var modal = document.getElementById('customerLogoutModal');
+
+    if (modal && event.target === modal) {
+        closeCustomerLogoutModal();
+    }
+});
+
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        closeCustomerLogoutModal();
+        closeCustomerAccountDropdown();
+    }
+});
+
+
+
+/* =========================================================
+   PRINT RECEIPT
+========================================================= */
+function printReceipt(data) {
+
+    var printWindow = document.getElementById('receipt-print-window');
+
+
+
+    var unitPrices = {
+        "Extra Small": 140,
+        "Small": 150,
+        "Medium": 175,
+        "Large": 195,
+        "Extra Large": 235,
+        "Jumbo": 255,
+        "Super Jumbo": 270,
+        "Double Yolk": 320
+    };
+
+    var sizeCodes = {
+        "Extra Small": "XS",
+        "Small": "S",
+        "Medium": "M",
+        "Large": "L",
+        "Extra Large": "XL",
+        "Jumbo": "J",
+        "Super Jumbo": "SJ",
+        "Double Yolk": "DY"
+    };
+
+    var totalAmount = 0;
+    var itemsHTML = "";
+
+    if (data.items && data.items.length > 0) {
+
+        data.items.forEach(function(item) {
+
+            var eggType = item.egg_type || "";
+            var quantity = parseInt(item.quantity, 10) || 0;
+
+            var unitPrice = unitPrices[eggType] || 0;
+
+            var lineTotal = unitPrice * quantity;
+
+            totalAmount += lineTotal;
+
+            var shortCode = sizeCodes[eggType] || eggType;
+
+            itemsHTML +=
+                '<div class="receipt-item">' +
+
+                    '<div class="item-main">' +
+                        '<span class="item-size">' +
+                            escapeHTML(shortCode) +
+                        '</span>' +
+
+                        '<span class="item-qty">' +
+                            escapeHTML(String(quantity)) +
+                        '</span>' +
+
+                        '<span class="item-price">' +
+                            '₱' + lineTotal.toFixed(2) +
+                        '</span>' +
+                    '</div>' +
+'<div class="item-description">' +
+                        escapeHTML(eggType) +
+                        ' @ ₱' + unitPrice.toFixed(2) +
+                    '</div>' +
+
+                '</div>';
+        });
+    }
+
+    /*
+     * If total_price already exists in the database,
+     * use it when available.
+     */
+    var displayedTotal = parseFloat(data.total_price);
+
+    if (isNaN(displayedTotal)) {
+        displayedTotal = totalAmount;
+    }
+
+    var deliveryMethod = data.delivery_method || "";
+
+    var deliveryText = "";
+
+    if (deliveryMethod.toLowerCase() === "delivery") {
+
+        deliveryText = "Delivery";
+
+    } else if (deliveryMethod.toLowerCase() === "pickup") {
+
+        deliveryText = "Pickup";
+
+    } else {
+
+        deliveryText = deliveryMethod;
+    }
+
+    var addressHTML = "";
+
+    if (
+        deliveryMethod.toLowerCase() === "delivery" &&
+        data.delivery_address
+    ) {
+
+        addressHTML =
+            '<div class="info-row">' +
+                '<span class="info-label">Address</span>' +
+                '<span class="info-value">' +
+                    escapeHTML(data.delivery_address) +
+                '</span>' +
+            '</div>';
+
+    } else {
+
+        addressHTML =
+            '<div class="info-row">' +
+                '<span class="info-label">Location</span>' +
+                '<span class="info-value">Cahilan 1, Lemery, Batangas</span>' +
+            '</div>';
+    }
+
+    printWindow.innerHTML =
+        '<div class="thermal-receipt">' +
+
+            /* =========================
+               HEADER
+            ========================== */
+
+            '<div class="receipt-header">' +
+
+                '<img ' +
+                    'src="vdvclogo.png" ' +
+                    'class="receipt-logo" ' +
+                    'alt="VDVC Egg Farm Logo"' +
+                '>' +
+
+                '<div class="farm-name">' +
+                    'VDVC EGG FARM' +
+                '</div>' +
+
+                '<div class="receipt-title">' +
+                    'RESERVATION RECEIPT' +
+                '</div>' +
+
+                '<div class="receipt-code">' +
+                    escapeHTML(data.reservation_code || "") +
+                '</div>' +
+
+            '</div>' +
+
+            '<div class="separator"></div>' +
+
+            /* =========================
+               CUSTOMER INFORMATION
+            ========================== */
+
+            '<div class="section-title">' +
+                'CUSTOMER INFORMATION' +
+            '</div>' +
+
+            '<div class="info-row">' +
+                '<span class="info-label">Customer</span>' +
+                '<span class="info-value">' +
+                    escapeHTML(data.customer_name || "") +
+                '</span>' +
+            '</div>' +
+
+            '<div class="info-row">' +
+                '<span class="info-label">Contact</span>' +
+                '<span class="info-value">' +
+                    escapeHTML(data.contact_number || "") +
+                '</span>' +
+            '</div>' +
+
+            '<div class="info-row">' +
+                '<span class="info-label">Method</span>' +
+                '<span class="info-value">' +
+                    escapeHTML(deliveryText) +
+                '</span>' +
+            '</div>' +
+
+            addressHTML +
+
+            '<div class="separator"></div>' +
+
+            /* =========================
+               RESERVATION DETAILS
+            ========================== */
+
+            '<div class="section-title">' +
+                'RESERVATION DETAILS' +
+            '</div>' +
+
+            '<div class="info-row">' +
+                '<span class="info-label">Date</span>' +
+                '<span class="info-value">' +
+                    escapeHTML(data.reservation_date || "Pending") +
+                '</span>' +
+            '</div>' +
+
+            '<div class="info-row">' +
+                '<span class="info-label">Status</span>' +
+                '<span class="info-value">' +
+                    escapeHTML(data.status || "") +
+                '</span>' +
+            '</div>' +
+
+            '<div class="separator"></div>' +
+
+            /* =========================
+               ORDER SUMMARY
+            ========================== */
+
+            '<div class="section-title">' +
+                'ORDER SUMMARY' +
+            '</div>' +
+
+            '<div class="items-header">' +
+                '<span>SIZE</span>' +
+                '<span>QTY</span>' +
+                '<span>AMOUNT</span>' +
+            '</div>' +
+
+            itemsHTML +
+
+            '<div class="separator"></div>' +
+
+            /* =========================
+               TOTAL
+            ========================== */
+
+            '<div class="total-row">' +
+                '<span>TOTAL</span>' +
+                '<span>₱' + displayedTotal.toFixed(2) + '</span>' +
+            '</div>' +
+
+            '<div class="separator"></div>' +
+
+            /* =========================
+               FOOTER
+            ========================== */
+
+            '<div class="receipt-footer">' +
+
+                '<div class="thank-you">' +
+                    'Thank you for your reservation!' +
+                '</div>' +
+
+                '<div>' +
+                    'VDVC Egg Farm' +
+                '</div>' +
+
+                '<div class="footer-small">' +
+                    'Please keep this receipt for your reference.' +
+                '</div>' +
+
+            '</div>' +
+
+        '</div>';
+
+    /*
+ * Temporary styles for thermal receipt
+ */
+
+var oldStyle = document.getElementById('thermal-receipt-style');
+
+if (oldStyle) {
+    oldStyle.parentNode.removeChild(oldStyle);
+}
+
+var style = document.createElement('style');
+
+style.id = 'thermal-receipt-style';
+
+style.innerHTML =
+
+    /*
+     * NORMAL PAGE
+     * Receipt must stay hidden.
+     */
+    '#receipt-print-window {' +
+        'display: none;' +
+    '}' +
+
+    /*
+     * RECEIPT DESIGN
+     */
+    '#receipt-print-window .thermal-receipt {' +
+        'width: 70mm;' +
+        'max-width: 70mm;' +
+        'margin: 0 auto;' +
+        'padding: 3mm 0;' +
+        'box-sizing: border-box;' +
+        'font-family: Arial, Helvetica, sans-serif;' +
+        'font-size: 10px;' +
+        'line-height: 1.35;' +
+        'color: #000000;' +
+        'background: #ffffff;' +
+    '}' +
+
+    '#receipt-print-window .receipt-header {' +
+        'text-align: center;' +
+        'margin-bottom: 3mm;' +
+    '}' +
+
+    '#receipt-print-window .receipt-logo {' +
+        'display: block;' +
+        'width: 42mm;' +
+        'max-width: 100%;' +
+        'height: auto;' +
+        'margin: 0 auto 2mm auto;' +
+        'object-fit: contain;' +
+    '}' +
+
+    '#receipt-print-window .farm-name {' +
+        'font-size: 16px;' +
+        'font-weight: 700;' +
+        'letter-spacing: 0.5px;' +
+        'margin-top: 1mm;' +
+    '}' +
+
+    '#receipt-print-window .receipt-title {' +
+        'font-size: 11px;' +
+        'font-weight: 700;' +
+        'margin-top: 1mm;' +
+    '}' +
+
+    '#receipt-print-window .receipt-code {' +
+        'font-size: 10px;' +
+        'font-weight: 700;' +
+        'margin-top: 1.5mm;' +
+    '}' +
+
+    '#receipt-print-window .separator {' +
+        'border-top: 1px dashed #000000;' +
+        'margin: 3mm 0;' +
+        'height: 0;' +
+    '}' +
+
+    '#receipt-print-window .section-title {' +
+        'font-size: 10px;' +
+        'font-weight: 700;' +
+        'text-align: left;' +
+        'margin-bottom: 1.5mm;' +
+    '}' +
+
+    '#receipt-print-window .info-row {' +
+        'display: flex;' +
+        'align-items: flex-start;' +
+        'justify-content: space-between;' +
+        'gap: 3mm;' +
+        'margin-bottom: 1.2mm;' +
+    '}' +
+
+    '#receipt-print-window .info-label {' +
+        'font-weight: 700;' +
+        'flex: 0 0 22mm;' +
+    '}' +
+
+    '#receipt-print-window .info-value {' +
+        'text-align: right;' +
+        'flex: 1;' +
+        'word-break: break-word;' +
+    '}' +
+
+    '#receipt-print-window .items-header {' +
+        'display: grid;' +
+        'grid-template-columns: 1fr 12mm 23mm;' +
+        'gap: 1mm;' +
+        'font-weight: 700;' +
+        'font-size: 9px;' +
+        'padding-bottom: 1mm;' +
+        'border-bottom: 1px solid #000000;' +
+    '}' +
+
+    '#receipt-print-window .items-header span:nth-child(2),' +
+    '#receipt-print-window .items-header span:nth-child(3) {' +
+        'text-align: right;' +
+    '}' +
+
+    '#receipt-print-window .receipt-item {' +
+        'padding: 1.8mm 0;' +
+        'border-bottom: 1px dotted #777777;' +
+    '}' +
+
+    '#receipt-print-window .item-main {' +
+        'display: grid;' +
+        'grid-template-columns: 1fr 12mm 23mm;' +
+        'gap: 1mm;' +
+        'align-items: center;' +
+    '}' +
+
+    '#receipt-print-window .item-size {' +
+        'font-weight: 700;' +
+    '}' +
+
+    '#receipt-print-window .item-qty,' +
+    '#receipt-print-window .item-price {' +
+        'text-align: right;' +
+    '}' +
+
+    '#receipt-print-window .item-description {' +
+        'font-size: 8.5px;' +
+        'margin-top: 0.5mm;' +
+        'color: #333333;' +
+    '}' +
+
+    '#receipt-print-window .total-row {' +
+        'display: flex;' +
+        'justify-content: space-between;' +
+        'align-items: center;' +
+        'font-size: 13px;' +
+        'font-weight: 700;' +
+        'margin-top: 2mm;' +
+    '}' +
+
+    '#receipt-print-window .receipt-footer {' +
+        'text-align: center;' +
+        'font-size: 9px;' +
+        'margin-top: 3mm;' +
+    '}' +
+
+    '#receipt-print-window .thank-you {' +
+        'font-weight: 700;' +
+        'font-size: 10px;' +
+        'margin-bottom: 1mm;' +
+    '}' +
+
+    '#receipt-print-window .footer-small {' +
+        'font-size: 8px;' +
+        'margin-top: 1.5mm;' +
+    '}' +
+
+    /*
+     * PRINT ONLY
+     */
+    '@media print {' +
+
+        '@page {' +
+            'size: 80mm auto;' +
+            'margin: 0;' +
+        '}' +
+
+        'html, body {' +
+            'width: 80mm !important;' +
+            'height: auto !important;' +
+            'min-height: 0 !important;' +
+            'margin: 0 !important;' +
+            'padding: 0 !important;' +
+            'background: #ffffff !important;' +
+        '}' +
+
+        'body {' +
+            'overflow: visible !important;' +
+        '}' +
+
+        'body * {' +
+            'visibility: hidden !important;' +
+        '}' +
+
+        '#receipt-print-window {' +
+            'display: block !important;' +
+            'visibility: visible !important;' +
+            'position: absolute !important;' +
+            'left: 0 !important;' +
+            'top: 0 !important;' +
+            'width: 80mm !important;' +
+            'height: auto !important;' +
+            'min-height: 0 !important;' +
+            'margin: 0 !important;' +
+            'padding: 0 !important;' +
+            'background: #ffffff !important;' +
+            'overflow: visible !important;' +
+        '}' +
+
+        '#receipt-print-window .thermal-receipt,' +
+        '#receipt-print-window .thermal-receipt * {' +
+            'visibility: visible !important;' +
+        '}' +
+
+        '#receipt-print-window .thermal-receipt {' +
+            'display: block !important;' +
+            'width: 70mm !important;' +
+            'max-width: 70mm !important;' +
+            'height: auto !important;' +
+            'min-height: 0 !important;' +
+            'margin: 0 auto !important;' +
+            'padding: 3mm 0 !important;' +
+            'box-sizing: border-box !important;' +
+            'background: #ffffff !important;' +
+            'border: none !important;' +
+            'box-shadow: none !important;' +
+            'overflow: visible !important;' +
+        '}' +
+
+        '.no-print {' +
+            'display: none !important;' +
+        '}' +
+
+    '}';
+
+document.head.appendChild(style);
+
+/* =========================================================
+   CUSTOMER NOTIFICATION DROPDOWN
+========================================================= */
+
+var customerNotificationDropdown = null;
+var isCustomerDropdownOpen = false;
+
+function toggleCustomerNotificationDropdown()
+{
+    if (!customerNotificationDropdown) {
+        customerNotificationDropdown = document.getElementById('customerNotificationDropdown');
+    }
+
+    if (customerNotificationDropdown) {
+        isCustomerDropdownOpen = !isCustomerDropdownOpen;
+
+        if (isCustomerDropdownOpen) {
+            customerNotificationDropdown.classList.remove('hidden');
+        } else {
+            customerNotificationDropdown.classList.add('hidden');
+        }
+    }
+}
+
+function closeCustomerNotificationDropdown()
+{
+    if (customerNotificationDropdown && isCustomerDropdownOpen) {
+        customerNotificationDropdown.classList.add('hidden');
+        isCustomerDropdownOpen = false;
+    }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(event) {
+    if (customerNotificationDropdown && isCustomerDropdownOpen) {
+        var notificationButton = document.querySelector('.customer-top-notification');
+        var notificationContainer = customerNotificationDropdown.parentElement;
+        if (!notificationContainer.contains(event.target)) {
+            closeCustomerNotificationDropdown();
+        }
+    }
+});
+
+// Mark All as Read function for dropdown header
+function markAllCustomerAsRead(event)
+{
+    if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+    }
+
+    var formData = new FormData();
+    formData.append('mark_all_read', '1');
+    formData.append('ajax', '1');
+
+    fetch('customer_notifications.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.success) {
+            // Reload page to update all notification states
+            window.location.reload();
+        }
+    })
+    .catch(function(error) {
+        console.error('Failed to mark all notifications as read:', error);
+    });
+}
+
+    /*
+     * Wait for logo to load before printing.
+     */
+  var logo = printWindow.querySelector('.receipt-logo');
+
+function startPrinting() {
+
+    setTimeout(function() {
+        window.print();
+    }, 300);
+}
+
+if (logo) {
+
+    if (logo.complete) {
+
+        startPrinting();
+
+    } else {
+
+        logo.onload = function() {
+            startPrinting();
+        };
+
+        logo.onerror = function() {
+            startPrinting();
+        };
+    }
+
+} else {
+
+    startPrinting();
+}
+}
+
+/* =========================================================
+   ESCAPE HTML FOR PRINT
+========================================================= */
+
+function escapeHTML(value) {
+
+    if (value === null || value === undefined) {
+        return '';
+    }
+
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
 </script>
 
-<?php require 'customer_modal.php'; ?>
+<script src="shared_notifications.js?v=20261022"></script>
+<script src="customer_scripts.js?v=20261022_2"></script>
 
-<?php require 'customer_footer.php'; ?>
+<script>
+// Load notifications using shared system
+document.addEventListener('DOMContentLoaded', function() {
+    var dropdown = document.getElementById('customerNotificationDropdown');
+    var list = document.getElementById('customerNotificationList');
+    
+    if (dropdown && list) {
+        fetch('customer_notifications.php?action=json')
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                var notifications = data.notifications || [];
+                if (notifications.length === 0) {
+                    list.innerHTML = '<div class="customer-notification-empty"><i class="fa-regular fa-bell-slash"></i><p>No notifications</p></div>';
+                } else {
+                    var html = '';
+                    notifications.forEach(function(n) {
+                        var iconClass = n.type || 'info';
+                        var iconName = 'fa-bell';
+                        var isUnread = !n.is_read;
+                        var time = n.created_at;
+                        
+                        // Map notification types to icons
+                        if (n.type === 'success') {
+                            iconClass = 'success';
+                            iconName = 'fa-check';
+                        } else if (n.type === 'alert') {
+                            iconClass = 'alert';
+                            iconName = 'fa-exclamation';
+                        } else if (n.type === 'warning') {
+                            iconClass = 'warning';
+                            iconName = 'fa-circle-exclamation';
+                        }
+                        
+                        html += '<div class="customer-notification-item' + (isUnread ? ' unread' : '') + '" data-id="' + n.id + '">';
+                        html += '<div class="customer-notification-icon ' + iconClass + '"><i class="fa-solid ' + iconName + '"></i></div>';
+                        html += '<div class="customer-notification-content">';
+                        html += '<div class="customer-notification-title">' + n.title + '</div>';
+                        html += '<div class="customer-notification-description">' + n.description + '</div>';
+                        html += '<div class="customer-notification-time">' + time + '</div>';
+                        html += '</div>';
+                        html += '</div>';
+                    });
+                    list.innerHTML = html;
+                    
+                    // Add click handlers for marking as read
+                    var items = list.querySelectorAll('.customer-notification-item.unread');
+                    items.forEach(function(item) {
+                        item.addEventListener('click', function() {
+                            var notifId = item.getAttribute('data-id');
+                            markSingleNotificationAsRead(notifId, item);
+                        });
+                    });
+                }
+            })
+            .catch(function(error) {
+                list.innerHTML = '<div class="customer-notification-empty"><i class="fa-solid fa-exclamation-circle"></i><p>Failed to load notifications</p></div>';
+            });
+    }
+});
 
+// Mark single notification as read
+function markSingleNotificationAsRead(notificationId, itemElement) {
+    var formData = new FormData();
+    formData.append('mark_read', '1');
+    formData.append('notification_id', notificationId);
+
+    fetch('customer_notifications.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) {
+        return response.json();
+    })
+    .then(function(data) {
+        if (data.success) {
+            itemElement.classList.remove('unread');
+            itemElement.classList.add('read');
+            
+            // Update badge count
+            var badge = document.querySelector('.customer-notification-badge');
+            if (badge) {
+                var currentCount = parseInt(badge.textContent);
+                if (!isNaN(currentCount) && currentCount > 1) {
+                    badge.textContent = currentCount - 1;
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        }
+    })
+    .catch(function(error) {
+        console.error('Failed to mark notification as read:', error);
+    });
+}
+</script>
+
+<?php require 'shared_notifications_modal.php'; ?>
+
+<!-- =========================================================
+     LOGOUT CONFIRMATION MODAL
+========================================================= -->
+
+<div
+    class="customer-logout-overlay hidden"
+    id="customerLogoutModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="customerLogoutTitle"
+    aria-describedby="customerLogoutMessage"
+>
+
+    <div class="customer-logout-modal">
+
+        <div class="customer-logout-icon">
+            <i class="fa-solid fa-right-from-bracket"></i>
+        </div>
+
+        <h2 id="customerLogoutTitle">Confirm Logout</h2>
+
+        <p id="customerLogoutMessage">
+            Are you sure you want to logout?
+        </p>
+
+        <div class="customer-logout-actions">
+
+            <button
+                type="button"
+                class="customer-logout-cancel"
+                onclick="closeCustomerLogoutModal()"
+            >
+                Cancel
+            </button>
+
+            <form method="POST" action="customer_history.php">
+
+                <input
+                    type="hidden"
+                    name="customer_logout"
+                    value="1"
+                >
+
+                <input
+                    type="hidden"
+                    name="logout_token"
+                    value="<?php echo htmlspecialchars(
+                        $_SESSION['customer_logout_token'],
+                        ENT_QUOTES,
+                        'UTF-8'
+                    ); ?>"
+                >
+
+                <button
+                    type="submit"
+                    class="customer-logout-confirm"
+                >
+                    Yes, Logout
+                </button>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
 </body>
 </html>

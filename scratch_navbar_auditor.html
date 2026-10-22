@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head><title>Navbar Auditor</title></head>
+<body>
+<div id="results"></div>
+<script>
+async function run() {
+    const pages = ['customer_dashboard.php', 'customer_reservation.php', 'customer_history.php', 'customer_profile.php'];
+    const results = {};
+    for (const page of pages) {
+        const frame = document.createElement('iframe');
+        frame.style.width = '1280px';
+        frame.style.height = '800px';
+        frame.src = page;
+        document.body.appendChild(frame);
+        await new Promise(r => frame.onload = r);
+        const doc = frame.contentDocument;
+        const nav = doc.querySelector('.customer-navbar');
+        if (!nav) {
+            results[page] = { error: 'No .customer-navbar found' };
+            continue;
+        }
+        const cs = frame.contentWindow.getComputedStyle(nav);
+        const logo = doc.querySelector('.customer-navbar-logo img');
+        const csLogo = logo ? frame.contentWindow.getComputedStyle(logo) : {};
+        const center = doc.querySelector('.customer-navbar-center');
+        const csCenter = center ? frame.contentWindow.getComputedStyle(center) : {};
+        const activeLink = doc.querySelector('.customer-nav-link.active');
+        const csActive = activeLink ? frame.contentWindow.getComputedStyle(activeLink) : {};
+        const firstLink = doc.querySelector('.customer-nav-link');
+        const csLink = firstLink ? frame.contentWindow.getComputedStyle(firstLink) : {};
+        const bell = doc.querySelector('.customer-top-notification');
+        const csBell = bell ? frame.contentWindow.getComputedStyle(bell) : {};
+        const badge = doc.querySelector('.customer-notification-badge');
+        const csBadge = badge ? frame.contentWindow.getComputedStyle(badge) : {};
+        const avatar = doc.querySelector('.customer-avatar');
+        const csAvatar = avatar ? frame.contentWindow.getComputedStyle(avatar) : {};
+        const right = doc.querySelector('.customer-navbar-right');
+        const csRight = right ? frame.contentWindow.getComputedStyle(right) : {};
+        
+        results[page] = {
+            nav: {
+                height: cs.height,
+                padding: cs.padding,
+                background: cs.backgroundColor,
+                borderTop: cs.borderTopWidth + ' ' + cs.borderTopColor,
+                borderBottom: cs.borderBottomWidth + ' ' + cs.borderBottomColor,
+                gap: cs.gap,
+                fontFamily: cs.fontFamily
+            },
+            logo: {
+                width: csLogo.width,
+                height: csLogo.height
+            },
+            center: {
+                gap: csCenter.gap,
+                marginLeft: csCenter.marginLeft,
+                height: csCenter.height
+            },
+            link: {
+                fontSize: csLink.fontSize,
+                fontWeight: csLink.fontWeight,
+                color: csLink.color,
+                fontFamily: csLink.fontFamily
+            },
+            activeLink: {
+                text: activeLink ? activeLink.textContent.trim() : 'NONE',
+                color: csActive.color,
+                fontWeight: csActive.fontWeight
+            },
+            right: {
+                gap: csRight.gap,
+                minWidth: csRight.minWidth
+            },
+            bell: {
+                width: csBell.width,
+                height: csBell.height,
+                fontSize: csBell.fontSize
+            },
+            avatar: {
+                width: csAvatar.width,
+                height: csAvatar.height
+            }
+        };
+        document.body.removeChild(frame);
+    }
+    document.getElementById('results').textContent = JSON.stringify(results, null, 2);
+    window.auditDone = true;
+}
+run();
+</script>
+</body>
+</html>
