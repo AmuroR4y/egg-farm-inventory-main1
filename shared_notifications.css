@@ -1,0 +1,467 @@
+/* =========================================================
+   VDVC EGG FARM MANAGEMENT SYSTEM
+   Shared Notification Component Styles
+   Applied across: Customer, Manager, and Owner/Admin
+   ========================================================= */
+
+/* ---- Notification Dropdown Header Actions ---- */
+.customer-header-actions,
+.notification-header-actions,
+.owner-header-actions,
+.vdvc-notif-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.customer-view-all-header-link,
+.view-all-header-link,
+.owner-view-all-header-link,
+.vdvc-view-all-header-link {
+    background: none;
+    border: none;
+    padding: 2px 4px;
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: #214f2c;
+    cursor: pointer;
+    text-decoration: none;
+    transition: color 0.15s ease, opacity 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1.2;
+}
+
+.customer-view-all-header-link:hover,
+.view-all-header-link:hover,
+.owner-view-all-header-link:hover,
+.vdvc-view-all-header-link:hover {
+    color: #123f22;
+    text-decoration: underline;
+}
+
+.customer-header-action-divider,
+.header-action-divider,
+.owner-header-action-divider,
+.vdvc-header-action-divider {
+    color: #c8d1ca;
+    font-size: 11px;
+    user-select: none;
+    line-height: 1;
+}
+
+.customer-mark-all-link,
+.mark-all-link,
+.owner-mark-all-link,
+.vdvc-mark-all-link {
+    background: none;
+    border: none;
+    padding: 2px 4px;
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: #527d59;
+    cursor: pointer;
+    text-decoration: none;
+    transition: color 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1.2;
+}
+
+.customer-mark-all-link:hover,
+.mark-all-link:hover,
+.owner-mark-all-link:hover,
+.vdvc-mark-all-link:hover {
+    color: #214f2c;
+    text-decoration: underline;
+}
+
+/* ---- Notification Dropdown Footer ---- */
+.customer-notification-dropdown-footer,
+.notification-dropdown-footer,
+.owner-notification-dropdown-footer,
+.vdvc-notif-dropdown-footer {
+    padding: 10px 16px;
+    background: #f8f9f7;
+    border-top: 1px solid #e5e8e5;
+    display: flex;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.customer-view-all-btn,
+.notification-view-all-btn,
+.owner-view-all-btn,
+.vdvc-view-all-btn {
+    width: 100%;
+    padding: 8px 16px;
+    background: #214f2c;
+    color: #ffffff !important;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background 0.15s ease;
+    text-decoration: none;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.customer-view-all-btn:hover,
+.notification-view-all-btn:hover,
+.owner-view-all-btn:hover,
+.vdvc-view-all-btn:hover {
+    background: #175c31;
+    color: #ffffff !important;
+}
+
+/* =========================================================
+   ALL NOTIFICATIONS MODAL
+   ========================================================= */
+
+.cnotif-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 20000;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: cnotifFadeIn 0.18s ease;
+}
+
+.cnotif-modal-overlay.hidden {
+    display: none !important;
+}
+
+@keyframes cnotifFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+.cnotif-modal {
+    background: #ffffff;
+    border-radius: 20px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+    width: 100%;
+    max-width: 580px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: cnotifSlideIn 0.2s ease;
+    border: 1px solid #e2dfd7;
+}
+
+@keyframes cnotifSlideIn {
+    from { transform: translateY(-16px); opacity: 0; }
+    to   { transform: translateY(0);     opacity: 1; }
+}
+
+/* --- Modal Header (pinned while body scrolls) --- */
+.cnotif-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 22px;
+    background: #f5f6f2;
+    border-bottom: 1px solid #e2dfd7;
+    flex-shrink: 0;
+}
+
+.cnotif-modal-header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.cnotif-modal-icon {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #e8f1e9;
+    color: #214f2c;
+    font-size: 15px;
+    flex-shrink: 0;
+}
+
+.cnotif-modal-header h2 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #202622;
+    margin: 0;
+    letter-spacing: -0.2px;
+}
+
+.cnotif-modal-count {
+    background: #dc3545;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    min-width: 22px;
+    text-align: center;
+}
+
+.cnotif-modal-count.hidden {
+    display: none !important;
+}
+
+.cnotif-modal-close {
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    color: #59635c;
+    font-size: 16px;
+    transition: all 0.15s ease;
+    background: none;
+    border: none;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.cnotif-modal-close:hover {
+    background: #e8ebe6;
+    color: #202622;
+}
+
+/* --- Modal Body: Scrollable list container --- */
+.cnotif-modal-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    overflow-x: hidden;
+    max-height: calc(85vh - 140px);
+    scrollbar-width: thin;
+    scrollbar-color: #8db89a #f1f6f2;
+    background: #ffffff;
+}
+
+.cnotif-modal-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.cnotif-modal-body::-webkit-scrollbar-track {
+    background: #f1f6f2;
+}
+
+.cnotif-modal-body::-webkit-scrollbar-thumb {
+    background: #8db89a;
+    border-radius: 6px;
+}
+
+.cnotif-modal-body::-webkit-scrollbar-thumb:hover {
+    background: #214f2c;
+}
+
+/* --- Loading / Empty states --- */
+.cnotif-loading,
+.cnotif-empty {
+    padding: 48px 24px;
+    text-align: center;
+    color: #8b9089;
+}
+
+.cnotif-loading i,
+.cnotif-empty i {
+    font-size: 36px;
+    margin-bottom: 12px;
+    display: block;
+    color: #8b9089;
+}
+
+.cnotif-loading p,
+.cnotif-empty p {
+    font-size: 14px;
+    margin: 0;
+    color: #6a716c;
+}
+
+.cnotif-list.hidden,
+.cnotif-loading.hidden,
+.cnotif-empty.hidden {
+    display: none !important;
+}
+
+/* --- Notification Items inside modal --- */
+.cnotif-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 22px;
+    border-bottom: 1px solid #eef0f4;
+    transition: background 0.15s ease;
+    cursor: pointer;
+    background: #ffffff;
+}
+
+.cnotif-item:last-child {
+    border-bottom: none;
+}
+
+.cnotif-item:hover {
+    background: #f5f6f3;
+}
+
+.cnotif-item.unread {
+    background: #edf5ee;
+}
+
+.cnotif-item.unread:hover {
+    background: #e3ede4;
+}
+
+.cnotif-item-icon {
+    width: 38px;
+    height: 38px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+
+.cnotif-item-icon.success { background: #d4f5e2; color: #28a745; }
+.cnotif-item-icon.alert   { background: #fee2e2; color: #dc3545; }
+.cnotif-item-icon.warning { background: #fff3cd; color: #d97706; }
+.cnotif-item-icon.info    { background: #d1ecf1; color: #17a2b8; }
+
+.cnotif-item-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.cnotif-item-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #202622;
+    margin-bottom: 3px;
+    line-height: 1.35;
+    word-break: break-word;
+}
+
+.cnotif-item-desc {
+    font-size: 12px;
+    color: #59635c;
+    line-height: 1.45;
+    margin-bottom: 6px;
+    word-break: break-word;
+}
+
+.cnotif-item-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cnotif-item-time {
+    font-size: 11px;
+    color: #8b9089;
+}
+
+.cnotif-unread-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #214f2c;
+    flex-shrink: 0;
+    display: inline-block;
+}
+
+/* --- Modal Footer (pinned while body scrolls) --- */
+.cnotif-modal-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 22px;
+    background: #f5f6f2;
+    border-top: 1px solid #e2dfd7;
+    flex-shrink: 0;
+}
+
+.cnotif-mark-all-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 16px;
+    background: #214f2c;
+    color: #ffffff;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.cnotif-mark-all-btn:hover {
+    background: #175c31;
+}
+
+.cnotif-mark-all-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #6a7c6e;
+}
+
+.cnotif-close-btn {
+    padding: 8px 18px;
+    background: #ffffff;
+    color: #59635c;
+    border: 1px solid #d4d8d3;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.cnotif-close-btn:hover {
+    background: #f0f1ed;
+    color: #202622;
+}
+
+/* Responsive: mobile viewports */
+@media (max-width: 600px) {
+    .cnotif-modal-overlay {
+        align-items: flex-end;
+        padding: 0;
+    }
+
+    .cnotif-modal {
+        max-width: 100%;
+        max-height: 92vh;
+        border-radius: 18px 18px 0 0;
+    }
+
+    .cnotif-modal-body {
+        max-height: calc(92vh - 140px);
+    }
+
+    .cnotif-modal-footer {
+        flex-direction: column-reverse;
+        gap: 8px;
+    }
+
+    .cnotif-mark-all-btn,
+    .cnotif-close-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}

@@ -26,6 +26,7 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] != 'owner') {
 
 $owner_name = 'Owner';
 $owner_unread_notifications = 0;
+$owner_role = 'Owner';
 
 $owner_notification_result = mysqli_query(
     $conn,
@@ -33,6 +34,16 @@ $owner_notification_result = mysqli_query(
 );
 if ($owner_notification_result && ($owner_notification_row = mysqli_fetch_assoc($owner_notification_result))) {
     $owner_unread_notifications = (int)$owner_notification_row['total'];
+}
+
+// Time-based greeting
+$hour = date('H');
+if ($hour < 12) {
+    $greeting = 'Good morning';
+} elseif ($hour < 18) {
+    $greeting = 'Good afternoon';
+} else {
+    $greeting = 'Good evening';
 }
 
 if (isset($_SESSION['fullname']) && $_SESSION['fullname'] != '') {
@@ -68,6 +79,9 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
         rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
     >
+
+    <link rel="stylesheet" href="vdvc/styles.css">
+    <link rel="stylesheet" href="shared_notifications.css?v=20261022">
 
 <style>
 
@@ -107,18 +121,14 @@ body {
 
 .main-content {
 
-    margin-left: 260px;
+    margin-left: 256px;
 
     min-height: 100vh;
 
     padding: 18px;
 
     background:
-        linear-gradient(
-            135deg,
-            #eeece6 0%,
-            #f5f3ed 100%
-        );
+        #f5f6f3;
 }
 
 
@@ -628,19 +638,27 @@ body {
         block;
 
     margin:
-        0;
+        0 0 2px 0;
 
     color:
-        #3f4b45;
+        #253447;
 
     font-size:
-        0.88rem;
+        0.95rem;
 
     font-weight:
-        700;
+        600;
 
     line-height:
         1.2;
+}
+
+.owner-top-role {
+    display: block;
+    margin: 0 0 2px 0;
+    color: #75859a;
+    font-size: 0.75rem;
+    font-weight: 500;
 }
 
 
@@ -738,6 +756,502 @@ body {
 
     padding:
         22px 28px 28px;
+}
+
+/* Styles for included dashboard content */
+.owner-content-area .dashboard-page {
+    margin: 0;
+    padding: 0;
+}
+
+.owner-content-area .dashboard-hero {
+    margin-bottom: 16px;
+    padding: 4px 2px 2px;
+    background: transparent;
+    border-radius: 0;
+}
+
+.owner-content-area .dashboard-kpis {
+    margin-bottom: 16px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+}
+
+@media (max-width: 1024px) {
+    .owner-content-area .dashboard-kpis {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .owner-content-area .dashboard-kpis {
+        grid-template-columns: 1fr;
+    }
+}
+
+.owner-content-area .dashboard-grid {
+    margin-bottom: 16px;
+    display: grid;
+    gap: 14px;
+}
+
+.owner-content-area .dashboard-main-grid {
+    grid-template-columns: 1fr 1.5fr;
+}
+
+.owner-content-area .dashboard-secondary-grid {
+    grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 1024px) {
+    .owner-content-area .dashboard-main-grid,
+    .owner-content-area .dashboard-secondary-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.owner-content-area .dashboard-card {
+    background: white;
+    border: 1px solid #e2dfd7;
+    border-radius: 10px;
+    padding: 17px 18px 15px;
+    box-shadow: 0 3px 10px rgba(70,65,55,0.06);
+}
+
+.owner-content-area .analytics-section {
+    margin-top: 24px;
+}
+
+/* Main Dashboard Alert and Activity Styling */
+.owner-content-area .alerts-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.owner-content-area .timeline-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.owner-content-area .alert-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 0;
+    border-bottom: 1px solid #f5f5f5;
+}
+
+.owner-content-area .alert-item:last-child {
+    border-bottom: none;
+}
+
+/* KPI Card Styling */
+.owner-content-area .kpi-card {
+    background: white;
+    border: 1px solid #e1e8e3;
+    border-radius: 12px;
+    padding: 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.owner-content-area .kpi-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.owner-content-area .kpi-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.owner-content-area .kpi-label {
+    font-size: 13px;
+    color: #75859a;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.owner-content-area .kpi-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #253447;
+    line-height: 1;
+    margin-bottom: 4px;
+}
+
+.owner-content-area .kpi-change {
+    font-size: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 2px;
+}
+
+.owner-content-area .kpi-comparison {
+    font-size: 11px;
+    color: #75859a;
+}
+
+/* Analytics-specific styles */
+.owner-content-area .analytics-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+@media (max-width: 1024px) {
+    .owner-content-area .analytics-kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .owner-content-area .analytics-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.owner-content-area .analytics-kpi-card {
+    background: white;
+    padding: 16px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    border: 1px solid #e2dfd7;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.owner-content-area .analytics-kpi-label {
+    font-size: 11px;
+    color: #666;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+    word-wrap: break-word;
+}
+
+.owner-content-area .analytics-kpi-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: #214f2c;
+    line-height: 1;
+    word-break: break-all;
+}
+
+.owner-content-area .analytics-chart-section {
+    margin: 30px 0;
+}
+
+.owner-content-area .analytics-chart-section h3 {
+    margin: 0 0 20px 0;
+    color: #214f2c;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.owner-content-area .chart-subtitle {
+    margin: 0 0 15px 0;
+    color: #75859a;
+    font-size: 12px;
+}
+
+.owner-content-area .analytics-charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+@media (max-width: 1024px) {
+    .owner-content-area .analytics-charts-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.owner-content-area .inventory-summary {
+    margin-bottom: 20px;
+    padding: 16px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+.owner-content-area .inventory-summary strong {
+    color: #214f2c;
+}
+
+.owner-content-area #dashboard-analytics-loading {
+    text-align: center;
+    padding: 40px;
+    color: #999;
+    font-style: italic;
+}
+
+/* Dashboard Layout with Right Rail */
+.dashboard-layout {
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+}
+
+.dashboard-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.dashboard-right-rail {
+    width: 322px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+@media (max-width: 1200px) {
+    .dashboard-layout {
+        flex-direction: column;
+    }
+    .dashboard-right-rail {
+        width: 100%;
+    }
+}
+
+/* Right Rail Cards */
+.right-rail-card {
+    background: white;
+    border: 1px solid #e1e8e3;
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+}
+
+.rail-card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.rail-card-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #e1efe7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #194f32;
+    font-size: 14px;
+}
+
+.rail-card-title {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 600;
+    color: #253447;
+}
+
+.rail-card-link {
+    font-size: 12px;
+    color: #2f7a45;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.rail-card-link:hover {
+    text-decoration: underline;
+}
+
+.rail-card-content {
+    min-height: 100px;
+}
+
+/* Alert Items */
+.alert-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid #f5f5f5;
+}
+
+.alert-item:last-child {
+    border-bottom: none;
+}
+
+.alert-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 4px;
+    flex-shrink: 0;
+}
+
+.alert-dot.warning { background: #f3a712; }
+.alert-dot.info { background: #3b82f6; }
+.alert-dot.success { background: #25a366; }
+.alert-dot.error { background: #e0443e; }
+
+.alert-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.alert-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: #253447;
+    margin-bottom: 2px;
+}
+
+.alert-time {
+    font-size: 11px;
+    color: #75859a;
+}
+
+/* Activity Items */
+.activity-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 0;
+    border-bottom: 1px solid #f5f5f5;
+}
+
+.activity-item:last-child {
+    border-bottom: none;
+}
+
+.activity-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #e1efe7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #194f32;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.activity-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.activity-text {
+    font-size: 12px;
+    color: #253447;
+    line-height: 1.4;
+    margin-bottom: 2px;
+}
+
+.activity-time {
+    font-size: 11px;
+    color: #75859a;
+}
+
+/* Quick Link Buttons */
+.quick-link-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 8px;
+    border: none;
+}
+
+.quick-link-btn:last-child {
+    margin-bottom: 0;
+}
+
+.quick-link-btn.primary {
+    background: #194f32;
+    color: white;
+}
+
+.quick-link-btn.primary:hover {
+    background: #2f7a45;
+}
+
+.quick-link-btn.secondary {
+    background: white;
+    color: #253447;
+    border: 1px solid #e1e8e3;
+}
+
+.quick-link-btn.secondary:hover {
+    background: #f5f6f3;
+}
+
+.quick-link-btn i:first-child {
+    font-size: 14px;
+}
+
+.quick-link-btn span {
+    flex: 1;
+    text-align: left;
+}
+
+.quick-link-btn i:last-child {
+    font-size: 12px;
+    color: #75859a;
+}
+
+/* Dashboard Footer */
+.dashboard-footer {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    background: white;
+    border: 1px solid #e1e8e3;
+    border-radius: 12px;
+    margin-top: 24px;
+}
+
+.footer-left,
+.footer-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #75859a;
+}
+
+.footer-left i,
+.footer-right i {
+    color: #194f32;
+    font-size: 14px;
+}
+
+.footer-divider {
+    width: 1px;
+    height: 24px;
+    background: #e1e8e3;
 }
 
 
@@ -846,12 +1360,53 @@ body {
 }
 
 
+/* Topbar Left Section */
+.topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.hamburger-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: #f5f6f3;
+    border: none;
+    color: #253447;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.greeting-section {
+    display: flex;
+    flex-direction: column;
+}
+
+.greeting-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #253447;
+    margin: 0;
+    line-height: 1.3;
+}
+
+.greeting-subtitle {
+    font-size: 13px;
+    color: #75859a;
+    margin: 2px 0 0 0;
+    line-height: 1.4;
+}
+
 /* =========================================================
    CONTENT AREA
 ========================================================= */
 
 .owner-content-area {
-    padding: 20px;
+    padding: 0;
     min-height: 400px;
     overflow: visible;
 }
@@ -873,10 +1428,10 @@ body {
     .main-content {
 
         margin-left:
-            270px;
+            256px;
 
         width:
-            calc(100% - 270px);
+            calc(100% - 256px);
     }
 }
 
@@ -943,7 +1498,15 @@ body {
 
         <div class="owner-dashboard-topbar">
 
-            <h1 class="owner-page-title">Owner Dashboard</h1>
+            <div class="topbar-left">
+                <button class="hamburger-btn">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <div class="greeting-section">
+                    <h1 class="greeting-title"><?php echo $greeting; ?>, <?php echo htmlspecialchars($owner_name); ?>!</h1>
+                    <p class="greeting-subtitle">Here's what's happening with your farm today.</p>
+                </div>
+            </div>
 
             <div class="owner-topbar-right">
 
@@ -981,10 +1544,38 @@ body {
                                 </div>
                                 <span class="owner-dashboard-panel-title">Notifications</span>
                             </div>
+                            <div class="owner-header-actions">
+                                <button
+                                    type="button"
+                                    class="owner-view-all-header-link"
+                                    id="ownerViewAllBtn"
+                                    onclick="openAllNotificationsModal(event)"
+                                >
+                                    View All
+                                </button>
+                                <span class="owner-header-action-divider">|</span>
+                                <a
+                                    href="#"
+                                    class="owner-mark-all-link"
+                                    onclick="markAllNotificationsAsRead(event); return false;"
+                                >
+                                    Mark All as Read
+                                </a>
+                            </div>
                         </div>
 
                         <div class="owner-notification-list" id="ownerNotificationList">
                             <!-- Notifications will be loaded here via JavaScript -->
+                        </div>
+
+                        <div class="owner-notification-dropdown-footer">
+                            <button
+                                type="button"
+                                class="owner-view-all-btn"
+                                onclick="openAllNotificationsModal(event)"
+                            >
+                                View All Notifications
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -997,8 +1588,8 @@ body {
                     </div>
                     <div class="owner-account-details">
                         <span class="owner-top-name"><?php echo htmlspecialchars($owner_name); ?></span>
+                        <span class="owner-top-role"><?php echo htmlspecialchars($owner_role); ?></span>
                         <div class="owner-date-time">
-                            <span class="owner-date" id="ownerCurrentDate"></span>
                             <span class="owner-time" id="ownerCurrentTime"></span>
                         </div>
                     </div>
@@ -1014,22 +1605,78 @@ body {
         <div class="owner-dashboard-content">
             
             <?php if ($page == 'dashboard'): ?>
-                <div class="dashboard-header">
-                    <div class="greeting-wrapper">
-                        <div class="greeting-icon">
-                            <i class="fa-solid fa-chart-pie"></i>
+                <div class="owner-content-area">
+                    <div class="dashboard-layout">
+                        <div class="dashboard-main">
+                            <?php include 'owner_dashboard_content.php'; ?>
                         </div>
-                        <div class="greeting-text-container">
-                            <h1>Owner Dashboard</h1>
-                            <p>Welcome back, <?php echo htmlspecialchars($owner_name); ?>. Here's your farm overview.</p>
+                        <div class="dashboard-right-rail">
+                            <!-- Alerts Card -->
+                            <div class="right-rail-card">
+                                <div class="rail-card-header">
+                                    <div class="rail-card-icon">
+                                        <i class="fa-solid fa-bell"></i>
+                                    </div>
+                                    <span class="rail-card-title">Alerts</span>
+                                    <a href="#" class="rail-card-link">View All</a>
+                                </div>
+                                <div class="rail-card-content" id="right-rail-alerts">
+                                    <!-- Alerts will be populated by JavaScript -->
+                                </div>
+                            </div>
+
+                            <!-- Recent Activity Card -->
+                            <div class="right-rail-card">
+                                <div class="rail-card-header">
+                                    <div class="rail-card-icon">
+                                        <i class="fa-solid fa-clock-rotate-left"></i>
+                                    </div>
+                                    <span class="rail-card-title">Recent Activity</span>
+                                    <a href="#" class="rail-card-link">View All</a>
+                                </div>
+                                <div class="rail-card-content" id="right-rail-activity">
+                                    <!-- Activity will be populated by JavaScript -->
+                                </div>
+                            </div>
+
+                            <!-- Quick Links Card -->
+                            <div class="right-rail-card">
+                                <div class="rail-card-header">
+                                    <div class="rail-card-icon">
+                                        <i class="fa-solid fa-leaf"></i>
+                                    </div>
+                                    <span class="rail-card-title">Quick Links</span>
+                                </div>
+                                <div class="rail-card-content">
+                                    <button class="quick-link-btn primary" onclick="window.location.href='owner_dashboard.php?page=forecasting'">
+                                        <i class="fa-solid fa-timeline"></i>
+                                        <span>Demand Forecasting</span>
+                                        <i class="fa-solid fa-chevron-right"></i>
+                                    </button>
+                                    <button class="quick-link-btn secondary" onclick="window.location.href='owner_dashboard.php?page=reports'">
+                                        <i class="fa-solid fa-file-invoice"></i>
+                                        <span>Reports</span>
+                                        <i class="fa-solid fa-chevron-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <div class="dashboard-footer">
+                        <div class="footer-left">
+                            <i class="fa-solid fa-leaf"></i>
+                            <span>Healthy Chickens • Quality Eggs • Better Tomorrow</span>
+                        </div>
+                        <div class="footer-divider"></div>
+                        <div class="footer-right">
+                            <i class="fa-solid fa-egg"></i>
+                            <span>VDVC Egg Farm</span>
                         </div>
                     </div>
                 </div>
 
-                <div class="owner-content-area">
-                    <iframe src="owner_dashboard_content.php?page=dashboard" style="width: 100%; min-height: 600px; border: none;"></iframe>
-                </div>
-                
             <?php elseif ($page == 'users'): ?>
                 <?php
                 // Redirect to dashboard since User Management has been removed
@@ -1038,22 +1685,12 @@ body {
                 ?>
                 
             <?php elseif ($page == 'analytics'): ?>
-                <div class="dashboard-header">
-                    <div class="greeting-wrapper">
-                        <div class="greeting-icon">
-                            <i class="fa-solid fa-chart-line"></i>
-                        </div>
-                        <div class="greeting-text-container">
-                            <h1>Data Analytics</h1>
-                            <p>View farm performance analytics and insights.</p>
-                        </div>
-                    </div>
-                </div>
+                <?php
+                // Redirect to dashboard since analytics is now integrated
+                header("Location: owner_dashboard.php?page=dashboard");
+                exit();
+                ?>
 
-                <div class="owner-content-area">
-                    <iframe src="owner_dashboard_content.php?page=analytics" style="width: 100%; min-height: 600px; border: none;"></iframe>
-                </div>
-                
             <?php elseif ($page == 'forecasting'): ?>
                 <div class="dashboard-header">
                     <div class="greeting-wrapper">
@@ -1213,12 +1850,19 @@ function loadOwnerNotifications() {
                     notificationsHtml += buildNotificationHtml(notification);
                 });
                 
-                // Add "Mark all as read" link at the top
-                var markAllHtml = '<div style="padding: 8px 16px; border-bottom: 1px solid #f0eee8; text-align: right;">';
-                markAllHtml += '<a href="#" onclick="markAllNotificationsAsRead(event); return false;" style="font-size: 11px; font-weight: 700; color: #527d59; text-decoration: none;">Mark all as read</a>';
-                markAllHtml += '</div>';
-                
-                notificationList.innerHTML = markAllHtml + notificationsHtml;
+                var unreadCount = data.notifications.filter(function(n) { return !n.read; }).length;
+                var headerMarkAll = document.querySelector('.owner-mark-all-link');
+                if (headerMarkAll) {
+                    if (unreadCount === 0) {
+                        headerMarkAll.style.opacity = '0.5';
+                        headerMarkAll.style.pointerEvents = 'none';
+                    } else {
+                        headerMarkAll.style.opacity = '1';
+                        headerMarkAll.style.pointerEvents = 'auto';
+                    }
+                }
+
+                notificationList.innerHTML = notificationsHtml;
             } else {
                 notificationList.innerHTML = '<div class="owner-notification-empty"><i class="fa-regular fa-bell-slash"></i><p>No new notifications</p></div>';
             }
@@ -1356,10 +2000,11 @@ function markAllNotificationsAsRead(event) {
                 item.classList.remove('unread');
             });
             
-            // Hide the "Mark all as read" link
-            var markAllLink = document.querySelector('#ownerNotificationList a[onclick*="markAllNotificationsAsRead"]');
-            if (markAllLink) {
-                markAllLink.style.display = 'none';
+            // Update the header "Mark All as Read" link
+            var headerMarkAll = document.querySelector('.owner-mark-all-link');
+            if (headerMarkAll) {
+                headerMarkAll.style.opacity = '0.5';
+                headerMarkAll.style.pointerEvents = 'none';
             }
         }
     })
@@ -1430,8 +2075,28 @@ function updateOwnerName(newName) {
         element.textContent = newName;
     });
 }
+
+// Update current time
+function updateCurrentTime() {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+    });
+    const timeElement = document.getElementById('ownerCurrentTime');
+    if (timeElement) {
+        timeElement.textContent = timeString;
+    }
+}
+
+// Update time immediately and then every minute
+updateCurrentTime();
+setInterval(updateCurrentTime, 60000);
 </script>
 
+<?php require_once 'shared_notifications_modal.php'; ?>
+<script src="shared_notifications.js?v=20261022"></script>
 </body>
 
 </html>

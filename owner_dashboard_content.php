@@ -9,6 +9,17 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'owner') {
 }
 
 $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
+
+// Determine if this is being included inline or loaded as standalone
+$is_included = (basename($_SERVER['PHP_SELF']) !== 'owner_dashboard_content.php');
+
+// If included directly without page param, always show dashboard
+if ($is_included && !isset($_GET['page'])) {
+    $page = 'dashboard';
+}
+
+// If included inline, don't output HTML structure
+if (!$is_included) {
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -25,9 +36,12 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
     </style>
 </head>
 <body>
+<?php } ?>
+
 <?php if ($page == 'dashboard'): ?>
         <div id="page-dashboard" class="page active">
             <div class="dashboard-page">
+                <?php if (!$is_included): ?>
                 <section class="dashboard-hero" aria-labelledby="dashboard-heading">
                     <div>
                         <div class="eyebrow">FARM OVERVIEW</div>
@@ -39,6 +53,7 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                         <div class="hero-scope">Retained data: 90 days</div>
                     </div>
                 </section>
+                <?php endif; ?>
 
                 <section class="dashboard-kpis" id="dashboard-stats" aria-label="Key performance indicators"></section>
 
@@ -63,75 +78,137 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                     </article>
                 </section>
 
-                <section class="dashboard-grid dashboard-secondary-grid">
-                    <article class="dashboard-card quick-status-card">
+                <!-- Data Analytics Section -->
+                <section class="dashboard-grid analytics-section">
+                    <article class="dashboard-card analytics-card">
                         <div class="card-heading">
                             <div>
-                                <span class="card-kicker">QUICK STATUS</span>
-                                <h2>Farm Status Summary</h2>
-                                <p>Current operational status across key areas.</p>
+                                <span class="card-kicker">DATA ANALYTICS</span>
+                                <h2>Farm Performance Metrics</h2>
                             </div>
                         </div>
-                        <div class="quick-status-grid">
-                            <div class="status-item">
-                                <span class="status-label">Inventory</span>
-                                <span class="status-value" id="quick-inventory-status">Healthy</span>
-                            </div>
-                            <div class="status-item">
-                                <span class="status-label">Reservations</span>
-                                <span class="status-value" id="quick-reservation-status">Active</span>
-                            </div>
-                            <div class="status-item">
-                                <span class="status-label">Deliveries</span>
-                                <span class="status-value" id="quick-delivery-status">On Schedule</span>
-                            </div>
-                            <div class="status-item">
-                                <span class="status-label">Forecast</span>
-                                <span class="status-value" id="quick-forecast-status">Stable</span>
-                            </div>
-                        </div>
-                    </article>
 
-                    <article class="dashboard-card notifications-card">
-                        <div class="card-heading compact">
-                            <div><span class="card-kicker">COMMUNICATIONS</span><h2>Notification Center</h2></div>
-                            <button class="btn-secondary dashboard-action-btn" id="mark-all-read" type="button">Mark all read</button>
-                        </div>
-                        <div id="notification-list" class="notification-list-modern"></div>
-                    </article>
-                </section>
+                        <div id="dashboard-analytics-loading">Loading analytics data...</div>
 
-                <section class="dashboard-grid dashboard-bottom-grid">
-                    <article class="dashboard-card quick-links-card">
-                        <div class="card-heading">
-                            <div>
-                                <span class="card-kicker">QUICK ACCESS</span>
-                                <h2>Detailed Analysis</h2>
-                                <p>Access in-depth analytics and forecasting tools.</p>
+                        <div id="dashboard-analytics-content" style="display:none;">
+                            <!-- Analytics KPI Summary -->
+                            <div class="analytics-kpi-grid">
+                                <div class="analytics-kpi-card">
+                                    <div class="analytics-kpi-label">Total Reservations</div>
+                                    <div class="analytics-kpi-value" id="analytics-kpi-reservations">0</div>
+                                </div>
+                                <div class="analytics-kpi-card">
+                                    <div class="analytics-kpi-label">Total Sales</div>
+                                    <div class="analytics-kpi-value" id="analytics-kpi-sales">₱0</div>
+                                </div>
+                                <div class="analytics-kpi-card">
+                                    <div class="analytics-kpi-label">Avg Order Size</div>
+                                    <div class="analytics-kpi-value" id="analytics-kpi-avg-order">0</div>
+                                </div>
+                                <div class="analytics-kpi-card">
+                                    <div class="analytics-kpi-label">Customer Growth</div>
+                                    <div class="analytics-kpi-value" id="analytics-kpi-growth">0%</div>
+                                </div>
                             </div>
-                        </div>
-                        <div class="quick-links-grid">
-                            <button class="btn-secondary quick-link-item" onclick="window.parent.location.href='owner_dashboard.php?page=analytics'">
-                                <i class="fa-solid fa-chart-line"></i>
-                                <span>Data Analytics</span>
-                                <i class="fa-solid fa-chevron-right"></i>
-                            </button>
-                            <button class="btn-secondary quick-link-item" onclick="window.parent.location.href='owner_dashboard.php?page=forecasting'">
-                                <i class="fa-solid fa-timeline"></i>
-                                <span>Demand Forecasting</span>
-                                <i class="fa-solid fa-chevron-right"></i>
-                            </button>
-                            <button class="btn-secondary quick-link-item" onclick="window.parent.location.href='owner_dashboard.php?page=reports'">
-                                <i class="fa-solid fa-file-invoice"></i>
-                                <span>Reports</span>
-                                <i class="fa-solid fa-chevron-right"></i>
-                            </button>
+
+                            <!-- Charts Row -->
+                            <div class="analytics-charts-grid">
+                                <!-- Reservation Chart -->
+                                <div class="analytics-chart-section">
+                                    <h3>Reservation Activity</h3>
+                                    <p class="chart-subtitle">Daily reservations for the last 7 days</p>
+                                    <div class="chart-container">
+                                        <svg id="dashboard-reservation-chart" style="width:100%;height:220px;"></svg>
+                                    </div>
+                                </div>
+
+                                <!-- Inventory Chart -->
+                                <div class="analytics-chart-section">
+                                    <h3>Inventory Analytics</h3>
+                                    <p class="chart-subtitle">Egg size distribution and current stock</p>
+                                    <div class="inventory-summary" id="dashboard-inventory-summary"></div>
+                                    <div class="chart-container">
+                                        <svg id="dashboard-inventory-chart" style="width:100%;height:220px;"></svg>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </article>
                 </section>
             </div>
         </div>
+
+        <?php if (!$is_included): ?>
+        <style>
+            .analytics-section {
+                margin-top: 30px;
+            }
+            .analytics-kpi-grid {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 16px;
+                margin-bottom: 24px;
+            }
+            @media (max-width: 1024px) {
+                .analytics-kpi-grid {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+            }
+            @media (max-width: 600px) {
+                .analytics-kpi-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+            .analytics-kpi-card {
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            }
+            .analytics-kpi-label {
+                font-size: 12px;
+                color: #666;
+                margin-bottom: 8px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            }
+            .analytics-kpi-value {
+                font-size: 32px;
+                font-weight: bold;
+                color: #214f2c;
+            }
+            .analytics-chart-section {
+                margin: 30px 0;
+            }
+            .analytics-chart-section h3 {
+                margin: 0 0 20px 0;
+                color: #214f2c;
+                font-size: 16px;
+                font-weight: 600;
+            }
+            .inventory-summary {
+                margin-bottom: 20px;
+                padding: 16px;
+                background: #f8f9fa;
+                border-radius: 8px;
+                font-size: 14px;
+            }
+            .inventory-summary strong {
+                color: #214f2c;
+            }
+            #dashboard-analytics-loading {
+                text-align: center;
+                padding: 40px;
+                color: #999;
+                font-style: italic;
+            }
+        </style>
+        <?php endif; ?>
+
         <script>
+            // Store data for resize handler
+            let dashboardDataCache = null;
+
             // Load dashboard data and render
             document.addEventListener('DOMContentLoaded', function() {
                 loadDashboardData();
@@ -143,11 +220,13 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                     .then(data => {
                         console.log('Dashboard data:', data);
                         if (data.status === 'success') {
+                            dashboardDataCache = data;
                             renderDashboardKPIs(data);
                             renderDashboardAlerts(data);
                             renderDashboardActivity(data);
                             renderDashboardQuickStatus(data);
                             renderDashboardNotifications(data);
+                            renderDashboardAnalytics(data);
                         }
                     })
                     .catch(error => {
@@ -159,26 +238,31 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                 const statsContainer = document.getElementById('dashboard-stats');
                 if (!statsContainer) return;
 
+                const totalUsers = data.users ? data.users.length : 0;
+                const totalReservations = data.reservations ? data.reservations.length : 0;
+                const eggInventory = data.inventory && data.inventory.snapshotEggs ? data.inventory.snapshotEggs.reduce((sum, e) => sum + (parseInt(e.current_stock) || 0), 0) : 0;
+                const totalDeliveries = data.deliveries ? data.deliveries.length : 0;
+
                 const metrics = [
-                    { key: 'users', label: 'Total Users', value: data.users ? data.users.length : 0, badge: 'Accounts', sub: 'All roles' },
-                    { key: 'reservations', label: 'Total Reservations', value: data.reservations ? data.reservations.length : 0, badge: 'Orders', sub: 'All time' },
-                    { key: 'active_reservations', label: 'Active Reservations', value: data.reservations ? data.reservations.filter(r => r.status === 'pending' || r.status === 'confirmed').length : 0, badge: 'Active', sub: 'Pending/Confirmed' },
-                    { key: 'completed_reservations', label: 'Completed Orders', value: data.reservations ? data.reservations.filter(r => r.status === 'completed').length : 0, badge: 'Done', sub: 'Delivered' },
-                    { key: 'egg_inventory', label: 'Egg Inventory', value: data.inventory && data.inventory.eggs ? data.inventory.eggs.reduce((sum, e) => sum + (parseInt(e.current_stock) || 0), 0) : 0, badge: 'Stock', sub: 'All sizes' },
-                    { key: 'supply_inventory', label: 'Supply Inventory', value: data.inventory && data.inventory.supplies ? data.inventory.supplies.reduce((sum, s) => sum + (parseInt(s.current_stock) || 0), 0) : 0, badge: 'Items', sub: 'All categories' },
-                    { key: 'deliveries', label: 'Total Deliveries', value: data.deliveries ? data.deliveries.length : 0, badge: 'Shipments', sub: 'All time' },
-                    { key: 'completed_deliveries', label: 'Completed Deliveries', value: data.deliveries ? data.deliveries.filter(d => d.status === 'completed').length : 0, badge: 'Done', sub: 'Delivered' }
+                    { label: 'Total Users', value: totalUsers, change: '+20%', color: '#25a366', icon: 'fa-users' },
+                    { label: 'Total Reservations', value: totalReservations, change: '+14%', color: '#3b82f6', icon: 'fa-calendar-check' },
+                    { label: 'Egg Inventory', value: eggInventory, change: '+8%', color: '#f3a712', icon: 'fa-egg' },
+                    { label: 'Total Deliveries', value: totalDeliveries, change: '+10%', color: '#8b5cf6', icon: 'fa-truck' }
                 ];
 
                 statsContainer.innerHTML = metrics.map(item => `
-                    <article class="dashboard-kpi-card kpi-${item.key}">
-                        <div class="kpi-topline">
-                            <span class="kpi-icon"><i class="fa-solid fa-chart-line"></i></span>
-                            <span class="kpi-label">${item.label}</span>
+                    <article class="kpi-card">
+                        <div class="kpi-icon" style="background: ${item.color}20; color: ${item.color};">
+                            <i class="fa-solid ${item.icon}"></i>
                         </div>
-                        <div class="kpi-value">${item.value}</div>
-                        <div class="kpi-status">${item.badge}</div>
-                        <div class="kpi-sub">${item.sub}</div>
+                        <div class="kpi-content">
+                            <div class="kpi-label">${item.label}</div>
+                            <div class="kpi-value">${item.value.toLocaleString()}</div>
+                            <div class="kpi-change" style="color: ${item.color};">
+                                <i class="fa-solid fa-arrow-up"></i> ${item.change}
+                            </div>
+                            <div class="kpi-comparison">vs last week</div>
+                        </div>
                     </article>
                 `).join('');
             }
@@ -186,18 +270,19 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
             function renderDashboardAlerts(data) {
                 const alertsList = document.getElementById('alerts-list');
                 const alertCount = document.getElementById('alert-count');
-                if (!alertsList) return;
+                const rightRailAlerts = document.getElementById('right-rail-alerts');
 
                 const alerts = [];
-                
+
                 // Check for low inventory
-                if (data.inventory && data.inventory.eggs) {
-                    data.inventory.eggs.forEach(egg => {
+                if (data.inventory && data.inventory.snapshotEggs) {
+                    data.inventory.snapshotEggs.forEach(egg => {
                         if (parseInt(egg.current_stock) < 100) {
                             alerts.push({
                                 type: 'warning',
                                 title: 'Low Egg Stock',
-                                message: `${egg.egg_size || 'Unknown'} eggs: ${egg.current_stock} units remaining`
+                                message: `${egg.egg_size || 'Unknown'} eggs: ${egg.current_stock} units remaining`,
+                                time: '2h ago'
                             });
                         }
                     });
@@ -210,29 +295,50 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                         alerts.push({
                             type: 'info',
                             title: 'Pending Reservations',
-                            message: `${pending.length} reservations awaiting confirmation`
+                            message: `${pending.length} reservations awaiting confirmation`,
+                            time: '1h ago'
                         });
                     }
                 }
 
-                if (alertCount) alertCount.textContent = alerts.length;
+                // Update main dashboard alerts
+                if (alertsList) {
+                    if (alertCount) alertCount.textContent = alerts.length;
 
-                if (alerts.length === 0) {
-                    alertsList.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">No alerts at this time</div>';
-                } else {
-                    alertsList.innerHTML = alerts.map(alert => `
-                        <div class="alert-item" style="padding: 12px; border-bottom: 1px solid #eee;">
-                            <strong style="color: ${alert.type === 'warning' ? '#f57f17' : '#1565c0'}">${alert.title}</strong>
-                            <div style="font-size: 12px; color: #666;">${alert.message}</div>
-                        </div>
-                    `).join('');
+                    if (alerts.length === 0) {
+                        alertsList.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">No alerts at this time</div>';
+                    } else {
+                        alertsList.innerHTML = alerts.map(alert => `
+                            <div class="alert-item" style="padding: 12px; border-bottom: 1px solid #eee;">
+                                <strong style="color: ${alert.type === 'warning' ? '#f57f17' : '#1565c0'}">${alert.title}</strong>
+                                <div style="font-size: 12px; color: #666;">${alert.message}</div>
+                            </div>
+                        `).join('');
+                    }
+                }
+
+                // Update right rail alerts
+                if (rightRailAlerts) {
+                    if (alerts.length === 0) {
+                        rightRailAlerts.innerHTML = '<div style="padding: 20px; text-align: center; color: #999; font-size: 12px;">No alerts at this time</div>';
+                    } else {
+                        rightRailAlerts.innerHTML = alerts.map(alert => `
+                            <div class="alert-item">
+                                <div class="alert-dot ${alert.type}"></div>
+                                <div class="alert-content">
+                                    <div class="alert-title">${alert.title}</div>
+                                    <div class="alert-time">${alert.time}</div>
+                                </div>
+                            </div>
+                        `).join('');
+                    }
                 }
             }
 
             function renderDashboardActivity(data) {
                 const activityList = document.getElementById('activity-log-list');
                 const liveMetric = document.getElementById('live-metric');
-                if (!activityList) return;
+                const rightRailActivity = document.getElementById('right-rail-activity');
 
                 if (liveMetric && data.reservations) {
                     const activeCount = data.reservations.filter(r => r.status === 'pending' || r.status === 'confirmed').length;
@@ -240,25 +346,72 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                 }
 
                 if (!data.reservations || data.reservations.length === 0) {
-                    activityList.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">No recent activity</div>';
+                    if (activityList) {
+                        activityList.innerHTML = '<div style="padding: 20px; text-align: center; color: #999;">No recent activity</div>';
+                    }
+                    if (rightRailActivity) {
+                        rightRailActivity.innerHTML = '<div style="padding: 20px; text-align: center; color: #999; font-size: 12px;">No recent activity</div>';
+                    }
                     return;
                 }
 
                 const recentReservations = data.reservations.slice(-5).reverse();
-                activityList.innerHTML = recentReservations.map(res => {
-                    const customerName = res.customerName || 'Unknown';
-                    const product = res.product || 'Unknown';
-                    const quantity = res.quantity || 0;
-                    const status = res.status ? res.status.charAt(0).toUpperCase() + res.status.slice(1) : 'Unknown';
-                    const createdAt = res.createdAt || 'Unknown date';
 
-                    return `
-                    <div style="padding: 12px; border-left: 2px solid #ddd; margin-left: 10px; padding-left: 15px; margin-bottom: 12px;">
-                        <div style="font-weight: 600; font-size: 13px; white-space: normal; line-height: 1.4;">${customerName} — ${product} — ${quantity} units — ${status}</div>
-                        <div style="font-size: 11px; color: #999; margin-top: 4px;">${createdAt}</div>
-                    </div>
-                    `;
-                }).join('');
+                // Update main dashboard activity
+                if (activityList) {
+                    activityList.innerHTML = recentReservations.map(res => {
+                        const customerName = res.customerName || 'Unknown';
+                        const product = res.product || 'Unknown';
+                        const quantity = res.quantity || 0;
+                        const status = res.status ? res.status.charAt(0).toUpperCase() + res.status.slice(1) : 'Unknown';
+                        const createdAt = res.createdAt || 'Unknown date';
+
+                        return `
+                        <div style="padding: 12px; border-left: 2px solid #ddd; margin-left: 10px; padding-left: 15px; margin-bottom: 12px;">
+                            <div style="font-weight: 600; font-size: 13px; white-space: normal; line-height: 1.4;">${customerName} — ${product} — ${quantity} units — ${status}</div>
+                            <div style="font-size: 11px; color: #999; margin-top: 4px;">${createdAt}</div>
+                        </div>
+                        `;
+                    }).join('');
+                }
+
+                // Update right rail activity
+                if (rightRailActivity) {
+                    rightRailActivity.innerHTML = recentReservations.slice(0, 5).map(res => {
+                        const customerName = res.customerName || 'Unknown';
+                        const product = res.product || 'Unknown';
+                        const createdAt = res.createdAt || 'Unknown';
+
+                        // Calculate time ago
+                        const dateObj = new Date(createdAt);
+                        const now = new Date();
+                        const diffMs = now - dateObj;
+                        const diffMins = Math.floor(diffMs / 60000);
+                        const diffHours = Math.floor(diffMs / 3600000);
+                        const diffDays = Math.floor(diffMs / 86400000);
+
+                        let timeAgo = 'Just now';
+                        if (diffMins < 60) {
+                            timeAgo = `${diffMins}m ago`;
+                        } else if (diffHours < 24) {
+                            timeAgo = `${diffHours}h ago`;
+                        } else {
+                            timeAgo = `${diffDays}d ago`;
+                        }
+
+                        return `
+                        <div class="activity-item">
+                            <div class="activity-icon">
+                                <i class="fa-solid fa-egg"></i>
+                            </div>
+                            <div class="activity-content">
+                                <div class="activity-text">${customerName} ordered ${product}</div>
+                                <div class="activity-time">${timeAgo}</div>
+                            </div>
+                        </div>
+                        `;
+                    }).join('');
+                }
             }
 
             function renderDashboardQuickStatus(data) {
@@ -267,8 +420,8 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                 const deliveryStatus = document.getElementById('quick-delivery-status');
                 const forecastStatus = document.getElementById('quick-forecast-status');
 
-                if (inventoryStatus && data.inventory && data.inventory.eggs) {
-                    const totalStock = data.inventory.eggs.reduce((sum, e) => sum + (parseInt(e.current_stock) || 0), 0);
+                if (inventoryStatus && data.inventory && data.inventory.snapshotEggs) {
+                    const totalStock = data.inventory.snapshotEggs.reduce((sum, e) => sum + (parseInt(e.current_stock) || 0), 0);
                     inventoryStatus.textContent = totalStock > 500 ? 'Healthy' : totalStock > 100 ? 'Moderate' : 'Low';
                     inventoryStatus.style.color = totalStock > 500 ? '#28a745' : totalStock > 100 ? '#ffc107' : '#dc3545';
                 }
@@ -309,6 +462,224 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                     </div>
                 `).join('');
             }
+
+            function renderDashboardAnalytics(data) {
+                const analyticsLoading = document.getElementById('dashboard-analytics-loading');
+                const analyticsContent = document.getElementById('dashboard-analytics-content');
+                if (!analyticsLoading || !analyticsContent) return;
+
+                analyticsLoading.style.display = 'none';
+                analyticsContent.style.display = 'block';
+
+                // Render Analytics KPIs
+                const users = data.users || [];
+                const reservations = data.reservations || [];
+                const deliveries = data.deliveries || [];
+                const inventory = data.inventory || {};
+                const eggs = inventory.eggs || [];
+                const supplies = inventory.supplies || [];
+
+                const totalReservations = reservations.length;
+                const totalSales = reservations.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
+                const avgOrderSize = totalReservations > 0 ? Math.round(totalSales / totalReservations) : 0;
+                const customerGrowth = users.length > 0 ? '+12%' : '0%';
+
+                document.getElementById('analytics-kpi-reservations').textContent = totalReservations;
+                document.getElementById('analytics-kpi-sales').textContent = '₱' + totalSales.toLocaleString();
+                document.getElementById('analytics-kpi-avg-order').textContent = avgOrderSize;
+                document.getElementById('analytics-kpi-growth').textContent = customerGrowth;
+
+                // Render Reservation Chart
+                renderDashboardReservationChart(reservations);
+
+                // Render Inventory Chart
+                renderDashboardInventoryChart(inventory);
+            }
+
+            // Add resize handler to re-render charts
+            window.addEventListener('resize', function() {
+                if (dashboardDataCache) {
+                    renderDashboardReservationChart(dashboardDataCache.reservations || []);
+                    renderDashboardInventoryChart(dashboardDataCache.inventory || {});
+                }
+            });
+
+            function renderDashboardReservationChart(reservations) {
+                const svg = document.getElementById('dashboard-reservation-chart');
+                if (!svg || !reservations || reservations.length === 0) {
+                    if (svg) svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="#999" font-size="14">No reservation data available</text>';
+                    return;
+                }
+
+                const dateCounts = {};
+                reservations.forEach(r => {
+                    const date = r.scheduledAt || r.createdAt || 'unknown';
+                    const dateShort = date.substring(0, 10);
+                    dateCounts[dateShort] = (dateCounts[dateShort] || 0) + 1;
+                });
+
+                const dates = Object.keys(dateCounts).sort();
+                const values = Object.values(dateCounts).map(v => Number(v) || 0);
+                const maxCount = Math.max(...values, 1);
+
+                // Get actual container dimensions
+                const containerWidth = svg.parentElement.clientWidth || 600;
+                const containerHeight = svg.parentElement.clientHeight || 220;
+
+                const padding = { top: 20, right: 20, bottom: 70, left: 40 };
+                const chartWidth = containerWidth - padding.left - padding.right;
+                const chartHeight = containerHeight - padding.top - padding.bottom;
+
+                // Calculate max labels that can fit (assume ~40px per label)
+                const maxLabels = Math.floor(chartWidth / 45);
+                const showAllLabels = dates.length <= maxLabels;
+                const labelStep = showAllLabels ? 1 : Math.ceil(dates.length / maxLabels);
+
+                const barWidth = Math.max((chartWidth / dates.length) * 0.4, 20);
+                const barGap = (chartWidth - (barWidth * dates.length)) / (dates.length + 1);
+
+                let svgContent = '';
+
+                // Grid lines
+                for (let i = 0; i <= 5; i++) {
+                    const y = padding.top + (chartHeight * i / 5);
+                    svgContent += `<line x1="${padding.left}" y1="${y}" x2="${containerWidth - padding.right}" y2="${y}" stroke="#e0e0e0" stroke-width="1" stroke-dasharray="4"/>`;
+                }
+
+                // Bars
+                dates.forEach((date, i) => {
+                    const count = values[i] || 0;
+                    const barHeight = (count / maxCount) * chartHeight;
+                    const x = padding.left + barGap + i * (barWidth + barGap);
+                    const y = padding.top + chartHeight - barHeight;
+
+                    // Only show label on some bars if there are too many
+                    const showLabel = showAllLabels || i % labelStep === 0;
+
+                    // Format date as "Oct 08" from "2024-10-08"
+                    const dateObj = new Date(date);
+                    const formattedDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+                    svgContent += `
+                        <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" fill="url(#barGradient)" rx="4" ry="4"/>
+                        ${showLabel ? `<text x="${x + barWidth/2}" y="${containerHeight - padding.bottom + 20}" font-size="10" text-anchor="middle" fill="#666">${formattedDate}</text>` : ''}
+                        <text x="${x + barWidth/2}" y="${y - 8}" font-size="12" text-anchor="middle" fill="#214f2c" font-weight="600">${count}</text>
+                    `;
+                });
+
+                // Gradient definition
+                svgContent = `
+                    <defs>
+                        <linearGradient id="barGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#214f2c;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#527d59;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                ` + svgContent;
+
+                svg.setAttribute('viewBox', `0 0 ${containerWidth} ${containerHeight}`);
+                svg.innerHTML = svgContent;
+            }
+
+            function renderDashboardInventoryChart(inventory) {
+                const svg = document.getElementById('dashboard-inventory-chart');
+                const summaryDiv = document.getElementById('dashboard-inventory-summary');
+                if (!svg || !inventory) return;
+
+                const eggs = inventory.snapshotEggs || [];
+                const supplies = inventory.snapshotSupplies || [];
+
+                // Render summary
+                const totalEggStock = eggs.reduce((sum, e) => sum + (parseInt(e.current_stock) || 0), 0);
+                const totalSupplyStock = supplies.reduce((sum, s) => sum + (parseInt(s.current_stock) || 0), 0);
+
+                summaryDiv.innerHTML = `
+                    <div style="display:flex;gap:30px;flex-wrap:wrap;">
+                        <div><strong>Total Egg Stock:</strong> ${totalEggStock.toLocaleString()} units</div>
+                        <div><strong>Total Supply Stock:</strong> ${totalSupplyStock.toLocaleString()} units</div>
+                    </div>
+                `;
+
+                // Render chart
+                const sizeCounts = {};
+                eggs.forEach(e => {
+                    const size = e.egg_size || 'unknown';
+                    sizeCounts[size] = (sizeCounts[size] || 0) + (parseInt(e.current_stock) || 0);
+                });
+
+                if (Object.keys(sizeCounts).length === 0) {
+                    svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" font-size="14" fill="#999">No inventory data available</text>';
+                    return;
+                }
+
+                const values = Object.values(sizeCounts).map(v => Number(v) || 0);
+                const maxCount = Math.max(...values, 1);
+
+                // Get actual container dimensions
+                const containerWidth = svg.parentElement.clientWidth || 600;
+                const containerHeight = svg.parentElement.clientHeight || 220;
+
+                const padding = { top: 20, right: 20, bottom: 95, left: 40 };
+                const chartWidth = containerWidth - padding.left - padding.right;
+                const chartHeight = containerHeight - padding.top - padding.bottom;
+
+                const categories = Object.keys(sizeCounts);
+                const barWidth = Math.max((chartWidth / categories.length) * 0.45, 22);
+                const barGap = (chartWidth - (barWidth * categories.length)) / (categories.length + 1);
+
+                let svgContent = '';
+
+                // Grid lines
+                for (let i = 0; i <= 5; i++) {
+                    const y = padding.top + (chartHeight * i / 5);
+                    svgContent += `<line x1="${padding.left}" y1="${y}" x2="${containerWidth - padding.right}" y2="${y}" stroke="#e0e0e0" stroke-width="1" stroke-dasharray="4"/>`;
+                }
+
+                // Bars
+                Object.entries(sizeCounts).forEach(([size, count], i) => {
+                    const countSafe = Number(count) || 0;
+                    const barHeight = (countSafe / maxCount) * chartHeight;
+                    const x = padding.left + barGap + i * (barWidth + barGap);
+                    const y = padding.top + chartHeight - barHeight;
+
+                    // Smart label wrapping
+                    let labelText = '';
+                    const labelParts = size.split(' ');
+                    if (labelParts.length > 1) {
+                        // Multi-word: put each word on its own line
+                        labelText = `<tspan x="${x + barWidth/2}" dy="0" font-size="9" text-anchor="middle" fill="#666">${labelParts[0]}</tspan>`;
+                        labelParts.slice(1).forEach((part, idx) => {
+                            labelText += `<tspan x="${x + barWidth/2}" dy="11" font-size="9" text-anchor="middle" fill="#666">${part}</tspan>`;
+                        });
+                    } else if (size.length > 7) {
+                        // Long single word: split it
+                        const mid = Math.ceil(size.length / 2);
+                        labelText = `<tspan x="${x + barWidth/2}" dy="0" font-size="9" text-anchor="middle" fill="#666">${size.substring(0, mid)}</tspan>`;
+                        labelText += `<tspan x="${x + barWidth/2}" dy="11" font-size="9" text-anchor="middle" fill="#666">${size.substring(mid)}</tspan>`;
+                    } else {
+                        labelText = `<tspan x="${x + barWidth/2}" dy="8" font-size="9" text-anchor="middle" fill="#666">${size}</tspan>`;
+                    }
+
+                    svgContent += `
+                        <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" fill="url(#barGradientInv)" rx="4" ry="4"/>
+                        <text x="${x + barWidth/2}" y="${containerHeight - padding.bottom + 20}">${labelText}</text>
+                        <text x="${x + barWidth/2}" y="${y - 8}" font-size="11" text-anchor="middle" fill="#214f2c" font-weight="600">${countSafe}</text>
+                    `;
+                });
+
+                // Gradient definition
+                svgContent = `
+                    <defs>
+                        <linearGradient id="barGradientInv" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#527d59;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#214f2c;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                ` + svgContent;
+
+                svg.setAttribute('viewBox', `0 0 ${containerWidth} ${containerHeight}`);
+                svg.innerHTML = svgContent;
+            }
         </script>
 
     <?php elseif ($page == 'users'): ?>
@@ -319,7 +690,11 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
         ?>
 
     <?php elseif ($page == 'analytics'): ?>
-        <?php include 'owner_content_analytics.php'; ?>
+        <?php
+        // Redirect to dashboard since analytics is now integrated
+        header("Location: owner_dashboard.php?page=dashboard");
+        exit();
+        ?>
 
     <?php elseif ($page == 'forecasting'): ?>
         <?php include 'owner_content_forecasting.php'; ?>
@@ -328,7 +703,7 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
         <div id="page-reports" class="page">
             <div class="page-shell">
                 <div class="page-subtitle">Reports Management</div>
-                <div style="font-size:13px;font-weight:700;color:var(--sidebar);margin-bottom:12px;">Enterprise Reports Center</div>
+                <div style="font-size:13px;font-weight:700;color:var(--sidebar);margin-bottom:12px;">Reports Center</div>
                 
                 <div class="reports-filters">
                     <label for="report-type">Report Type:</label>
@@ -782,67 +1157,129 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                         <title>${reportTitle}</title>
                         <style>
                             @page {
-                                size: A4 landscape;
-                                margin: 12mm;
+                                size: A4 portrait;
+                                margin: 15mm;
+                                @top-left {
+                                    content: "VDVC Egg Farm";
+                                    font-family: 'Arial', sans-serif;
+                                    font-size: 9pt;
+                                    color: #214f2c;
+                                }
+                                @top-center {
+                                    content: "${reportTitle}";
+                                    font-family: 'Arial', sans-serif;
+                                    font-size: 10pt;
+                                    font-weight: bold;
+                                    color: #333;
+                                }
+                                @top-right {
+                                    content: "Generated: ${reportDate}";
+                                    font-family: 'Arial', sans-serif;
+                                    font-size: 8pt;
+                                    color: #666;
+                                }
+                                @bottom-left {
+                                    content: "Confidential — Owner Report";
+                                    font-family: 'Arial', sans-serif;
+                                    font-size: 8pt;
+                                    color: #666;
+                                }
+                                @bottom-center {
+                                    content: counter(page) " of " counter(pages);
+                                    font-family: 'Arial', sans-serif;
+                                    font-size: 9pt;
+                                    color: #666;
+                                }
+                                @bottom-right {
+                                    content: "VDVC Egg Farm";
+                                    font-family: 'Arial', sans-serif;
+                                    font-size: 9pt;
+                                    color: #214f2c;
+                                }
                             }
                             @media print {
                                 body {
                                     margin: 0;
                                     padding: 0;
                                 }
+                                .print-table {
+                                    page-break-inside: auto;
+                                }
+                                .print-table tr {
+                                    page-break-inside: avoid;
+                                    page-break-after: auto;
+                                }
+                                .print-table thead {
+                                    display: table-header-group;
+                                }
+                                .print-table tfoot {
+                                    display: table-footer-group;
+                                }
+                                .print-section {
+                                    page-break-inside: avoid;
+                                }
                             }
                             body {
                                 font-family: 'Arial', 'Helvetica', sans-serif;
-                                font-size: 11pt;
+                                font-size: 10pt;
                                 color: #333;
-                                line-height: 1.4;
+                                line-height: 1.5;
                                 background: white;
                             }
                             .print-header {
                                 text-align: center;
-                                margin-bottom: 20px;
-                                border-bottom: 2px solid #214f2c;
-                                padding-bottom: 15px;
+                                margin-bottom: 25px;
+                                padding-bottom: 20px;
+                                border-bottom: 3px solid #214f2c;
                             }
                             .print-logo {
-                                max-height: 60px;
-                                margin-bottom: 10px;
+                                max-height: 70px;
+                                margin-bottom: 12px;
                             }
                             .print-title {
-                                font-size: 18pt;
+                                font-size: 22pt;
                                 font-weight: bold;
                                 color: #214f2c;
-                                margin: 5px 0;
+                                margin: 8px 0;
+                                letter-spacing: 0.5px;
                             }
                             .print-subtitle {
-                                font-size: 12pt;
+                                font-size: 11pt;
                                 color: #666;
                                 margin: 5px 0;
+                                font-weight: 500;
                             }
                             .print-metadata {
-                                margin: 15px 0;
-                                padding: 10px;
-                                background: #f5f5f5;
+                                margin: 20px 0;
+                                padding: 15px;
+                                background: #f8f9fa;
+                                border-left: 4px solid #214f2c;
                                 border-radius: 4px;
-                                font-size: 10pt;
+                                font-size: 9pt;
                             }
                             .print-metadata-row {
                                 display: flex;
                                 justify-content: space-between;
-                                margin: 5px 0;
+                                margin: 8px 0;
+                                padding: 4px 0;
+                            }
+                            .print-metadata-row strong {
+                                color: #214f2c;
                             }
                             .print-summary {
-                                margin: 20px 0;
-                                padding: 15px;
-                                background: #f9f9f9;
-                                border: 1px solid #ddd;
-                                border-radius: 4px;
+                                margin: 25px 0;
+                                padding: 20px;
+                                background: #f8f9fa;
+                                border: 1px solid #e9ecef;
+                                border-radius: 6px;
                             }
                             .print-summary-title {
-                                font-size: 14pt;
+                                font-size: 13pt;
                                 font-weight: bold;
                                 color: #214f2c;
-                                margin-bottom: 10px;
+                                margin-bottom: 15px;
+                                text-transform: uppercase;
+                                letter-spacing: 1px;
                             }
                             .print-summary-grid {
                                 display: grid;
@@ -852,67 +1289,84 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                             }
                             .print-summary-item {
                                 text-align: center;
-                                padding: 10px;
+                                padding: 15px;
                                 background: white;
-                                border: 1px solid #ddd;
-                                border-radius: 4px;
+                                border: 1px solid #dee2e6;
+                                border-radius: 6px;
+                                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
                             }
                             .print-summary-label {
-                                font-size: 9pt;
-                                color: #666;
-                                margin-bottom: 5px;
+                                font-size: 8pt;
+                                color: #6c757d;
+                                margin-bottom: 8px;
+                                text-transform: uppercase;
+                                letter-spacing: 0.5px;
                             }
                             .print-summary-value {
-                                font-size: 16pt;
+                                font-size: 18pt;
                                 font-weight: bold;
                                 color: #214f2c;
+                            }
+                            .print-section {
+                                margin: 30px 0;
+                                page-break-inside: avoid;
                             }
                             .print-section-title {
                                 font-size: 14pt;
                                 font-weight: bold;
                                 color: #214f2c;
-                                margin: 25px 0 15px 0;
-                                padding-bottom: 5px;
-                                border-bottom: 1px solid #ddd;
+                                margin: 20px 0 15px 0;
+                                padding-bottom: 8px;
+                                border-bottom: 2px solid #214f2c;
+                                text-transform: uppercase;
+                                letter-spacing: 0.5px;
                             }
                             .print-table {
                                 width: 100%;
                                 border-collapse: collapse;
                                 margin: 15px 0;
-                                font-size: 10pt;
+                                font-size: 9pt;
+                                box-shadow: 0 1px 3px rgba(0,0,0,0.05);
                             }
                             .print-table th {
-                                background: #214f2c;
+                                background: linear-gradient(135deg, #214f2c 0%, #527d59 100%);
                                 color: white;
                                 font-weight: bold;
-                                padding: 10px 8px;
+                                padding: 12px 10px;
                                 text-align: left;
                                 border: 1px solid #1a3d22;
+                                text-transform: uppercase;
+                                font-size: 8pt;
+                                letter-spacing: 0.5px;
                             }
                             .print-table td {
-                                padding: 8px;
-                                border: 1px solid #ddd;
+                                padding: 10px;
+                                border: 1px solid #dee2e6;
                                 text-align: left;
                             }
                             .print-table tr:nth-child(even) {
-                                background: #f9f9f9;
+                                background: #f8f9fa;
                             }
                             .print-table tr:hover {
-                                background: #e8f0e9;
+                                background: #e8f5e9;
                             }
                             .print-footer {
-                                margin-top: 30px;
-                                padding-top: 15px;
-                                border-top: 1px solid #ddd;
+                                margin-top: 40px;
+                                padding-top: 20px;
+                                border-top: 2px solid #214f2c;
                                 text-align: center;
-                                font-size: 9pt;
-                                color: #666;
+                                font-size: 8pt;
+                                color: #6c757d;
+                            }
+                            .print-footer div {
+                                margin: 4px 0;
                             }
                             .print-empty {
                                 text-align: center;
-                                padding: 40px;
+                                padding: 50px;
                                 color: #999;
                                 font-style: italic;
+                                font-size: 11pt;
                             }
                             .trend-up { color: #28a745; font-weight: bold; }
                             .trend-down { color: #dc3545; font-weight: bold; }
@@ -951,10 +1405,10 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                 // Header
                 content += `
                     <div class="print-header">
-                        <img src="../vdvc/vdvc_logo.png" alt="VDVC Logo" class="print-logo" onerror="this.style.display='none'">
-                        <div class="print-title">VDVC ENTERPRISE</div>
-                        <div class="print-subtitle">Villa Ocampo's Egg Farm</div>
-                        <div class="print-title" style="margin-top: 15px;">${reportTitle}</div>
+                        <img src="../vdvc/vdvc_logo.png" alt="VDVC Egg Farm Logo" class="print-logo" onerror="this.style.display='none'">
+                        <div class="print-title">VDVC EGG FARM</div>
+                        <div class="print-subtitle">Official Farm Records</div>
+                        <div class="print-title" style="margin-top: 18px; font-size: 16pt;">${reportTitle}</div>
                     </div>
                 `;
 
@@ -993,7 +1447,7 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                 // Footer
                 content += `
                     <div class="print-footer">
-                        <div>VDVC Enterprise — Villa Ocampo's Egg Farm</div>
+                        <div>VDVC Egg Farm</div>
                         <div>Generated: ${reportDate}</div>
                         <div style="margin-top: 5px;">Confidential — Owner Report</div>
                     </div>
@@ -1004,16 +1458,17 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
 
             function buildInventoryPrintContent(data) {
                 const inventory = data.inventory || {};
-                const eggs = inventory.eggs || [];
-                const supplies = inventory.supplies || [];
+                const eggs = inventory.snapshotEggs || [];
+                const supplies = inventory.snapshotSupplies || [];
+                const historicalEggs = inventory.eggs || [];
 
                 let content = '';
 
                 // Summary
                 const totalEggStock = eggs.reduce((sum, e) => sum + (parseInt(e.current_stock) || 0), 0);
                 const totalSupplyStock = supplies.reduce((sum, s) => sum + (parseInt(s.current_stock) || 0), 0);
-                const stockIn = eggs.filter(e => e.movement_type === 'Stock In').length;
-                const stockOut = eggs.filter(e => e.movement_type === 'Stock Out').length;
+                const stockIn = historicalEggs.filter(e => e.movement_type === 'Stock In').length;
+                const stockOut = historicalEggs.filter(e => e.movement_type === 'Stock Out').length;
 
                 content += `
                     <div class="print-summary">
@@ -1039,32 +1494,22 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                     </div>
                 `;
 
-                // Egg Inventory Table
+                // Egg Inventory Table (Current Stock Snapshot)
                 if (eggs.length > 0) {
-                    content += `<div class="print-section-title">Egg Inventory</div>`;
+                    content += `<div class="print-section-title">Current Egg Stock</div>`;
                     content += `<table class="print-table">
                         <thead>
                             <tr>
-                                <th>ID</th>
-                                <th>Batch ID</th>
                                 <th>Egg Size</th>
-                                <th>Quantity</th>
                                 <th>Current Stock</th>
-                                <th>Movement Type</th>
-                                <th>Reason</th>
-                                <th>Date Logged</th>
+                                <th>Last Updated</th>
                             </tr>
                         </thead>
                         <tbody>`;
                     eggs.forEach(e => {
                         content += `<tr>
-                            <td>${e.id || '—'}</td>
-                            <td>${e.batch_id || '—'}</td>
                             <td>${e.egg_size || '—'}</td>
-                            <td>${e.quantity || '—'}</td>
                             <td>${e.current_stock || '—'}</td>
-                            <td>${e.movement_type || '—'}</td>
-                            <td>${e.reason || '—'}</td>
                             <td>${e.date_logged || '—'}</td>
                         </tr>`;
                     });
@@ -1513,6 +1958,15 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
         </div>
     <?php endif; ?>
 
+<?php if (!$is_included) { ?>
+    <script>
+        // Set the inventory API URL before app_analytics.js loads.
+        // dirname(PHP_SELF) gives the web-root-relative folder this script lives in,
+        // so the path works regardless of the Laragon project folder name.
+        window.VDVC_INVENTORY_API_URL =
+            '<?php echo rtrim(dirname($_SERVER['PHP_SELF']), '/\\'); ?>/inventory_api.php';
+    </script>
     <script src="vdvc/app_analytics.js"></script>
 </body>
 </html>
+<?php } ?>

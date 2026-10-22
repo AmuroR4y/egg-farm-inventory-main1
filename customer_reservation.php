@@ -7,6 +7,7 @@ require_once 'session_config.php';
 date_default_timezone_set('Asia/Manila');
 
 require 'db.php';
+require_once 'config_age_eligibility.php';
 
 // Helper function to get manager users
 function getManagerUsers($conn) {
@@ -45,10 +46,35 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] != 'customer') {
     exit();
 }
 
+/* =========================================================
+   CUSTOMER LOGOUT TOKEN
+   PHP 5.5 COMPATIBLE
+========================================================= */
+
+if (empty($_SESSION['customer_logout_token'])) {
+    if (function_exists('random_bytes')) {
+        $_SESSION['customer_logout_token'] = bin2hex(
+            random_bytes(32)
+        );
+    } elseif (function_exists('openssl_random_pseudo_bytes')) {
+        $_SESSION['customer_logout_token'] = bin2hex(
+            openssl_random_pseudo_bytes(32)
+        );
+    } else {
+        $_SESSION['customer_logout_token'] = hash(
+            'sha256',
+            uniqid(mt_rand(), true) . session_id()
+        );
+    }
+}
+
 // Match the active logged-in parameters
 $user_id = $_SESSION['user_id'];
-$customer_name = isset($_SESSION['fullname']) ? $_SESSION['fullname'] : '';
+$customer_name = isset($_SESSION['fullname'])
+    ? $_SESSION['fullname']
+    : (isset($_SESSION['customer_name']) ? $_SESSION['customer_name'] : (isset($_SESSION['name']) ? $_SESSION['name'] : 'Customer'));
 $user_role = isset($_SESSION['role']) ? $_SESSION['role'] : 'Customer';
+$active_page = 'reservation';
 
 // =========================================================
 // NOTIFICATION COUNT
@@ -427,1359 +453,187 @@ $paginated_reservations = array_slice(
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="customer_styles.css">
 </head>
 <style>
 
 /* =========================================================
-   CUSTOMER RESERVATION — CUSTOMER DASHBOARD MATCH
-   HEADER + PAGE SHELL ONLY
+   RESERVATION PAGE SPECIFIC STYLES
 ========================================================= */
 
-/* =========================================================
-   MAIN CONTENT
-========================================================= */
-html,
-body {
-
-    margin:
-        0;
-
-    padding:
-        0;
-
-    width:
-        100%;
-
-    min-height:
-        100%;
-
-    background:
-        #f3f1eb;
+.reservation-hero {
+    background: linear-gradient(135deg, #214f2c 0%, #175c31 100%);
+    color: #ffffff;
+    padding: 35px 25px;
+    text-align: center;
 }
-.main-content {
-
-    margin-left:
-        312px;
-
-    min-height:
-        100vh;
-
-    padding:
-        18px;
-
-    background:
-        linear-gradient(
-            135deg,
-            #eeece6 0%,
-            #f5f3ed 100%
-        );
-}
-
-.copy-reservation-btn:hover {
-    color: #214f2c !important;
-    background: #e8f0ea !important;
-}
-/* =========================================================
-   RESERVATION OUTER CARD
-   SAME AS CUSTOMER DASHBOARD WRAPPER
-========================================================= */
 
 .reservation-card {
-
-    width:
-        100%;
-
-    background:
-        #ffffff;
-
-    border:
-        1px solid #dedbd2;
-
-    border-radius:
-        22px;
-
-    box-shadow:
-        0 12px 35px
-        rgba(
-            80,
-            72,
-            55,
-            0.10
-        );
-
-    overflow:
-        hidden;
+    padding-top: 0;
 }
 
-
-/* =========================================================
-   REMOVE EXTRA TAILWIND OUTER SPACING
-========================================================= */
-
-.main-content > .flex-1 {
-    width: 100% !important;
-}
-
-.main-content > .flex-1 > .max-w-7xl {
-    width: 100% !important;
-    max-width: none !important;
-
-    margin: 0 !important;
-
-    padding:
-        0 !important;
-}
-
-
-/* =========================================================
-   CUSTOMER RESERVATION HEADER
-   EXACT CUSTOMER DASHBOARD HEADER SIZE
-========================================================= */
-
-.reservation-card > header {
-
-    min-height:
-        86px !important;
-
-    width:
-        100% !important;
-
-    padding:
-        0 28px !important;
-
-    display:
-        flex !important;
-
-    align-items:
-        center !important;
-
-    justify-content:
-        space-between !important;
-
-    background:
-        #f7f6f2 !important;
-
-    border-bottom:
-        1px solid #dddcd6 !important;
-
-    box-sizing:
-        border-box !important;
-}
-
-
-/* =========================================================
-   HEADER TITLE
-========================================================= */
-
-.reservation-card > header h1 {
-
-    margin:
-        0 !important;
-
-    padding:
-        0 !important;
-
-    font-family:
-        Arial,
-        Helvetica,
-        sans-serif !important;
-
-    font-size:
-        1.35rem !important;
-
-    font-weight:
-        700 !important;
-
-    line-height:
-        1.2 !important;
-
-    color:
-        #3f4b45 !important;
-
-    letter-spacing:
-        -0.3px !important;
-}
-
-
-/* =========================================================
-   HEADER RIGHT SIDE
-========================================================= */
-
-.reservation-card > header > div {
-
-    display:
-        flex !important;
-
-    align-items:
-        center !important;
-
-    gap:
-        18px !important;
-
-    height:
-        100% !important;
-}
-
-
-/* =========================================================
-   CUSTOMER ACCOUNT AREA
-
-   Customer Dashboard:
-   Avatar → Name → Date/Time → Dropdown
-
-   Reservation:
-   We keep the existing name position but
-   make its size/color match.
-========================================================= */
-
-.reservation-card > header .text-right {
-
-    display:
-        flex !important;
-
-    flex-direction:
-        column !important;
-
-    justify-content:
-        center !important;
-
-    min-width:
-        100px !important;
-
-    text-align:
-        left !important;
-}
-
-
-/* =========================================================
-   CUSTOMER NAME
-========================================================= */
-
-.reservation-card > header .text-right > div:first-child {
-
-    display:
-        block !important;
-
-    margin:
-        0 !important;
-
-    color:
-        #3f4b45 !important;
-
-    font-size:
-        0.88rem !important;
-
-    font-weight:
-        700 !important;
-
-    line-height:
-        1.2 !important;
-}
-
-
-/* =========================================================
-   CUSTOMER ROLE
-========================================================= */
-
-.reservation-card > header .text-right > div:last-child {
-
-    margin-top:
-        5px !important;
-
-    font-size:
-        0.63rem !important;
-
-    color:
-        #8a9590 !important;
-
-    line-height:
-        1.2 !important;
-}
-
-
-/* =========================================================
-   PROFILE AVATAR
-   EXACT CUSTOMER DASHBOARD SIZE
-========================================================= */
-
-.reservation-card > header .w-10.h-10 {
-
-    width:
-        54px !important;
-
-    height:
-        54px !important;
-
-    min-width:
-        54px !important;
-
-    border-radius:
-        50% !important;
-
-    overflow:
-        hidden !important;
-
-    background:
-        #e8ebe7 !important;
-
-    border:
-        1px solid #d9ddd8 !important;
-
-    box-shadow:
-        0 2px 6px
-        rgba(
-            0,
-            0,
-            0,
-            0.04
-        ) !important;
-}
-
-
-.reservation-card > header .w-10.h-10 img {
-
-    width:
-        100% !important;
-
-    height:
-        100% !important;
-
-    object-fit:
-        cover !important;
-
-    display:
-        block !important;
-}
-
-
-/* =========================================================
-   NOTIFICATION CONTAINER
-========================================================= */
-
-.reservation-card > header .relative {
-
-    position:
-        relative !important;
-}
-
-
-/* =========================================================
-   NOTIFICATION BELL
-========================================================= */
-
-.reservation-card > header .relative > div:first-child {
-
-    width:
-        40px !important;
-
-    height:
-        40px !important;
-
-    padding:
-        0 !important;
-
-    display:
-        flex !important;
-
-    align-items:
-        center !important;
-
-    justify-content:
-        center !important;
-
-    border-radius:
-        50% !important;
-
-    color:
-        #65716b !important;
-
-    background:
-        transparent !important;
-}
-
-
-.reservation-card > header .relative > div:first-child:hover {
-
-    background:
-        transparent !important;
-
-    color:
-        #527d59 !important;
-}
-
-
-/* =========================================================
-   NOTIFICATION ICON
-========================================================= */
-
-.reservation-card > header .relative > div:first-child i {
-
-    color:
-        #65716b !important;
-
-    font-size:
-        1.2rem !important;
-}
-
-
-.reservation-card > header .relative > div:first-child:hover i {
-
-    color:
-        #527d59 !important;
-}
-
-
-/* =========================================================
-   NOTIFICATION BADGE
-   SAME SIZE/COLOR AS DASHBOARD
-========================================================= */
-
-#bell_badge {
-
-    top:
-        1px !important;
-
-    right:
-        0 !important;
-
-    width:
-        auto !important;
-
-    min-width:
-        17px !important;
-
-    height:
-        17px !important;
-
-    padding:
-        0 4px !important;
-
-    border-radius:
-        50% !important;
-
-    background:
-        #527d59 !important;
-
-    border:
-        2px solid #f7f6f2 !important;
-}
-
-
-/* =========================================================
-   NOTIFICATION DROPDOWN
-   CHANGE BLUE ACCENTS TO DASHBOARD GREEN
-========================================================= */
-
-#notification_dropdown {
-
-    width:
-        320px !important;
-
-    margin-top:
-        12px !important;
-
-    background:
-        #ffffff !important;
-
-    border:
-        1px solid #dedbd2 !important;
-
-    border-radius:
-        12px !important;
-
-    box-shadow:
-        0 12px 30px
-        rgba(
-            70,
-            65,
-            55,
-            0.12
-        ) !important;
-}
-
-
-/* =========================================================
-   NOTIFICATION HEADER
-========================================================= */
-
-#notification_dropdown > div:first-child {
-
-    background:
-        #f7f6f2 !important;
-
-    border-bottom:
-        1px solid #e9e6df !important;
-}
-
-
-#notification_dropdown > div:first-child span:first-child {
-
-    color:
-        #3f4b45 !important;
-}
-
-
-/* =========================================================
-   UNREAD COUNT
-========================================================= */
-
-#unread_count {
-
-    background:
-        #e9f1e6 !important;
-
-    color:
-        #527d59 !important;
-}
-
-
-/* =========================================================
-   NOTIFICATION ITEMS
-========================================================= */
-
-#notification_list > div {
-
-    transition:
-        background 0.2s ease;
-}
-
-
-#notification_list > div:hover {
-
-    background:
-        #fafaf7 !important;
-}
-
-
-/* =========================================================
-   NOTIFICATION ICON COLORS
-========================================================= */
-
-#notification_list .bg-blue-100 {
-
-    background:
-        #eef3ed !important;
-
-    color:
-        #527d59 !important;
-}
-
-
-/* =========================================================
-   RESERVATION BODY
-   SAME INNER SPACING FEEL AS DASHBOARD
-========================================================= */
-
-.reservation-card > .p-6 {
-
-    padding:
-        22px 28px 28px !important;
-}
-
-
-/* =========================================================
-   MY RESERVATIONS SECTION
-========================================================= */
-
-.reservation-card .mt-6 {
-
-    border:
-        1px solid #e2dfd7 !important;
-
-    border-radius:
-        10px !important;
-
-    background:
-        #ffffff !important;
-
-    box-shadow:
-        0 3px 10px
-        rgba(
-            70,
-            65,
-            55,
-            0.05
-        ) !important;
-}
-
-
-/* =========================================================
-   RESPONSIVE
-========================================================= */
-
-@media screen and (max-width: 1100px) {
-
-    .main-content {
-
-        margin-left:
-            270px !important;
-
-        width:
-            calc(100% - 270px) !important;
-    }
-}
-
-
-@media screen and (max-width: 900px) {
-
-    .main-content {
-
-        margin-left:
-            0 !important;
-
-        width:
-            100% !important;
-
-        padding:
-            15px !important;
-    }
-
-    .reservation-card {
-
-        border-radius:
-            18px !important;
-    }
-
-    .reservation-card > header {
-
-        padding:
-            0 18px !important;
-    }
-}
-
-
-@media screen and (max-width: 600px) {
-
-    .reservation-card > .p-6 {
-
-        padding:
-            18px !important;
-    }
-
-    .reservation-card > header h1 {
-
-        font-size:
-            1.15rem !important;
-    }
-
-    .reservation-card > header .text-right {
-
-        display:
-            none !important;
-    }
-}
-
-.customer-dashboard-topbar {
-
-    min-height:
-        86px;
-
-    width:
-        100%;
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    justify-content:
-        space-between;
-
-    padding:
-        0 28px;
-
-    background:
-        #f7f6f2;
-
-    border-bottom:
-        1px solid #dddcd6;
-
-    box-sizing:
-        border-box;
-}
-
-
-/* =========================================================
-   HEADER TITLE
-========================================================= */
-
-.customer-page-title {
-
-    margin:
-        0;
-
-    font-size:
-        1.35rem;
-
-    font-weight:
-        700;
-
-    color:
-        #3f4b45;
-
-    letter-spacing:
-        -0.3px;
-}
-
-
-/* =========================================================
-   HEADER RIGHT
-========================================================= */
-
-.customer-topbar-right {
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    gap:
-        18px;
-
-    height:
-        100%;
-}
-
-
-/* =========================================================
-   NOTIFICATION
-========================================================= */
-
-.customer-top-notification {
-
-    position:
-        relative;
-
-    width:
-        40px;
-
-    height:
-        40px;
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    justify-content:
-        center;
-
-    background:
-        transparent;
-
-    border:
-        none;
-
-    color:
-        #65716b;
-
-    font-size:
-        1.2rem;
-
-    transition:
-        0.2s ease;
-
-    cursor:
-        pointer;
-}
-
-
-.customer-top-notification:hover {
-
-    color:
-        #527d59;
-}
-
-
-/* =========================================================
-   NOTIFICATION BADGE
-========================================================= */
-
-.customer-notification-badge {
-
-    position:
-        absolute;
-
-    top:
-        1px;
-
-    right:
-        0;
-
-    min-width:
-        17px;
-
-    height:
-        17px;
-
-    padding:
-        0 4px;
-
-    border-radius:
-        50%;
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    justify-content:
-        center;
-
-    background:
-        #527d59;
-
-    color:
-        #ffffff;
-
-    font-size:
-        0.58rem;
-
-    font-weight:
-        700;
-
-    border:
-        2px solid #f7f6f2;
-}
-
-
-/* =========================================================
-   CUSTOMER NOTIFICATION DROPDOWN
-========================================================= */
-
-.customer-notification-dropdown {
-    position: absolute;
-    top: calc(100% + 8px);
-    right: 0;
-    width: 360px;
-    background: #ffffff;
-    border: 1px solid #e2dfd7;
-    border-radius: 10px;
-    box-shadow: 0 3px 10px rgba(70, 65, 55, 0.05);
-    z-index: 1000;
-}
-
-.customer-notification-dropdown.hidden {
-    display: none;
-}
-
-.customer-notification-dropdown-header {
-    min-height: 50px;
-    padding: 0 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 1px solid #e9e6df;
-}
-
-.customer-panel-title-group {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-
-.customer-panel-title-icon {
-    width: 30px;
-    height: 30px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    background: #eef3ed;
-    color: #527d59;
-    font-size: 14px;
-}
-
-.customer-dashboard-panel-title {
-    font-size: 14px;
+.reservation-hero h1 {
+    margin: 0 0 12px;
+    font-size: 26px;
     font-weight: 700;
-    color: #3f4b45;
 }
 
-.customer-mark-all-link {
-    font-size: 11px;
-    font-weight: 700;
-    color: #527d59;
-    text-decoration: none;
-    cursor: pointer;
+.reservation-hero h1 i {
+    margin-right: 10px;
 }
 
-.customer-mark-all-link:hover {
-    text-decoration: underline;
-}
-
-.customer-notification-list {
-    max-height: 400px;
-    overflow-y: auto;
-}
-
-.customer-notification-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 12px 16px;
-    border-bottom: 1px solid #f0eee8;
-    cursor: pointer;
-    transition: background 0.15s;
-}
-
-.customer-notification-item:hover {
-    background: #faf9f7;
-}
-
-.customer-notification-item.unread {
-    background: #f0f5f1;
-}
-
-.customer-notification-item.unread:hover {
-    background: #e8f0e9;
-}
-
-.customer-notification-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    font-size: 14px;
-}
-
-.customer-notification-icon.success {
-    background: #e8f5e9;
-    color: #2e7d32;
-}
-
-.customer-notification-icon.alert {
-    background: #fff3e0;
-    color: #e65100;
-}
-
-.customer-notification-icon.info {
-    background: #e3f2fd;
-    color: #1565c0;
-}
-
-.customer-notification-icon.warning {
-    background: #fff8e1;
-    color: #f57f17;
-}
-
-.customer-notification-content {
-    flex: 1;
-    min-width: 0;
-}
-
-.customer-notification-title {
-    font-weight: 600;
-    font-size: 13px;
-    color: #1a2e1c;
-    margin-bottom: 4px;
-}
-
-.customer-notification-item.unread .customer-notification-title {
-    color: #214f2c;
-}
-
-.customer-notification-description {
-    font-size: 12px;
-    color: #5a6b60;
-    line-height: 1.4;
-}
-
-.customer-notification-time {
-    font-size: 11px;
-    color: #9aaa9a;
-    margin-top: 4px;
-}
-
-.customer-notification-empty {
-    padding: 40px 20px;
-    text-align: center;
-    color: #9aaa9a;
-}
-
-.customer-notification-empty i {
-    font-size: 32px;
-    margin-bottom: 12px;
-    color: #c8d4c4;
-}
-
-.customer-notification-empty p {
-    font-size: 13px;
+.reservation-hero p {
     margin: 0;
+    font-size: 14px;
+    line-height: 1.6;
+    opacity: 0.9;
 }
 
-.customer-mark-read-btn {
-    background: none;
-    border: none;
-    color: #527d59;
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-    padding: 4px 8px;
-    margin-top: 8px;
-}
-
-.customer-mark-read-btn:hover {
-    text-decoration: underline;
-}
-
-
-/* =========================================================
-   HEADER DIVIDER
-========================================================= */
-
-.customer-topbar-divider {
-
-    width:
-        1px;
-
-    height:
-        42px;
-
-    background:
-        #deded8;
-}
-
-
-/* =========================================================
-   CUSTOMER PROFILE
-========================================================= */
-
-.customer-top-profile {
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    gap:
-        11px;
-
-    min-width:
-        190px;
-
-    text-decoration:
-        none;
-
-    color:
-        #3f4b45;
-}
-
-
-/* =========================================================
-   CUSTOMER AVATAR
-========================================================= */
-
-.customer-avatar {
-
-    width:
-        54px;
-
-    height:
-        54px;
-
-    min-width:
-        54px;
-
-    border-radius:
-        50%;
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    justify-content:
-        center;
-
-    background:
-        #e8ebe7;
-
-    border:
-        1px solid #d9ddd8;
-
-    color:
-        #527d59;
-
-    font-size:
-        1.25rem;
-
-    box-shadow:
-        0 2px 6px
-        rgba(
-            0,
-            0,
-            0,
-            0.04
-        );
-}
-
-
-/* =========================================================
-   CUSTOMER ACCOUNT DETAILS
-========================================================= */
-
-.customer-account-details {
-
-    display:
-        flex;
-
-    flex-direction:
-        column;
-
-    justify-content:
-        center;
-
-    min-width:
-        100px;
-}
-
-
-/* =========================================================
-   CUSTOMER NAME
-========================================================= */
-
-.customer-top-name {
-
-    display:
-        block;
-
-    margin:
-        0;
-
-    color:
-        #3f4b45;
-
-    font-size:
-        0.88rem;
-
-    font-weight:
-        700;
-
-    line-height:
-        1.2;
-}
-
-
-/* =========================================================
-   DATE AND LIVE TIME
-========================================================= */
-
-.customer-date-time {
-
-    display:
-        flex;
-
-    flex-direction:
-        column;
-
-    align-items:
-        flex-start;
-
-    gap:
-        2px;
-
-    margin-top:
-        5px;
-
-    white-space:
-        nowrap;
-}
-
-
-.customer-date {
-
-    font-size:
-        0.63rem;
-
-    color:
-        #8a9590;
-
-    line-height:
-        1.2;
-}
-
-
-.customer-time {
-
-    font-size:
-        0.63rem;
-
-    color:
-        #527d59;
-
-    font-weight:
-        600;
-
-    line-height:
-        1.2;
-
-    white-space:
-        nowrap;
-}
-
-
-/* =========================================================
-   DROPDOWN ICON
-========================================================= */
-
-.customer-dropdown-icon {
-
-    width:
-        28px;
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    justify-content:
-        center;
-
-    color:
-        #65716b;
-
-    font-size:
-        0.7rem;
-}
-/* =========================================================
-   RESERVATION STEP CARDS
-========================================================= */
-
-.step-column {
-    min-width: 0;
-    min-height: 0;
+.reservation-progress {
     display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 25px 30px;
+    background: #f8f9f6;
+    border-bottom: 1px solid #e8e9e6;
+}
+
+.reservation-progress-step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.reservation-progress-number {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: #e1e5e1;
+    color: #69736d;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.reservation-progress-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #69736d;
 }
 
 .step-card {
-    background: #ffffff;
-    border: 1px solid #dedbd2;
-    border-radius: 16px;
-    padding: 22px;
-    height: 100%;
-    width: 100%;
-    box-sizing: border-box;
-    box-shadow: 0 4px 14px rgba(80, 72, 55, 0.06);
-
-    /* IMPORTANT */
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    overflow: hidden;
+    padding: 30px;
+    border-bottom: 1px solid #e8e9e6;
 }
 
-.step-1-card {
-    background: #ffffff;
+.step-card:last-child {
+    border-bottom: none;
 }
 
-/* =========================================================
-   STEP 2 / STEP 3 INTERNAL SCROLL
-========================================================= */
+.copy-reservation-btn {
+    background: #f0f2ef;
+    border: 1px solid #d4d8d3;
+    transition: all 0.2s ease;
+}
+
+.copy-reservation-btn:hover {
+    background: #e5e7e4;
+}
+
+#pickup_date_section.hidden {
+    display: none;
+}
+
+.reservation-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
 
 .step-scroll {
-    min-height: 0;
-    flex: 1 1 auto;
-    overflow-y: auto;
-    overflow-x: hidden;
-
-    padding-right: 6px;
+    overflow-y: visible;
+    max-height: none;
 }
 
 /* =========================================================
-   STEP 2 SCROLLBAR
+   STEP 2 — SCROLLABLE INNER CONTAINER
+   The h2 heading lives outside this div and stays pinned.
+   Only the content (egg grid, qty, method, add-to-cart)
+   scrolls independently within the column.
 ========================================================= */
 
-.step-column:nth-child(2) .step-scroll::-webkit-scrollbar {
-    width: 7px;
+.step-2-card {
+    display: flex;
+    flex-direction: column;
+    /* Let the card grow to fill the column height naturally */
+    min-height: 0;
 }
 
-.step-column:nth-child(2) .step-scroll::-webkit-scrollbar-track {
-    background: #f1f2ef;
-    border-radius: 10px;
+.step-2-scroll {
+    overflow-y: auto;
+    max-height: calc(100vh - 290px);
+    min-height: 200px;
+    padding-right: 6px; /* room for scrollbar */
+    /* Prevent nested horizontal overflow on small screens */
+    overflow-x: hidden;
 }
 
-.step-column:nth-child(2) .step-scroll::-webkit-scrollbar-thumb {
-    background: #b8c8bc;
-    border-radius: 10px;
+/* Responsive — tighter max-height on medium/small viewports */
+@media (max-width: 1023px) {
+    .step-2-scroll {
+        max-height: 520px;
+    }
 }
 
-.step-column:nth-child(2) .step-scroll::-webkit-scrollbar-thumb:hover {
-    background: #527d59;
+@media (max-width: 640px) {
+    .step-2-scroll {
+        max-height: 420px;
+    }
+}
+
+/* ---- VDVC dark-green scrollbar (Webkit) ---- */
+.step-2-scroll::-webkit-scrollbar {
+    width: 5px;
+}
+
+.step-2-scroll::-webkit-scrollbar-track {
+    background: #f1f6f2;
+    border-radius: 8px;
+}
+
+.step-2-scroll::-webkit-scrollbar-thumb {
+    background: #8db89a;
+    border-radius: 8px;
+    border: 1px solid #f1f6f2;
+}
+
+.step-2-scroll::-webkit-scrollbar-thumb:hover {
+    background: #214f2c;
 }
 
 /* Firefox */
-
-.step-column:nth-child(2) .step-scroll {
+.step-2-scroll {
     scrollbar-width: thin;
-    scrollbar-color: #b8c8bc #f1f2ef;
+    scrollbar-color: #8db89a #f1f6f2;
 }
 
-/* =========================================================
-   STEP 2 CONTENT
-========================================================= */
-
-.step-column:nth-child(2) .step-scroll {
-    padding-bottom: 4px;
+.reservation-add-to-cart {
+    background-color: #214f2c;
 }
 
-/* =========================================================
-   STEP 2 METHOD INFORMATION
-========================================================= */
-
-#method_description {
-    width: 100%;
-    box-sizing: border-box;
+.reservation-add-to-cart:hover {
+    background-color: #175c31;
 }
 
-/* =========================================================
-   PICKUP / DELIVERY INFORMATION
-========================================================= */
-
-#pickup_date_section,
-#delivery_schedule_info {
-    width: 100%;
-    box-sizing: border-box;
-}
-
-/* =========================================================
-   ADD TO CART
-========================================================= */
-
-.step-column:nth-child(2) button[onclick="addItemToBundle()"] {
-    flex-shrink: 0;
-    margin-top: 2px;
-}
-
-
-.egg-btn.selected {
-    border-color: #214f2c !important;
-    background: #f1f6f2 !important;
-    color: #214f2c !important;
-}
-
-.timeline-progress {
-    background: #214f2c !important;
-}
-button[name="submit_reservation"]:hover {
-    background-color: #173b20 !important;
-}
 </style>
-<body class="font-sans text-gray-700 antialiased min-h-screen">
+<body>
 
-<?php include('customer_panel.php'); ?>
+<?php require 'customer_header.php'; ?>
 
-<div class="main-content">
+
+<div class="main-content" style="padding-top: 72px;">
       
 
         <!-- Main Workspace -->
@@ -1796,110 +650,52 @@ button[name="submit_reservation"]:hover {
      CUSTOMER DASHBOARD TOPBAR
 ===================================================== -->
 
-<div class="customer-dashboard-topbar">
+<!-- =========================================================
+     RESERVATION HERO BANNER
+========================================================= -->
 
-    <div class="customer-page-title">
-        Customer Reservation
+<section class="reservation-hero">
+    <div class="reservation-hero-content">
+        <h1>
+            <i class="fa-solid fa-leaf"></i>
+            Reserve Fresh Eggs
+        </h1>
+
+        <p>
+            Choose your preferred size and delivery method.<br>
+            We'll take care of the rest!
+        </p>
+    </div>
+</section>
+
+
+<div class="reservation-progress">
+
+    <div class="reservation-progress-step">
+        <div class="reservation-progress-number">1</div>
+        <div class="reservation-progress-label">
+            Contact &amp; Delivery<br>Information
+        </div>
     </div>
 
-    <div class="customer-topbar-right">
-
-        <!-- NOTIFICATION -->
-
-        <div style="position: relative;">
-            <button
-                type="button"
-                class="customer-top-notification"
-                title="Notifications"
-                onclick="event.stopPropagation(); toggleCustomerNotificationDropdown()"
-            >
-                <i class="fa-regular fa-bell"></i>
-                <?php if ($unread_notifications > 0): ?>
-                    <span class="customer-notification-badge"><?php echo $unread_notifications > 99 ? '99+' : $unread_notifications; ?></span>
-                <?php endif; ?>
-            </button>
-
-            <!-- NOTIFICATION DROPDOWN -->
-            <div
-                class="customer-notification-dropdown hidden"
-                id="customerNotificationDropdown"
-            >
-                <div class="customer-notification-dropdown-header">
-                    <div class="customer-panel-title-group">
-                        <div class="customer-panel-title-icon">
-                            <i class="fa-solid fa-bell"></i>
-                        </div>
-                        <div class="customer-dashboard-panel-title">
-                            Notifications
-                        </div>
-                    </div>
-                    <a class="customer-mark-all-link" onclick="markAllCustomerAsRead(event)">
-                        Mark All as Read
-                    </a>
-                </div>
-
-                <div class="customer-notification-list" id="customerNotificationList">
-                    <!-- Notifications will be loaded here via JavaScript -->
-                </div>
-            </div>
+    <div class="reservation-progress-step">
+        <div class="reservation-progress-number">2</div>
+        <div class="reservation-progress-label">
+            Select Egg Sizes<br>&amp; Quantity
         </div>
+    </div>
 
-        <!-- DIVIDER -->
-
-        <div class="customer-topbar-divider"></div>
-
-        <!-- CUSTOMER PROFILE -->
-
-        <a
-            href="customer_profile.php"
-            class="customer-top-profile"
-        >
-
-            <!-- AVATAR -->
-
-            <div class="customer-avatar">
-                <i class="fa-solid fa-user"></i>
-            </div>
-
-            <!-- CUSTOMER DETAILS -->
-
-            <div class="customer-account-details">
-
-                <span class="customer-top-name">
-                    Customer
-                </span>
-
-                <div class="customer-date-time">
-
-                    <span
-                        class="customer-date"
-                        id="customer-live-date"
-                    >
-                        <?php echo date('F j, Y'); ?>
-                    </span>
-
-                    <span
-                        class="customer-time"
-                        id="customer-live-time"
-                    >
-                        <?php echo date('h:i:s A'); ?>
-                    </span>
-
-                </div>
-
-            </div>
-
-            <!-- DROPDOWN -->
-
-            <div class="customer-dropdown-icon">
-                <i class="fa-solid fa-chevron-down"></i>
-            </div>
-
-        </a>
-
+    <div class="reservation-progress-step">
+        <div class="reservation-progress-number">3</div>
+        <div class="reservation-progress-label">
+            Review &amp; Submit
+        </div>
     </div>
 
 </div>
+
+
+
 
 
             <!-- =====================================================
@@ -1982,7 +778,7 @@ button[name="submit_reservation"]:hover {
                             </div>
                             <div>
                                 <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Delivery Address</label>
-                                <input type="text" id="delivery_address_input" name="delivery_address" placeholder="Type location..." required oninput="handleAddressTyping(this.value)" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 mb-2">
+                                <input type="text" id="delivery_address_input" name="delivery_address" placeholder="Type location..." required oninput="handleAddressTyping(this.value); updateReservationProgress();" class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 mb-2">
                                 <div class="border border-gray-200 rounded-lg overflow-hidden relative h-48 bg-sky-50 z-10" id="map"></div>
                             </div>
                         </div>
@@ -1991,13 +787,13 @@ button[name="submit_reservation"]:hover {
                     <!-- Step 2: Bundle Items Configurator -->
                  <div class="step-column">
 
-    <div class="step-card">
+    <div class="step-card step-2-card">
 
         <h2 class="text-lg font-bold text-slate-800 mb-5">
             Step 2: Add Items
         </h2>
 
-        <div class="step-scroll space-y-4">
+        <div class="step-2-scroll space-y-4">
                             <div>
                                 <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Egg Size Selection</label>
                                 <div class="grid grid-cols-4 gap-2 mb-3">
@@ -2086,12 +882,11 @@ button[name="submit_reservation"]:hover {
         Delivery Method
     </label>
 
-    <input
-        type="hidden"
-        name="delivery_method"
-        id="delivery_method_input"
-        required
-    >
+  <input
+    type="hidden"
+    name="delivery_method"
+    id="delivery_method_input"
+>
 
     <div class="grid grid-cols-2 gap-4">
 
@@ -2138,7 +933,7 @@ button[name="submit_reservation"]:hover {
     <button
         type="button"
         onclick="addItemToBundle()"
-        class="w-full bg-slate-800 hover:bg-slate-900 text-white font-medium py-2 px-4 rounded-lg text-xs transition flex items-center justify-center space-x-2"
+        class="w-full text-white font-medium py-2 px-4 rounded-lg text-xs transition flex items-center justify-center space-x-2 reservation-add-to-cart"
     >
         <i class="fa-solid fa-plus"></i>
         <span>Add To Cart</span>
@@ -2660,132 +1455,275 @@ button[name="submit_reservation"]:hover {
         </div>
     </div>
 
-    <!-- Interactive Logout Confirmation Modal -->
-<div id="logout_modal" class="hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-    <div class="bg-white rounded-xl shadow-2xl border border-gray-100 max-w-sm w-full p-6 space-y-4 transform transition-all">
-        <div class="flex items-center space-x-3 text-red-500">
-            <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center text-red-600">
-                <i class="fa-solid fa-right-from-bracket text-base"></i>
-            </div>
-            <h3 class="text-lg font-bold text-slate-800">Confirm Logout</h3>
+
+<!-- LOGOUT CONFIRMATION MODAL -->
+
+<div
+    class="customer-logout-overlay hidden"
+    id="customerLogoutModal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="customerLogoutTitle"
+    aria-describedby="customerLogoutMessage"
+>
+    <div class="customer-logout-modal">
+
+        <div class="customer-logout-icon">
+            <i class="fa-solid fa-right-from-bracket"></i>
         </div>
-        <p class="text-sm text-gray-500">Are you sure you want to end your session? You will need to log back in to manage reservations.</p>
-        <div class="flex justify-end space-x-3 pt-2">
-            <button type="button" onclick="closeLogoutModal()" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold transition">
-                Stay Logged In
+
+        <h2 id="customerLogoutTitle">Confirm Logout</h2>
+
+        <p id="customerLogoutMessage">
+            Are you sure you want to logout?
+        </p>
+
+        <div class="customer-logout-actions">
+
+            <button
+                type="button"
+                class="customer-logout-cancel"
+                onclick="closeCustomerLogoutModal()"
+            >
+                Cancel
             </button>
-            <a href="logout.php" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold text-center transition">
-                Yes, Logout
-            </a>
+
+        
+<form method="POST" action="customer_dashboard.php">
+    <input type="hidden" name="customer_logout" value="1">
+
+    <input
+        type="hidden"
+        name="logout_token"
+        value="<?php
+            echo isset($_SESSION['customer_logout_token'])
+                ? htmlspecialchars($_SESSION['customer_logout_token'], ENT_QUOTES, 'UTF-8')
+                : '';
+        ?>"
+    >
+
+    <button type="submit" class="customer-logout-confirm">
+        Yes, Logout
+    </button>
+</form>
+
+
         </div>
+
     </div>
 </div>
 
-    <script>
-  
-function updateCustomerDateTime() {
 
-    var now = new Date();
 
-    var options = {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric'
-    };
 
-    var dateText = now.toLocaleDateString(
-        'en-US',
-        options
+<script>
+
+const priceList = {
+    'Extra Small': 140,
+    'Small': 150,
+    'Medium': 175,
+    'Large': 195,
+    'Extra Large': 235,
+    'Jumbo': 255,
+    'Super Jumbo': 270,
+    'Double Yolk': 320
+};
+
+let bundleItems = [];
+let addressLookupTimeout = null;
+
+/* Tracks whether a location was selected or successfully located on the map */
+let mapLocationSelected = false;
+
+
+/* =========================================================
+   RESERVATION PROGRESS STATUS
+========================================================= */
+
+function setReservationStepCompleted(stepNumber, isComplete) {
+
+    var steps = document.querySelectorAll(
+        '.reservation-progress-step'
     );
 
-    var timeText = now.toLocaleTimeString(
-        'en-US',
-        {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: true
-        }
-    );
+    var step = steps[stepNumber - 1];
 
-    var dateElement = document.getElementById(
-        'customer-live-date'
-    );
-
-    var timeElement = document.getElementById(
-        'customer-live-time'
-    );
-
-    if (dateElement) {
-        dateElement.textContent = dateText;
+    if (!step) {
+        return;
     }
 
-    if (timeElement) {
-        timeElement.textContent = timeText;
+    if (isComplete) {
+        step.classList.add('completed');
+    } else {
+        step.classList.remove('completed');
     }
 }
 
-updateCustomerDateTime();
-
-setInterval(
-    updateCustomerDateTime,
-    1000
-);
 
 
 
-        function openLogoutModal() {
-    document.getElementById('logout_modal').classList.remove('hidden');
+function updateReservationProgress() {
+    var name = document.getElementById('cust_name_input').value.trim();
+    var contact = document.getElementById('contact_input').value.trim();
+    var address = document.getElementById('delivery_address_input').value.trim();
+    var method = document.getElementById('delivery_method_input').value.trim().toLowerCase();
+    var pickupDate = document.getElementById('reservation_date_input').value;
+
+    var validName = name.length > 0;
+    var validContact = /^09[0-9]{9}$/.test(contact);
+    var validAddress = address.length > 0;
+    var validMethod = method === 'delivery' || method === 'pickup';
+    var validPickupDate = method !== 'pickup' || pickupDate !== '';
+
+    var step1Complete =
+        validName &&
+        validContact &&
+        validAddress &&
+        validMethod &&
+        validPickupDate;
+
+    var step2Complete = bundleItems.length > 0;
+    var step3Complete = step1Complete && step2Complete;
+
+    setReservationStepCompleted(1, step1Complete);
+    setReservationStepCompleted(2, step2Complete);
+    setReservationStepCompleted(3, step3Complete);
 }
 
-function closeLogoutModal() {
-    document.getElementById('logout_modal').classList.add('hidden');
-}
-
-// Optional: Close the modal if the user clicks anywhere outside of the white modal container box
-window.addEventListener('click', function(event) {
-    const logoutModal = document.getElementById('logout_modal');
-    if (event.target === logoutModal) {
-        closeLogoutModal();
-    }
-});
 
 
-        const priceList = { 'Extra Small': 140, 'Small': 150, 'Medium': 175, 'Large': 195, 'Extra Large': 235, 'Jumbo': 255, 'Super Jumbo': 270, 'Double Yolk': 320 };
-        let bundleItems = [];
-        let addressLookupTimeout = null;
 
         // Leaflet Setup
         const map = L.map('map').setView([14.5995, 120.9842], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         const marker = L.marker([14.5995, 120.9842], { draggable: true }).addTo(map);
 
-        function reverseGeocode(lat, lng) {
-            fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`)
-                .then(res => res.json()).then(data => {
-                    if (data && data.display_name) {
-                        document.getElementById('delivery_address_input').value = data.display_name;
-                        document.getElementById('summary_address_display').innerText = data.display_name;
-                    }
-                });
+    
+function reverseGeocode(lat, lng) {
+    fetch(
+        'https://nominatim.openstreetmap.org/reverse?format=json&lat=' +
+        encodeURIComponent(lat) +
+        '&lon=' +
+        encodeURIComponent(lng)
+    )
+    .then(function(response) {
+        if (!response.ok) {
+            throw new Error('Unable to find the address.');
         }
-        map.on('click', e => { marker.setLatLng(e.latlng); reverseGeocode(e.latlng.lat, e.latlng.lng); });
-        marker.on('dragend', () => { reverseGeocode(marker.getLatLng().lat, marker.getLatLng().lng); });
 
-        function handleAddressTyping(val) {
-            document.getElementById('summary_address_display').innerText = val || 'None';
-            clearTimeout(addressLookupTimeout);
-            if (!val.trim()) return;
-            addressLookupTimeout = setTimeout(() => {
-                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val)}&limit=1`)
-                    .then(res => res.json()).then(data => {
-                        if (data.length > 0) {
-                            map.setView([data[0].lat, data[0].lon], 16);
-                            marker.setLatLng([data[0].lat, data[0].lon]);
-                        }
-                    });
-            }, 600);
+        return response.json();
+    })
+    .then(function(data) {
+        if (data && data.display_name) {
+            document.getElementById('delivery_address_input').value =
+                data.display_name;
+
+            document.getElementById('summary_address_display').innerText =
+                data.display_name;
+
+            mapLocationSelected = true;
+
+            updateReservationProgress();
+        } else {
+            mapLocationSelected = false;
+            updateReservationProgress();
+
+            alert('Unable to identify this location. Please select another point on the map.');
         }
+    })
+    .catch(function(error) {
+        mapLocationSelected = false;
+        updateReservationProgress();
+
+        console.error('Reverse geocoding error:', error);
+        alert('Unable to get the address. Please try selecting the location again.');
+    });
+}
+
+
+// Kapag nag-click ang user sa map
+map.on('click', function(e) {
+    marker.setLatLng(e.latlng);
+
+    mapLocationSelected = false;
+    updateReservationProgress();
+
+    reverseGeocode(e.latlng.lat, e.latlng.lng);
+});
+
+
+// Kapag ginalaw ng user ang marker
+marker.on('dragend', function() {
+    var position = marker.getLatLng();
+
+    mapLocationSelected = false;
+    updateReservationProgress();
+
+    reverseGeocode(position.lat, position.lng);
+});
+
+
+// Kapag nagta-type sa address field
+function handleAddressTyping(val) {
+    var addressInput = document.getElementById('delivery_address_input');
+    var summaryAddress = document.getElementById('summary_address_display');
+    var address = val.trim();
+
+    summaryAddress.innerText = address || 'None';
+
+    // Ang pag-type lamang ay hindi pa confirmed map location.
+    mapLocationSelected = false;
+    updateReservationProgress();
+
+    clearTimeout(addressLookupTimeout);
+
+    // Huwag maghanap ng location kung isang letra o maikling text pa lang.
+    if (address.length < 8) {
+        return;
+    }
+
+    addressLookupTimeout = setTimeout(function() {
+        fetch(
+            'https://nominatim.openstreetmap.org/search?format=json&q=' +
+            encodeURIComponent(address) +
+            '&limit=1'
+        )
+        .then(function(response) {
+            if (!response.ok) {
+                throw new Error('Unable to search for the address.');
+            }
+
+            return response.json();
+        })
+        .then(function(data) {
+            // Huwag gumamit ng resulta kung binago na ulit ang address.
+            if (addressInput.value.trim() !== address) {
+                return;
+            }
+
+            if (data && data.length > 0) {
+                var lat = parseFloat(data[0].lat);
+                var lng = parseFloat(data[0].lon);
+
+                if (isNaN(lat) || isNaN(lng)) {
+                    return;
+                }
+
+                // Ipakita ang nahanap na lokasyon sa map.
+                // Hindi pa ito confirmed hangga't hindi nagki-click
+                // o nagda-drag ang user sa map.
+                map.setView([lat, lng], 16);
+                marker.setLatLng([lat, lng]);
+                map.invalidateSize();
+            }
+        })
+        .catch(function(error) {
+            console.error('Address search error:', error);
+        });
+    }, 900);
+}
+
+
 
         // Bundle Logic Operations
         function setEgg(val) {
@@ -2797,29 +1735,59 @@ window.addEventListener('click', function(event) {
             });
         }
 
-        function addItemToBundle() {
-            const size = document.getElementById('egg_type_select').value;
-            const qty = parseInt(document.getElementById('quantity_input').value);
+     
+function addItemToBundle() {
 
-            if (!size || isNaN(qty) || qty <= 0) {
-                alert('Please select a valid size and quantity.');
-                return;
-            }
+    const size = document.getElementById(
+        'egg_type_select'
+    ).value;
 
-            const existingItem = bundleItems.find(item => item.size === size);
-            if (existingItem) {
-                existingItem.qty += qty;
-            } else {
-                bundleItems.push({ size, qty, price: priceList[size] });
-            }
+    const qty = parseInt(
+        document.getElementById('quantity_input').value,
+        10
+    );
 
-            document.getElementById('quantity_input').value = '';
-            updateLiveSummary();
+    if (!size || isNaN(qty) || qty <= 0) {
+
+        alert('Please select a valid size and quantity.');
+
+        return;
+    }
+
+    const existingItem = bundleItems.find(
+        function(item) {
+            return item.size === size;
         }
+    );
+
+    if (existingItem) {
+
+        existingItem.qty += qty;
+
+    } else {
+
+        bundleItems.push({
+            size: size,
+            qty: qty,
+            price: priceList[size]
+        });
+    }
+
+    /*
+       Do not clear the quantity, egg size,
+       customer information, address, or cart.
+    */
+
+    updateLiveSummary();
+
+    updateReservationProgress();
+}
+
 
         function removeBundleItem(index) {
             bundleItems.splice(index, 1);
             updateLiveSummary();
+                updateReservationProgress();
         }
 
         function updateLiveSummary() {
@@ -2882,6 +1850,7 @@ else {
         'None selected';
 
 }
+    updateReservationProgress();
         }
 
         function setMethod(method) {
@@ -3010,33 +1979,49 @@ else {
         method === 'Pickup'
        ? "p-3 border rounded-lg flex flex-col items-center justify-center space-y-1 border-green-800 bg-green-50 text-green-800"
         : "p-3 border rounded-lg flex flex-col items-center justify-center space-y-1 border-gray-200 text-gray-500";
+            updateLiveSummary();
+    updateReservationProgress();
 }
 
-      function validateForm() {
+    
+function validateForm() {
 
-    const contactNumber =
-        document.getElementById('contact_input').value;
+    var customerName = document.getElementById(
+        'cust_name_input'
+    ).value.trim();
 
-    const deliveryMethod =
-        document.getElementById('delivery_method_input').value;
+    var contactNumber = document.getElementById(
+        'contact_input'
+    ).value.trim();
 
-    const reservationDate =
-        document.getElementById('reservation_date_input').value;
+    var deliveryAddress = document.getElementById(
+        'delivery_address_input'
+    ).value.trim();
+
+    var deliveryMethod = document.getElementById(
+        'delivery_method_input'
+    ).value;
+
+    var reservationDate = document.getElementById(
+        'reservation_date_input'
+    ).value;
 
 
-    // =====================================================
-    // CONTACT NUMBER
-    // =====================================================
+    /* CUSTOMER NAME */
 
-    if (contactNumber.length !== 11) {
+    if (!customerName) {
 
-        alert('Contact number must be exactly 11 digits.');
+        alert('Please enter your full name.');
 
-        document.getElementById('contact_input').focus();
+        document.getElementById(
+            'cust_name_input'
+        ).focus();
 
         return false;
     }
 
+
+    /* CONTACT NUMBER */
 
     if (!/^09[0-9]{9}$/.test(contactNumber)) {
 
@@ -3044,31 +2029,36 @@ else {
             'Please enter a valid Philippine mobile number starting with 09.'
         );
 
-        document.getElementById('contact_input').focus();
+        document.getElementById(
+            'contact_input'
+        ).focus();
 
         return false;
     }
 
 
-    // =====================================================
-    // ITEMS
-    // =====================================================
+    /* DELIVERY ADDRESS AND MAP */
 
-    if (bundleItems.length === 0) {
+    if (!deliveryAddress || !mapLocationSelected) {
 
         alert(
-            'Please add at least one item row to your bundle layout.'
+            'Please enter an address and select a valid location on the map.'
         );
+
+        document.getElementById(
+            'delivery_address_input'
+        ).focus();
 
         return false;
     }
 
 
-    // =====================================================
-    // DELIVERY METHOD
-    // =====================================================
+    /* DELIVERY METHOD */
 
-    if (!deliveryMethod) {
+    if (
+        deliveryMethod !== 'Delivery' &&
+        deliveryMethod !== 'Pickup'
+    ) {
 
         alert(
             'Please choose either Delivery or Pickup.'
@@ -3078,35 +2068,52 @@ else {
     }
 
 
-    // =====================================================
-    // PICKUP DATE
-    // =====================================================
+    /* PICKUP DATE */
 
-    if (deliveryMethod === 'Pickup' && !reservationDate) {
+    if (
+        deliveryMethod === 'Pickup' &&
+        !reservationDate
+    ) {
 
         alert(
             'Please select your preferred pickup date.'
         );
 
-        document.getElementById('reservation_date_input').focus();
+        document.getElementById(
+            'reservation_date_input'
+        ).focus();
 
         return false;
     }
 
 
-    // =====================================================
-    // DELIVERY
-    // =====================================================
+    /* CART ITEMS */
 
-    if (deliveryMethod === 'Delivery') {
+    if (bundleItems.length === 0) {
 
-        // Delivery should NOT have a customer-selected date.
-        document.getElementById('reservation_date_input').value = '';
+        alert(
+            'Please add at least one item to your cart.'
+        );
+
+        return false;
     }
 
 
+    /* DELIVERY DOES NOT REQUIRE A CUSTOMER-SELECTED DATE */
+
+    if (deliveryMethod === 'Delivery') {
+
+        document.getElementById(
+            'reservation_date_input'
+        ).value = '';
+    }
+
+
+    updateReservationProgress();
+
     return true;
 }
+
 
         function openSuccessModal() { document.getElementById('success_modal').classList.remove('hidden'); }
         function closeSuccessModal() { document.getElementById('success_modal').classList.add('hidden'); }
@@ -3119,190 +2126,6 @@ else {
             .then(res => res.json()).then(data => { if(data.status === 'success') location.reload(); });
         }
 
-        function toggleCustomerNotificationDropdown()
-        {
-            if (!customerNotificationDropdown) {
-                customerNotificationDropdown = document.getElementById('customerNotificationDropdown');
-            }
-
-            if (customerNotificationDropdown) {
-                isCustomerDropdownOpen = !isCustomerDropdownOpen;
-
-                if (isCustomerDropdownOpen) {
-                    customerNotificationDropdown.classList.remove('hidden');
-                    loadCustomerNotifications();
-                } else {
-                    customerNotificationDropdown.classList.add('hidden');
-                }
-            }
-        }
-
-        function closeCustomerNotificationDropdown()
-        {
-            if (customerNotificationDropdown && isCustomerDropdownOpen) {
-                customerNotificationDropdown.classList.add('hidden');
-                isCustomerDropdownOpen = false;
-            }
-        }
-
-        // Close dropdown when clicking outside
-        document.addEventListener('click', function(event) {
-            if (customerNotificationDropdown && isCustomerDropdownOpen) {
-                var notificationButton = document.querySelector('.customer-top-notification');
-                var notificationContainer = customerNotificationDropdown.parentElement;
-                if (!notificationContainer.contains(event.target)) {
-                    closeCustomerNotificationDropdown();
-                }
-            }
-        });
-
-        function loadCustomerNotifications()
-        {
-            var notificationList = document.getElementById('customerNotificationList');
-            if (!notificationList) return;
-
-            // Show loading state
-            notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading notifications...</p></div>';
-
-            // Fetch notifications from the dedicated notifications page
-            fetch('customer_notifications.php')
-                .then(function(response) {
-                    return response.text();
-                })
-                .then(function(html) {
-                    // Parse the HTML to extract notification data
-                    var parser = new DOMParser();
-                    var doc = parser.parseFromString(html, 'text/html');
-
-                    // Extract notification items from the dedicated page
-                    var notificationItems = doc.querySelectorAll('.notification-item');
-
-                    if (notificationItems.length > 0) {
-                        var notificationsHtml = '';
-                        notificationItems.forEach(function(item) {
-                            var isUnread = item.classList.contains('unread');
-                            var iconElement = item.querySelector('.notification-icon');
-                            var iconClass = 'info';
-                            var iconHtml = '<div class="customer-notification-icon info"><i class="fa-solid fa-bell"></i></div>';
-
-                            if (iconElement) {
-                                if (iconElement.classList.contains('success')) {
-                                    iconClass = 'success';
-                                    iconHtml = '<div class="customer-notification-icon success"><i class="fa-solid fa-check"></i></div>';
-                                } else if (iconElement.classList.contains('alert')) {
-                                    iconClass = 'alert';
-                                    iconHtml = '<div class="customer-notification-icon alert"><i class="fa-solid fa-exclamation"></i></div>';
-                                } else if (iconElement.classList.contains('warning')) {
-                                    iconClass = 'warning';
-                                    iconHtml = '<div class="customer-notification-icon warning"><i class="fa-solid fa-circle-exclamation"></i></div>';
-                                } else {
-                                    iconHtml = iconElement.outerHTML;
-                                }
-                            }
-
-                            var titleElement = item.querySelector('.notification-title');
-                            var title = titleElement ? titleElement.textContent : 'Notification';
-
-                            var descElement = item.querySelector('.notification-desc');
-                            var description = descElement ? descElement.textContent : '';
-
-                            var timeElement = item.querySelector('.notification-time');
-                            var time = timeElement ? timeElement.textContent : '';
-
-                            var notificationId = item.getAttribute('onclick') ? item.getAttribute('onclick').match(/\d+/) : null;
-
-                            notificationsHtml += '<div class="customer-notification-item ' + (isUnread ? 'unread' : 'read') + '">';
-                            notificationsHtml += iconHtml;
-                            notificationsHtml += '<div class="customer-notification-content">';
-                            notificationsHtml += '<div class="customer-notification-title">' + title + '</div>';
-                            notificationsHtml += '<div class="customer-notification-description">' + description + '</div>';
-                            notificationsHtml += '<div class="customer-notification-time">' + time + '</div>';
-                            notificationsHtml += '</div>';
-                            if (notificationId && isUnread) {
-                                notificationsHtml += '<button class="customer-mark-read-btn" onclick="markCustomerAsRead(' + notificationId + ', this)">Mark as Read</button>';
-                            }
-                            notificationsHtml += '</div>';
-                        });
-
-                        notificationList.innerHTML = notificationsHtml;
-                    } else {
-                        notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-regular fa-bell-slash"></i><p>No notifications</p></div>';
-                    }
-                })
-                .catch(function(error) {
-                    notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-solid fa-exclamation-circle"></i><p>Failed to load notifications</p></div>';
-                });
-        }
-
-        function markCustomerAsRead(notificationId, buttonElement)
-        {
-            var formData = new FormData();
-            formData.append('mark_read', '1');
-            formData.append('notification_id', notificationId);
-
-            fetch('customer_notifications.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(function(response) {
-                return response.json();
-            })
-            .then(function(data) {
-                if (data.success) {
-                    // Update UI
-                    var notificationItem = buttonElement.closest('.customer-notification-item');
-                    if (notificationItem) {
-                        notificationItem.classList.remove('unread');
-                        notificationItem.classList.add('read');
-                        buttonElement.remove();
-
-                        // Update badge
-                        var badge = document.querySelector('.customer-notification-badge');
-                        if (badge) {
-                            var currentBadge = parseInt(badge.textContent);
-                            if (!isNaN(currentBadge) && currentBadge > 0) {
-                                if (currentBadge > 1) {
-                                    badge.textContent = currentBadge - 1;
-                                } else {
-                                    badge.remove();
-                                }
-                            }
-                        }
-                    }
-                }
-            })
-            .catch(function(error) {
-                console.error('Failed to mark notification as read:', error);
-            });
-        }
-
-        function markAllCustomerAsRead(event)
-        {
-            event.preventDefault();
-            event.stopPropagation();
-
-            var formData = new FormData();
-            formData.append('mark_all_read', '1');
-
-            fetch('customer_notifications.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(function(response) {
-                return response.text();
-            })
-            .then(function() {
-                // Reload page to update all notification states
-                window.location.reload();
-            })
-            .catch(function(error) {
-                console.error('Failed to mark all notifications as read:', error);
-            });
-        }
-
-        var customerNotificationDropdown = null;
-        var isCustomerDropdownOpen = false;
-
         <?php if (!empty($message)): ?>
             document.addEventListener('DOMContentLoaded', openSuccessModal);
         <?php endif; ?>
@@ -3313,7 +2136,7 @@ function matchReservationStepHeights() {
 
     const stepCards = document.querySelectorAll('.step-card');
     const step1Card = document.querySelector('.step-1-card');
-    const scrollAreas = document.querySelectorAll('.step-scroll');
+    const scrollAreas = document.querySelectorAll('.step-scroll, .step-2-scroll');
 
     if (!step1Card || stepCards.length === 0) {
         return;
@@ -3450,7 +2273,35 @@ function copyReservationCode() {
     }
 }
 
+/* =========================================================
+   AUTOMATIC RESERVATION PROGRESS UPDATES
+========================================================= */
+
+document.getElementById('cust_name_input').addEventListener(
+    'input',
+    updateReservationProgress
+);
+
+document.getElementById('contact_input').addEventListener(
+    'input',
+    updateReservationProgress
+);
+
+document.getElementById('reservation_date_input').addEventListener(
+    'change',
+    updateLiveSummary
+);
+
+/* Set the initial progress state when the page loads */
+updateLiveSummary();
+updateReservationProgress();
+
 
     </script>
+
+<?php require 'customer_modal.php'; ?>
+
+<?php require 'customer_footer.php'; ?>
+
 </body>
 </html>

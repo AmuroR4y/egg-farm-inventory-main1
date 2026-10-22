@@ -6,6 +6,7 @@ ob_start();
 require_once 'session_config.php';
 
 require_once('db.php');
+require_once('config_age_eligibility.php');
 
 
 /* =========================================================
@@ -534,6 +535,10 @@ if (
 
     /* =========================================
        DETECT STOCK COLUMN
+       Priority: available_stock > current_stock > quantity
+       current_stock holds the running balance after each transaction.
+       quantity holds only the per-transaction amount — not suitable for
+       KPI display after a stock-out.
     ========================================= */
 
     $stock_column = '';
@@ -554,23 +559,23 @@ if (
         column_exists(
             $conn,
             'egg_inventory',
-            'quantity'
-        )
-    ) {
-
-        $stock_column =
-            'quantity';
-
-    } elseif (
-        column_exists(
-            $conn,
-            'egg_inventory',
             'current_stock'
         )
     ) {
 
         $stock_column =
             'current_stock';
+
+    } elseif (
+        column_exists(
+            $conn,
+            'egg_inventory',
+            'quantity'
+        )
+    ) {
+
+        $stock_column =
+            'quantity';
 
     }
 
@@ -619,10 +624,13 @@ if (
 
 
     /* =========================================
-       GET TOTAL EGG STOCK
+       GET TOTAL EGG STOCK (AGE-ELIGIBLE ONLY)
     ========================================= */
 
     if ($stock_column != '') {
+
+        // Get minimum eligible date
+        $eligible_min_date = get_eligible_min_date();
 
         $total_egg_stock =
             get_total_value(
@@ -638,6 +646,7 @@ if (
                         SELECT MAX(e2.id)
                         FROM egg_inventory e2
                         WHERE e2.$size_column = e.$size_column
+                        AND e2.harvest_date >= '$eligible_min_date'
                     )
                 ) latest_rows
                 "
@@ -648,7 +657,7 @@ if (
 
 
     /* =========================================
-       GET EGG STOCKS
+       GET EGG STOCKS (AGE-ELIGIBLE ONLY)
     ========================================= */
 
     if (
@@ -656,6 +665,8 @@ if (
         $size_column != ''
     ) {
 
+        // Get minimum eligible date
+        $eligible_min_date = get_eligible_min_date();
 
         $egg_query = "
 
@@ -673,6 +684,7 @@ if (
                 SELECT e2.$size_column, MAX(e2.id) AS id
 
                 FROM egg_inventory e2
+                WHERE e2.harvest_date >= '$eligible_min_date'
 
                 GROUP BY e2.$size_column
 
@@ -810,23 +822,23 @@ if (
         column_exists(
             $conn,
             'supply_inventory',
-            'quantity'
-        )
-    ) {
-
-        $supply_stock_column =
-            'quantity';
-
-    } elseif (
-        column_exists(
-            $conn,
-            'supply_inventory',
             'current_stock'
         )
     ) {
 
         $supply_stock_column =
             'current_stock';
+
+    } elseif (
+        column_exists(
+            $conn,
+            'supply_inventory',
+            'quantity'
+        )
+    ) {
+
+        $supply_stock_column =
+            'quantity';
 
     }
 
@@ -1365,6 +1377,8 @@ if (
     rel="stylesheet"
     href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
 >
+
+<link rel="stylesheet" href="shared_notifications.css?v=20261022">
 
 
 <style>
@@ -3259,13 +3273,29 @@ white-space: nowrap;
                             Notifications
                         </div>
                     </div>
-                    <a class="mark-all-link" onclick="markAllAsRead(event)">
-                        Mark All as Read
-                    </a>
+                    <div class="notification-header-actions">
+                        <button type="button" class="view-all-header-link" onclick="openAllNotificationsModal(event)">
+                            View All
+                        </button>
+                        <span class="header-action-divider">|</span>
+                        <a class="mark-all-link" onclick="markAllAsRead(event)">
+                            Mark All as Read
+                        </a>
+                    </div>
                 </div>
 
                 <div class="notification-list" id="notificationList">
                     <!-- Notifications will be loaded here via JavaScript -->
+                </div>
+
+                <div class="notification-dropdown-footer">
+                    <button
+                        type="button"
+                        class="notification-view-all-btn"
+                        onclick="openAllNotificationsModal(event)"
+                    >
+                        View All Notifications
+                    </button>
                 </div>
             </div>
         </div>
@@ -5010,6 +5040,9 @@ function markAllAsRead(event)
 
 </script>
 
+
+<?php require_once 'shared_notifications_modal.php'; ?>
+<script src="shared_notifications.js?v=20261022"></script>
 
 </body>
 

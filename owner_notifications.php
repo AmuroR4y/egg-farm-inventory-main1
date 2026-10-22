@@ -25,6 +25,47 @@ if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'owner') {
 $user_id = (int)$_SESSION['user_id'];
 
 // =========================================================
+// JSON API ENDPOINT — GET all notifications
+// Called by the "View All" popup in shared_notifications.js
+// Usage: owner_notifications.php?action=json
+// =========================================================
+
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['action']) && $_GET['action'] === 'json') {
+    header('Content-Type: application/json');
+
+    $json_stmt = $conn->prepare("
+        SELECT id, title, description, type, is_read, created_at
+        FROM notifications
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+    ");
+
+    $all_notifications = array();
+
+    if ($json_stmt) {
+        $json_stmt->bind_param("i", $user_id);
+        $json_stmt->execute();
+        $json_result = $json_stmt->get_result();
+
+        while ($row = $json_result->fetch_assoc()) {
+            $all_notifications[] = array(
+                'id'          => (int) $row['id'],
+                'title'       => $row['title'] ?? '',
+                'description' => $row['description'] ?? '',
+                'type'        => $row['type'] ?? 'info',
+                'is_read'     => (bool) $row['is_read'],
+                'created_at'  => $row['created_at'] ?? '',
+            );
+        }
+
+        $json_stmt->close();
+    }
+
+    echo json_encode(array('notifications' => $all_notifications));
+    exit;
+}
+
+// =========================================================
 // MARK SINGLE NOTIFICATION AS READ (AJAX)
 // =========================================================
 
@@ -50,6 +91,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mark_all_read'])) {
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $stmt->close();
+
+    if (isset($_POST['ajax']) || (isset($_SERVER['HTTP_ACCEPT']) && strpos($_SERVER['HTTP_ACCEPT'], 'application/json') !== false)) {
+        header('Content-Type: application/json');
+        echo json_encode(['success' => true]);
+        exit;
+    }
 
     header("Location: owner_notifications.php");
     exit;

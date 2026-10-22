@@ -1,0 +1,273 @@
+/* =========================================================
+   CUSTOMER SHARED JAVASCRIPT
+========================================================= */
+
+/* =========================================================
+   LIVE DATE AND TIME
+========================================================= */
+
+function updateCustomerDateTime() {
+    var now = new Date();
+
+    var dateElement = document.getElementById('customer-live-date');
+    var timeElement = document.getElementById('customer-live-time');
+
+    if (dateElement) {
+        var options = { year: 'numeric', month: 'long', day: 'numeric' };
+        dateElement.textContent = now.toLocaleDateString('en-US', options);
+    }
+
+    if (timeElement) {
+        timeElement.textContent = now.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: true
+        });
+    }
+}
+
+// Update time every second
+setInterval(updateCustomerDateTime, 1000);
+
+// Initial update
+updateCustomerDateTime();
+
+/* =========================================================
+   CUSTOMER NOTIFICATION DROPDOWN
+========================================================= */
+
+function toggleCustomerNotificationDropdown(event) {
+    event.stopPropagation();
+
+    var dropdown = document.getElementById('customerNotificationDropdown');
+
+    if (dropdown.classList.contains('hidden')) {
+        dropdown.classList.remove('hidden');
+        loadCustomerNotifications();
+    } else {
+        dropdown.classList.add('hidden');
+    }
+}
+
+function loadCustomerNotifications() {
+    var notificationList = document.getElementById('customerNotificationList');
+
+    // Show loading state
+    notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading notifications...</p></div>';
+
+    // Fetch notifications from the dedicated notifications page
+    fetch('customer_notifications.php')
+        .then(function(response) {
+            return response.text();
+        })
+        .then(function(html) {
+            // Parse the HTML to extract notification data
+            var parser = new DOMParser();
+            var doc = parser.parseFromString(html, 'text/html');
+
+            // Extract notification items from the dedicated page
+            var notificationItems = doc.querySelectorAll('.notification-item');
+
+            if (notificationItems.length > 0) {
+                var notificationsHtml = '';
+                notificationItems.forEach(function(item) {
+                    var isUnread = item.classList.contains('unread');
+                    var icon = item.querySelector('.notification-icon');
+                    var title = item.querySelector('.notification-title');
+                    var description = item.querySelector('.notification-desc');
+                    var time = item.querySelector('.notification-time');
+
+                    notificationsHtml += '<div class="customer-notification-item' + (isUnread ? ' unread' : '') + '" onclick="markCustomerAsRead(this, event)">';
+                    notificationsHtml += '<div class="customer-notification-icon ' + (icon ? icon.className.replace('notification-icon', '') : 'info') + '">';
+                    notificationsHtml += icon ? icon.innerHTML : '<i class="fa-solid fa-bell"></i>';
+                    notificationsHtml += '</div>';
+                    notificationsHtml += '<div class="customer-notification-content">';
+                    notificationsHtml += '<div class="customer-notification-title">' + (title ? title.textContent : 'Notification') + '</div>';
+                    notificationsHtml += '<div class="customer-notification-description">' + (description ? description.textContent : '') + '</div>';
+                    notificationsHtml += '<div class="customer-notification-time">' + (time ? time.textContent : '') + '</div>';
+                    notificationsHtml += '</div>';
+                    notificationsHtml += '</div>';
+                });
+
+                notificationList.innerHTML = notificationsHtml;
+            } else {
+                notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-fa-regular fa-bell-slash"></i><p>No notifications</p></div>';
+            }
+        })
+        .catch(function(error) {
+            console.error('Failed to load notifications:', error);
+            notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-solid fa-triangle-exclamation"></i><p>Failed to load notifications</p></div>';
+        });
+}
+
+function markCustomerAsRead(element, event) {
+    event.stopPropagation();
+
+    var notificationId = element.getAttribute('data-notification-id');
+
+    if (notificationId) {
+        var formData = new FormData();
+        formData.append('mark_read', notificationId);
+
+        fetch('customer_notifications.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(function(response) {
+            return response.text();
+        })
+        .then(function() {
+            element.classList.remove('unread');
+            updateCustomerNotificationBadge();
+        })
+        .catch(function(error) {
+            console.error('Failed to mark notification as read:', error);
+        });
+    }
+}
+
+function markAllCustomerAsRead(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    var formData = new FormData();
+    formData.append('mark_all_read', '1');
+
+    fetch('customer_notifications.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(function(response) {
+        return response.text();
+    })
+    .then(function() {
+        // Reload page to update all notification states
+        window.location.reload();
+    })
+    .catch(function(error) {
+        console.error('Failed to mark all notifications as read:', error);
+    });
+}
+
+function updateCustomerNotificationBadge() {
+    var badge = document.querySelector('.customer-notification-badge');
+    if (badge) {
+        var currentCount = parseInt(badge.textContent);
+        if (currentCount > 1) {
+            badge.textContent = currentCount - 1;
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+}
+
+/* =========================================================
+   CUSTOMER ACCOUNT DROPDOWN
+========================================================= */
+
+function toggleCustomerAccountDropdown(event) {
+    event.stopPropagation();
+
+    var dropdown = document.getElementById('customerAccountDropdown');
+    var toggle = document.getElementById('customerAccountToggle');
+
+    if (dropdown.classList.contains('hidden')) {
+        dropdown.classList.remove('hidden');
+        toggle.setAttribute('aria-expanded', 'true');
+    } else {
+        dropdown.classList.add('hidden');
+        toggle.setAttribute('aria-expanded', 'false');
+    }
+}
+
+function closeCustomerAccountDropdown() {
+    var dropdown = document.getElementById('customerAccountDropdown');
+    var toggle = document.getElementById('customerAccountToggle');
+
+    if (dropdown) {
+        dropdown.classList.add('hidden');
+    }
+
+    if (toggle) {
+        toggle.setAttribute('aria-expanded', 'false');
+    }
+}
+
+/* =========================================================
+   LOGOUT CONFIRMATION MODAL
+========================================================= */
+
+function openCustomerLogoutModal() {
+    closeCustomerAccountDropdown();
+
+    var modal = document.getElementById('customerLogoutModal');
+
+    if (modal) {
+        modal.classList.remove('hidden');
+
+        var cancelButton = modal.querySelector(
+            '.customer-logout-cancel'
+        );
+
+        if (cancelButton) {
+            cancelButton.focus();
+        }
+    }
+}
+
+function closeCustomerLogoutModal() {
+    var modal = document.getElementById('customerLogoutModal');
+
+    if (modal) {
+        modal.classList.add('hidden');
+
+        var toggle = document.getElementById('customerAccountToggle');
+
+        if (toggle) {
+            toggle.focus();
+        }
+    }
+}
+
+/* =========================================================
+   CLOSE MENUS WHEN CLICKING OUTSIDE
+========================================================= */
+
+document.addEventListener('click', function(event) {
+
+    var accountWrapper = document.querySelector(
+        '.customer-account-wrapper'
+    );
+
+    if (
+        accountWrapper &&
+        !accountWrapper.contains(event.target)
+    ) {
+        closeCustomerAccountDropdown();
+    }
+
+    var modal = document.getElementById(
+        'customerLogoutModal'
+    );
+
+    if (
+        modal &&
+        !modal.classList.contains('hidden') &&
+        event.target === modal
+    ) {
+        closeCustomerLogoutModal();
+    }
+});
+
+/* =========================================================
+   CLOSE LOGOUT MODAL WITH ESCAPE
+========================================================= */
+
+document.addEventListener('keydown', function(event) {
+
+    if (event.key === 'Escape') {
+        closeCustomerLogoutModal();
+        closeCustomerAccountDropdown();
+    }
+});

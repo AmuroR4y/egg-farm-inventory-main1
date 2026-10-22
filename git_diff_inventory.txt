@@ -1,0 +1,714 @@
+﻿diff --git a/inventory.php b/inventory.php
+index 4c1db26..b97e5a0 100644
+--- a/inventory.php
++++ b/inventory.php
+@@ -5,6 +5,7 @@ ob_start();
+ require_once 'session_config.php';
+ 
+ include 'db.php';
++require_once 'config_age_eligibility.php';
+ 
+ /* =========================================================
+    SECURITY - MANAGER/OWNER ACCESS
+@@ -347,17 +348,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+ 
+ 
+         /* =================================================
+-           NORMAL EGG STOCK IN / STOCK OUT
++           NORMAL EGG STOCK IN / STOCK OUT (MULTI-SIZE SUPPORT)
+         ================================================= */
+ 
+         } else {
+ 
+-            $batch_id = mysqli_real_escape_string(
+-                $conn,
+-                $_POST['batch_id']
+-            );
+-
+-
+             $harvest_date =
+                 $_POST['harvest_date'];
+ 
+@@ -365,121 +360,262 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+             $harvest_time =
+                 $_POST['harvest_time'];
+ 
++            // Check if multi-size harvest (arrays) or single size (legacy)
++            $is_multi_size = isset($_POST['egg_sizes']) && is_array($_POST['egg_sizes']);
+ 
+-            $egg_size = mysqli_real_escape_string(
+-                $conn,
+-                $_POST['egg_size']
+-            );
+-
+-
+-            $quantity = intval(
+-                $_POST['quantity']
+-            );
++            if ($is_multi_size && $movement == "Stock In") {
++                // MULTI-SIZE HARVEST SESSION
++                $egg_sizes = $_POST['egg_sizes'];
++                $egg_quantities = $_POST['egg_quantities'];
+ 
++                // Validate inputs
++                $valid_entries = array();
++                $total_eggs = 0;
+ 
+-            /*
+-               Get latest current stock
+-            */
++                foreach ($egg_sizes as $index => $size) {
++                    $size = trim($size);
++                    $quantity = intval($egg_quantities[$index]);
+ 
+-            $stock_query = mysqli_query(
+-                $conn,
+-                "
+-                SELECT current_stock
+-                FROM egg_inventory
+-                WHERE egg_size = '$egg_size'
+-                ORDER BY id DESC
+-                LIMIT 1
+-                "
+-            );
++                    if ($size && $quantity > 0) {
++                        // Check for duplicates
++                        if (isset($valid_entries[$size])) {
++                            die("Duplicate egg size detected: $size");
++                        }
++                        $valid_entries[$size] = $quantity;
++                        $total_eggs += $quantity;
++                    }
++                }
+ 
++                if (empty($valid_entries)) {
++                    die("Please add at least one egg size with a valid quantity.");
++                }
+ 
+-            if (
+-                $stock_query &&
+-                mysqli_num_rows(
+-                    $stock_query
+-                ) > 0
+-            ) {
++                // Start transaction
++                $conn->autocommit(false);
+ 
+-                $stock_row =
+-                    mysqli_fetch_assoc(
+-                        $stock_query
++                try {
++                    // Create harvest session
++                    $session_stmt = $conn->prepare(
++                        "INSERT INTO harvest_sessions (session_date, session_time, total_eggs, created_by) VALUES (?, ?, ?, ?)"
++                    );
++                    $session_stmt->bind_param("ssii", $harvest_date, $harvest_time, $total_eggs, $_SESSION['user_id']);
++                    $session_stmt->execute();
++                    $session_id = $conn->insert_id;
++                    $session_stmt->close();
++
++                    // Generate batch ID prefix
++                    $today_str = date('Ymd', strtotime($harvest_date));
++                    $batch_prefix = "EG" . $today_str . "-";
++
++                    // Get next batch number
++                    $seq_stmt = $conn->prepare(
++                        "SELECT batch_id FROM egg_inventory WHERE batch_id LIKE ? ORDER BY id DESC LIMIT 1"
+                     );
++                    $seq_prefix = $batch_prefix . "%";
++                    $seq_stmt->bind_param("s", $seq_prefix);
++                    $seq_stmt->execute();
++                    $seq_result = $seq_stmt->get_result();
++                    $seq_row = $seq_result->fetch_assoc();
++                    $seq_stmt->close();
++
++                    if ($seq_row) {
++                        $last_num = (int)substr($seq_row['batch_id'], -3);
++                        $next_num = str_pad($last_num + 1, 3, '0', STR_PAD_LEFT);
++                    } else {
++                        $next_num = "001";
++                    }
+ 
++                    // Insert inventory records for each size
++                    foreach ($valid_entries as $egg_size => $quantity) {
++                        // Get latest current stock for this size
++                        $stock_stmt = $conn->prepare(
++                            "SELECT current_stock FROM egg_inventory WHERE egg_size = ? ORDER BY id DESC LIMIT 1 FOR UPDATE"
++                        );
++                        $stock_stmt->bind_param("s", $egg_size);
++                        $stock_stmt->execute();
++                        $stock_result = $stock_stmt->get_result();
++                        $stock_row = $stock_result->fetch_assoc();
++                        $stock_stmt->close();
++
++                        $current_stock = $stock_row ? intval($stock_row['current_stock']) : 0;
++                        $new_stock = $current_stock + $quantity;
++
++                        // Generate batch ID
++                        $batch_id = $batch_prefix . $next_num;
++                        $next_num = str_pad(intval($next_num) + 1, 3, '0', STR_PAD_LEFT);
++
++                        // Insert inventory record
++                        $insert_stmt = $conn->prepare(
++                            "INSERT INTO egg_inventory (batch_id, session_id, harvest_date, harvest_time, egg_size, quantity, current_stock, movement_type, reason, date_logged) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
++                        );
++                        $insert_stmt->bind_param("sissiiisss", $batch_id, $session_id, $harvest_date, $harvest_time, $egg_size, $quantity, $new_stock, $movement, $reason, $current_date);
++                        $insert_stmt->execute();
++                        $insert_stmt->close();
++
++                        // Low stock notification
++                        $low_stock_threshold = 10;
++                        if ($new_stock <= $low_stock_threshold && !lowStockNotificationExists($conn, $egg_size, 'egg')) {
++                            $owners = getOwnerUsers($conn);
++                            foreach ($owners as $owner_id) {
++                                add_notification(
++                                    $conn,
++                                    $owner_id,
++                                    "Low Stock Alert",
++                                    "{$egg_size} egg stock is currently {$new_stock}, below the threshold of {$low_stock_threshold}.",
++                                    "warning"
++                                );
++                            }
++                        }
++                    }
+ 
+-                $current_stock =
+-                    intval(
+-                        $stock_row['current_stock']
+-                    );
++                    $conn->commit();
++
++                } catch (Exception $e) {
++                    $conn->rollback();
++                    die("Multi-size harvest failed: " . $e->getMessage());
++                }
+ 
+             } else {
++                // LEGACY SINGLE-SIZE (for Stock Out/Adjustment or backward compatibility)
+ 
+-                $current_stock = 0;
++                // Validate required fields
++                if (!isset($_POST['batch_id']) || empty($_POST['batch_id'])) {
++                    die("Batch ID is required.");
++                }
+ 
+-            }
++                if (!isset($_POST['egg_size']) || empty($_POST['egg_size'])) {
++                    die("Egg size is required.");
++                }
+ 
++                if (!isset($_POST['quantity']) || !is_numeric($_POST['quantity'])) {
++                    die("Quantity is required and must be a number.");
++                }
+ 
+-            /*
+-               Compute new stock
+-            */
++                $batch_id = mysqli_real_escape_string(
++                    $conn,
++                    $_POST['batch_id']
++                );
+ 
+-            if ($movement == "Stock In") {
++                $egg_size = mysqli_real_escape_string(
++                    $conn,
++                    $_POST['egg_size']
++                );
+ 
+-                $new_stock =
+-                    $current_stock
+-                    +
+-                    $quantity;
++                $quantity = intval(
++                    $_POST['quantity']
++                );
+ 
+-            } elseif ($movement == "Stock Out") {
++                // Validate egg size against enum values
++                $valid_sizes = array('XS', 'Small', 'Medium', 'Large', 'XL', 'Jumbo', 'Super Jumbo', 'Double Yolk');
++                if (!in_array($egg_size, $valid_sizes)) {
++                    die("Invalid egg size: '$egg_size'. Valid sizes are: " . implode(', ', $valid_sizes));
++                }
+ 
+-                $new_stock =
+-                    $current_stock
+-                    -
+-                    $quantity;
++                // Validate quantity
++                if ($quantity <= 0) {
++                    die("Quantity must be a positive integer.");
++                }
+ 
++                /*
++                   Get latest current stock
++                */
+ 
+-                if ($new_stock < 0) {
++                $stock_query = mysqli_query(
++                    $conn,
++                    "
++                    SELECT current_stock
++                    FROM egg_inventory
++                    WHERE egg_size = '$egg_size'
++                    ORDER BY id DESC
++                    LIMIT 1
++                    "
++                );
+ 
+-                    $new_stock = 0;
++                if (
++                    $stock_query &&
++                    mysqli_num_rows(
++                        $stock_query
++                    ) > 0
++                ) {
++
++                    $stock_row =
++                        mysqli_fetch_assoc(
++                            $stock_query
++                        );
++
++                    $current_stock =
++                        intval(
++                            $stock_row['current_stock']
++                        );
++
++                } else {
++
++                    $current_stock = 0;
+ 
+                 }
+ 
+-            }
++                /*
++                   Compute new stock
++                */
++
++                if ($movement == "Stock In") {
++
++                    $new_stock =
++                        $current_stock
++                        +
++                        $quantity;
++
++                } elseif ($movement == "Stock Out") {
++
++                    $new_stock =
++                        $current_stock
++                        -
++                        $quantity;
++
++                    if ($new_stock < 0) {
++
++                        $new_stock = 0;
++
++                    }
++
++                }
+ 
+ 
+             /*
+-               Insert inventory record
++               Insert inventory record (legacy single-size)
+             */
+ 
+-            mysqli_query(
+-                $conn,
+-                "
+-                INSERT INTO egg_inventory
+-                (
+-                    batch_id,
+-                    harvest_date,
+-                    harvest_time,
+-                    egg_size,
+-                    quantity,
+-                    current_stock,
+-                    movement_type,
+-                    reason,
+-                    date_logged
+-                )
+-                VALUES
+-                (
+-                    '$batch_id',
+-                    '$harvest_date',
+-                    '$harvest_time',
+-                    '$egg_size',
+-                    '$quantity',
+-                    '$new_stock',
+-                    '$movement',
+-                    '$reason',
+-                    '$current_date'
+-                )
+-                "
++            $insert_stmt = $conn->prepare(
++                "INSERT INTO egg_inventory
++                (batch_id, session_id, harvest_date, harvest_time, egg_size, quantity, current_stock, movement_type, reason, date_logged)
++                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+             );
+ 
++            if (!$insert_stmt) {
++                die("Insert statement prepare failed: " . $conn->error);
++            }
++
++            $session_id_null = NULL;
++            $insert_stmt->bind_param(
++                "sissiiisss",
++                $batch_id,
++                $session_id_null,
++                $harvest_date,
++                $harvest_time,
++                $egg_size,
++                $quantity,
++                $new_stock,
++                $movement,
++                $reason,
++                $current_date
++            );
++
++            if (!$insert_stmt->execute()) {
++                die("Insert failed: " . $insert_stmt->error);
++            }
++
++            $insert_stmt->close();
++
+             // Check for low stock and notify owners
+             $low_stock_threshold = 10;
+             if ($new_stock <= $low_stock_threshold && !lowStockNotificationExists($conn, $egg_size, 'egg')) {
+@@ -495,9 +631,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+                 }
+             }
+ 
+-        }
++        } // closes legacy single-size else (line 477)
+ 
+-    }
++    } // closes outer else for Stock Adjustment (line 354)
++
++} // closes if (isset($_POST['action_egg'])) (line 79)
+ 
+ 
+     /* =====================================================
+@@ -743,6 +881,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+                         INSERT INTO supply_inventory
+                         (
+                             batch_id,
++                            session_id,
+                             item_category,
+                             item_name,
+                             quantity,
+@@ -754,6 +893,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+                         VALUES
+                         (
+                             '$batch_id',
++                            NULL,
+                             '$category',
+                             '$item_name',
+                             '$adjustment',
+@@ -973,6 +1113,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+                 INSERT INTO supply_inventory
+                 (
+                     batch_id,
++                    session_id,
+                     item_category,
+                     item_name,
+                     quantity,
+@@ -984,6 +1125,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+                 VALUES
+                 (
+                     '$batch_id',
++                    NULL,
+                     '$category',
+                     '$item_name',
+                     '$quantity',
+@@ -1012,7 +1154,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+ 
+         }
+ 
+-    }
++    } // closes if (isset($_POST['action_supply'])) (line 621)
+ 
+ 
+     /* PREVENT DOUBLE FORM SUBMISSION */
+@@ -4480,6 +4622,8 @@ h6 {
+ 
+     <th>Reason</th>
+ 
++    <th>Age / Eligibility</th>
++
+ </tr>
+ 
+ </thead>
+@@ -4599,6 +4743,26 @@ while (
+ 
+     </td>
+ 
++
++    <td>
++
++        <?php
++        // Calculate age and eligibility
++        $age_in_days = get_age_in_days($row['harvest_date']);
++        $eligibility = get_eligibility_status($row['harvest_date']);
++
++        if ($age_in_days !== null) {
++            echo '<span class="badge" style="background-color: ' . $eligibility_colors[$eligibility] . '; color: white;">';
++            echo $age_in_days . ' days';
++            echo '</span> ';
++            echo '<small>(' . $eligibility_labels[$eligibility] . ')</small>';
++        } else {
++            echo '<span class="badge bg-secondary">Unknown</span>';
++        }
++        ?>
++
++    </td>
++
+ </tr>
+ 
+ <?php } ?>
+@@ -5835,6 +5999,7 @@ if (
+ <form
+     method="POST"
+     class="modal-content"
++    id="eggForm"
+ >
+ 
+ <div class="modal-header">
+@@ -5955,12 +6120,9 @@ if (
+ </div>
+ 
+ 
+-<!-- EGG SIZE -->
++<!-- SINGLE-SIZE (for Stock Out/Adjustment) -->
+ 
+-<div
+-    class="mb-3"
+-    id="eggSizeContainer"
+->
++<div class="mb-3" id="singleSizeContainer">
+ 
+ <label class="form-label">
+ 
+@@ -5972,7 +6134,6 @@ if (
+     name="egg_size"
+     id="eggSizeSelect"
+     class="form-select"
+-    required
+ >
+ 
+     <option value="XS">
+@@ -6030,7 +6191,6 @@ if (
+     name="quantity"
+     id="eggQuantityInput"
+     class="form-control"
+-    required
+ >
+ 
+ <small
+@@ -6046,6 +6206,35 @@ if (
+ </div>
+ 
+ 
++<!-- MULTI-SIZE HARVEST (for Stock In only) -->
++
++<div class="mb-3" id="multiSizeContainer" style="display:none;">
++
++<label class="form-label">
++
++    Egg Sizes & Quantities
++
++</label>
++
++<div id="eggSizesContainer">
++
++    <!-- Dynamic egg size rows will be added here -->
++
++</div>
++
++<button
++    type="button"
++    class="btn btn-sm btn-outline-success mt-2"
++    id="addEggSizeBtn"
++>
++
++    <i class="fa-solid fa-plus"></i> Add Egg Size
++
++</button>
++
++</div>
++
++
+ <!-- AUTOMATIC REASON -->
+ 
+ <div class="mb-3">
+@@ -6520,9 +6709,14 @@ function setupEggModal(action) {
+     ).style.display = "";
+ 
+ 
+-    document.getElementById(
+-        "eggSizeContainer"
+-    ).style.display = "";
++    // Show/hide multi-size vs single-size based on action
++    if (action == "Stock In") {
++        document.getElementById("multiSizeContainer").style.display = "";
++        document.getElementById("singleSizeContainer").style.display = "none";
++    } else {
++        document.getElementById("multiSizeContainer").style.display = "none";
++        document.getElementById("singleSizeContainer").style.display = "";
++    }
+ 
+ 
+     document.getElementById(
+@@ -6553,6 +6747,11 @@ function setupEggModal(action) {
+         ).value =
+             "Harvest";
+ 
++        // Add first multi-size row
++        document.getElementById('eggSizesContainer').innerHTML = '';
++        eggSizeRowCounter = 0;
++        addEggSizeRow();
++
+     } else {
+ 
+         document.getElementById(
+@@ -6560,6 +6759,9 @@ function setupEggModal(action) {
+         ).value =
+             "Stock Out";
+ 
++        // Clear single-size field
++        document.getElementById('eggSizeSelect').value = '';
++
+     }
+ 
+ }
+@@ -7693,6 +7895,131 @@ if (
+ 
+ }
+ 
++
++/* =========================================================
++   MULTI-SIZE HARVEST FUNCTIONALITY
++========================================================= */
++
++var eggSizeRowCounter = 0;
++
++// Add initial egg size row when modal opens
++document.getElementById('eggModal').addEventListener('show.bs.modal', function() {
++    // Clear existing rows
++    document.getElementById('eggSizesContainer').innerHTML = '';
++    eggSizeRowCounter = 0;
++    // Add first row (only for Stock In, handled by setupEggModal)
++});
++
++// Add new egg size row
++document.getElementById('addEggSizeBtn').addEventListener('click', function() {
++    addEggSizeRow();
++});
++
++function addEggSizeRow() {
++    var container = document.getElementById('eggSizesContainer');
++    var rowId = 'eggSizeRow_' + eggSizeRowCounter;
++    
++    var rowHtml = `
++        <div class="row mb-2" id="${rowId}">
++            <div class="col-md-5">
++                <select name="egg_sizes[]" class="form-select" required>
++                    <option value="">Select Size</option>
++                    <option value="XS">XS (Extra Small)</option>
++                    <option value="Small">Small</option>
++                    <option value="Medium">Medium</option>
++                    <option value="Large">Large</option>
++                    <option value="XL">XL (Extra Large)</option>
++                    <option value="Jumbo">Jumbo</option>
++                    <option value="Super Jumbo">Super Jumbo</option>
++                    <option value="Double Yolk">Double Yolk</option>
++                </select>
++            </div>
++            <div class="col-md-5">
++                <input type="number" name="egg_quantities[]" class="form-control" placeholder="Quantity" min="1" required>
++            </div>
++            <div class="col-md-2">
++                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeEggSizeRow('${rowId}')">
++                    <i class="fa-solid fa-trash"></i>
++                </button>
++            </div>
++        </div>
++    `;
++    
++    container.insertAdjacentHTML('beforeend', rowHtml);
++    eggSizeRowCounter++;
++}
++
++function removeEggSizeRow(rowId) {
++    var row = document.getElementById(rowId);
++    var container = document.getElementById('eggSizesContainer');
++    
++    // Always keep at least one row
++    if (container.children.length > 1) {
++        row.remove();
++    } else {
++        // Clear values instead of removing
++        row.querySelector('select').value = '';
++        row.querySelector('input').value = '';
++    }
++}
++
++// Validate form before submission
++document.getElementById('eggForm').addEventListener('submit', function(e) {
++    var action = document.getElementById('egg_action_type').value;
++    var hasValidEntry = false;
++    
++    // Check if single-size form (Stock Out/Adjustment) or multi-size (Stock In)
++    if (action === 'Stock In') {
++        // Multi-size validation
++        var sizes = document.querySelectorAll('select[name="egg_sizes[]"]');
++        var quantities = document.querySelectorAll('input[name="egg_quantities[]"]');
++        
++        for (var i = 0; i < sizes.length; i++) {
++            if (sizes[i].value && quantities[i].value && parseInt(quantities[i].value) > 0) {
++                hasValidEntry = true;
++                break;
++            }
++        }
++        
++        if (!hasValidEntry) {
++            e.preventDefault();
++            alert('Please add at least one egg size with a valid quantity.');
++            return false;
++        }
++        
++        // Check for duplicate sizes
++        var selectedSizes = [];
++        for (var i = 0; i < sizes.length; i++) {
++            if (sizes[i].value) {
++                if (selectedSizes.includes(sizes[i].value)) {
++                    e.preventDefault();
++                    alert('Duplicate egg size detected. Please remove duplicates.');
++                    return false;
++                }
++                selectedSizes.push(sizes[i].value);
++            }
++        }
++    } else {
++        // Single-size validation (Stock Out/Adjustment)
++        var singleSize = document.getElementById('eggSizeSelect');
++        var singleQuantity = document.getElementById('eggQuantityInput');
++        
++        if (singleSize && singleQuantity) {
++            if (singleSize.value && singleQuantity.value && parseInt(singleQuantity.value) > 0) {
++                hasValidEntry = true;
++            }
++        }
++        
++        if (!hasValidEntry) {
++            e.preventDefault();
++            alert('Please select an egg size and enter a valid quantity.');
++            return false;
++        }
++    }
++    
++    return true;
++});
++
+ </script>
+ 
+ </body>

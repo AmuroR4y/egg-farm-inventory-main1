@@ -1,6 +1,7 @@
 <?php
 require_once 'session_config.php';
 require_once 'db.php';
+require_once 'config_age_eligibility.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -129,7 +130,11 @@ try {
 
     $eggs = fetch_all_rows($conn, "SELECT id, batch_id, harvest_date, harvest_time, egg_size, quantity, current_stock, movement_type, reason, date_logged FROM egg_inventory ORDER BY id DESC");
     $supplies = fetch_all_rows($conn, "SELECT id, batch_id, item_category, item_name, quantity, current_stock, action_type, reason, date_logged FROM supply_inventory ORDER BY id DESC");
-    $snapshotEggs = fetch_all_rows($conn, "SELECT e.* FROM egg_inventory e INNER JOIN (SELECT egg_size, MAX(id) AS id FROM egg_inventory GROUP BY egg_size) latest ON latest.id = e.id");
+
+    // Get minimum eligible date for snapshots
+    $eligible_min_date = get_eligible_min_date();
+
+    $snapshotEggs = fetch_all_rows($conn, "SELECT e.* FROM egg_inventory e INNER JOIN (SELECT egg_size, MAX(id) AS id FROM egg_inventory WHERE harvest_date >= '$eligible_min_date' GROUP BY egg_size) latest ON latest.id = e.id");
     $snapshotSupplies = fetch_all_rows($conn, "SELECT s.* FROM supply_inventory s INNER JOIN (SELECT item_category, item_name, MAX(id) AS id FROM supply_inventory GROUP BY item_category, item_name) latest ON latest.id = s.id");
 
     echo json_encode(array(

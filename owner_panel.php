@@ -46,12 +46,12 @@ if (isset($_SESSION['fullname']) && $_SESSION['fullname'] != '') {
    SIDEBAR
 ================================ */
 .sidebar {
-    width: 260px;
+    width: 256px;
     height: 100vh;
-    background: #214f2c;
+    background: linear-gradient(180deg, #1d6030 0%, #123f22 100%);
     display: flex;
     flex-direction: column;
-    padding: 30px 15px;
+    padding: 20px 16px;
     border-right: 1px solid #183d21;
     position: fixed;
     left: 0;
@@ -201,6 +201,20 @@ if (isset($_SESSION['fullname']) && $_SESSION['fullname'] != '') {
     padding: 30px;
 }
 
+/* Sidebar Decoration */
+.sidebar-decoration {
+    margin-top: auto;
+    padding: 20px 0;
+    text-align: center;
+}
+
+.decoration-image {
+    width: 200px;
+    height: auto;
+    border-radius: 8px;
+    opacity: 0.8;
+}
+
 </style>
 
 <!-- ================================
@@ -227,7 +241,7 @@ if (isset($_SESSION['fullname']) && $_SESSION['fullname'] != '') {
 
     <!-- DASHBOARD -->
     <a href="owner_dashboard.php"
-    class="menu-item <?= ($current == 'owner_dashboard.php') ? 'active' : ''; ?>">
+    class="menu-item <?php if ($current == 'owner_dashboard.php' || (isset($_GET['page']) && $_GET['page'] == 'analytics')) { echo 'active'; } ?>">
 
         <i class="fa-solid fa-chart-pie"></i>
         Dashboard
@@ -235,19 +249,9 @@ if (isset($_SESSION['fullname']) && $_SESSION['fullname'] != '') {
     </a>
 
 
-    <!-- DATA ANALYTICS -->
-    <a href="owner_dashboard.php?page=analytics"
-    class="menu-item <?= (isset($_GET['page']) && $_GET['page'] == 'analytics') ? 'active' : ''; ?>">
-
-        <i class="fa-solid fa-chart-line"></i>
-        Data Analytics
-
-    </a>
-
-
     <!-- DEMAND FORECASTING -->
     <a href="owner_dashboard.php?page=forecasting"
-    class="menu-item <?= (isset($_GET['page']) && $_GET['page'] == 'forecasting') ? 'active' : ''; ?>">
+    class="menu-item <?php if (isset($_GET['page']) && $_GET['page'] == 'forecasting') { echo 'active'; } ?>">
 
         <i class="fa-solid fa-timeline"></i>
         Demand Forecasting
@@ -257,7 +261,7 @@ if (isset($_SESSION['fullname']) && $_SESSION['fullname'] != '') {
 
     <!-- REPORTS -->
     <a href="owner_dashboard.php?page=reports"
-    class="menu-item <?= (isset($_GET['page']) && $_GET['page'] == 'reports') ? 'active' : ''; ?>">
+    class="menu-item <?php if (isset($_GET['page']) && $_GET['page'] == 'reports') { echo 'active'; } ?>">
 
         <i class="fa-solid fa-file-invoice"></i>
         Reports
@@ -267,7 +271,7 @@ if (isset($_SESSION['fullname']) && $_SESSION['fullname'] != '') {
 
     <!-- PROFILE -->
     <a href="owner_dashboard.php?page=profile"
-    class="menu-item <?= (isset($_GET['page']) && $_GET['page'] == 'profile') ? 'active' : ''; ?>">
+    class="menu-item <?php if (isset($_GET['page']) && $_GET['page'] == 'profile') { echo 'active'; } ?>">
 
         <i class="fa-solid fa-user-gear"></i>
         Profile
@@ -289,5 +293,9 @@ if (isset($_SESSION['fullname']) && $_SESSION['fullname'] != '') {
 
 </ul>
 
+<!-- Farm Decoration -->
+<div class="sidebar-decoration">
+    <img src="vdvc/farm-decoration.png" alt="Farm" class="decoration-image" onerror="this.style.display='none'">
+</div>
 
 </nav>

@@ -29,38 +29,38 @@ if ($user_role !== 'customer') {
     header("Location: login.php");
     exit;
 }
+/* =========================================================
+   CUSTOMER LOGOUT TOKEN
+   PHP 5.5 COMPATIBLE
+========================================================= */
 
+if (empty($_SESSION['customer_logout_token'])) {
+    if (function_exists('random_bytes')) {
+        $_SESSION['customer_logout_token'] = bin2hex(random_bytes(32));
+    } elseif (function_exists('openssl_random_pseudo_bytes')) {
+        $_SESSION['customer_logout_token'] = bin2hex(openssl_random_pseudo_bytes(32));
+    } else {
+        $_SESSION['customer_logout_token'] = hash(
+            'sha256',
+            uniqid(mt_rand(), true) . session_id()
+        );
+    }
+}
 // =========================================================
 // GET CURRENT USER INFORMATION
 // =========================================================
 
-$current_user_name = 'Customer';
+$customer_name = isset($_SESSION['fullname'])
+    ? $_SESSION['fullname']
+    : (isset($_SESSION['customer_name']) ? $_SESSION['customer_name'] : (isset($_SESSION['name']) ? $_SESSION['name'] : 'Customer'));
+$active_page = 'history';
 
-$user_stmt = $conn->prepare("
-    SELECT fullname, username
-    FROM users
-    WHERE id = ?
-    LIMIT 1
-");
-
-if ($user_stmt) {
-    $user_stmt->bind_param("i", $user_id);
-    $user_stmt->execute();
-
-    $user_result = $user_stmt->get_result();
-
-    if ($user_result && $user_result->num_rows > 0) {
-        $user_data = $user_result->fetch_assoc();
-
-        if (!empty($user_data['fullname'])) {
-            $current_user_name = $user_data['fullname'];
-        } elseif (!empty($user_data['username'])) {
-            $current_user_name = $user_data['username'];
-        }
-    }
-
-    $user_stmt->close();
+$unread_notifications = 0;
+$notification_count_result = $conn->query("SELECT COUNT(*) AS total FROM notifications WHERE user_id = " . (int)$user_id . " AND is_read = 0");
+if ($notification_count_result && ($notification_count_row = $notification_count_result->fetch_assoc())) {
+    $unread_notifications = (int)$notification_count_row['total'];
 }
+
 
 // =========================================================
 // FILTERS
@@ -147,11 +147,15 @@ foreach ($notifications as $n) {
 // RESERVATION QUERY
 // =========================================================
 
+
 $query = "
     SELECT *
     FROM reservations
     WHERE 1=1
+    AND COALESCE(LOWER(TRIM(status)), '') NOT LIKE 'pending%'
+    AND COALESCE(TRIM(status), '') <> ''
 ";
+
 
 $params = array();
 $types = "";
@@ -454,28 +458,50 @@ foreach ($grouped_reservations as $reservation) {
     }
 }
 
-// Recent reservation
+
+/* =========================================================
+   RECENT RESERVATION
+   Show the latest reservation creation date.
+========================================================= */
+
 $recent_reservation = 'No reservations';
 
 if (!empty($grouped_reservations)) {
 
-    $recent_timestamp = strtotime(
-        $grouped_reservations[0]['reservation_date']
-    );
+    $recent_timestamp = false;
+
+    foreach ($grouped_reservations as $recent_row) {
+
+        if (
+            isset($recent_row['created_at']) &&
+            trim((string)$recent_row['created_at']) !== ''
+        ) {
+
+            $row_timestamp = strtotime(
+                $recent_row['created_at']
+            );
+
+            if (
+                $row_timestamp !== false &&
+                (
+                    $recent_timestamp === false ||
+                    $row_timestamp > $recent_timestamp
+                )
+            ) {
+                $recent_timestamp = $row_timestamp;
+            }
+        }
+    }
 
     if ($recent_timestamp !== false) {
 
         $recent_reservation = date(
-            'F j, Y',
+            'M j, Y',
             $recent_timestamp
         );
-
-    } else {
-
-        $recent_reservation =
-            $grouped_reservations[0]['reservation_date'];
     }
 }
+
 
 // =========================================================
 // PAGINATION URL
@@ -514,1275 +540,357 @@ function getPaginationUrl($page_num)
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
     >
 
+    <link rel="stylesheet" href="customer_styles.css">
+
     <style>
 
-        /* =====================================================
-           GLOBAL
-        ===================================================== */
+/* =========================================================
+   VDVC CUSTOMER HISTORY — REFERENCE REDESIGN
+========================================================= */
 
-        * {
-            box-sizing: border-box;
-        }
 
-        html,
-        body {
-            margin: 0;
-            padding: 0;
-            min-height: 100%;
-        }
+/* =========================================================
+   CUSTOMER NAVIGATION — USE SHARED STYLES FROM customer_styles.css
+========================================================= */
 
-        body {
-            background: #f3f1eb;
-            color: #385247;
-            font-family: Arial, Helvetica, sans-serif;
-            font-size: 13px;
-        }
+/* Remove duplicate navbar styles - using shared stylesheet */
 
-        /* =====================================================
-           MAIN CONTENT
-        ===================================================== */
 
-        .main-content {
-            margin-left: 260px;
-            min-height: 100vh;
-            padding: 18px 28px 30px 28px;
-        }
 
-        .history-shell {
-            width: 100%;
-            max-width: 1340px;
-            margin: 0 auto;
-        }
+/* =========================================================
+   PAGE LAYOUT
+========================================================= */
 
-        /* =====================================================
-           PAGE CARD
-        ===================================================== */
-.history-card {
-    background: linear-gradient(
-        135deg,
-        #eeece6 0%,
-        #f5f3ed 100%
-    );
+/* =========================================================
+   PAGE LAYOUT — MAIN HISTORY OUTER CARD
+========================================================= */
 
-    border: 1px solid #e2e0d9;
-    border-radius: 22px;
+.main-content {
+    width: 100%;
+    min-height: calc(100vh - 125px);
+    margin: 0;
+    padding: 10px 0 14px;
+}
 
-    box-shadow:
-        0 3px 12px rgba(55, 70, 60, 0.08);
+.history-shell {
+    width: calc(100% - 40px);
+    max-width: 1740px;
+    margin: 0 auto;
+}
 
+.history-outer-card {
+    width: 100%;
+    background: #ffffff;
+    border: 1px solid #dedbd2;
+    border-radius: 26px;
     overflow: hidden;
+    box-shadow: 0 8px 24px rgba(35, 55, 38, 0.08);
 }
 
-     .customer-dashboard-topbar {
-
-    min-height:
-        86px;
-
-    width:
-        100%;
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    justify-content:
-        space-between;
-
-    padding:
-        0 28px;
-
-    background:
-        #f7f6f2;
-
-    border-bottom:
-        1px solid #dddcd6;
-
-    box-sizing:
-        border-box;
-
-    border-radius:
-        22px 22px 0 0;
+.history-card {
+    width: 100%;
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
 }
 
 
 /* =========================================================
-   HEADER TITLE
+   HISTORY HERO / BANNER
 ========================================================= */
-
-.customer-page-title {
-
-    margin:
-        0;
-
-    font-size:
-        1.35rem;
-
-    font-weight:
-        700;
-
-    color:
-        #3f4b45;
-
-    letter-spacing:
-        -0.3px;
-}
 
 
 /* =========================================================
-   HEADER RIGHT
+   HISTORY HERO — BUILT INTO OUTER CARD
 ========================================================= */
 
-.customer-topbar-right {
+.customer-dashboard-topbar {
+    position: relative;
+    min-height: 143px;
+    width: 100%;
+    padding: 24px 5%;
 
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    gap:
-        18px;
-
-    height:
-        100%;
-}
-
-
-/* =========================================================
-   NOTIFICATION
-========================================================= */
-
-.customer-top-notification {
-
-    position:
-        relative;
-
-    width:
-        40px;
-
-    height:
-        40px;
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    justify-content:
-        center;
-
-    text-decoration:
-        none;
-
-    color:
-        #65716b;
-
-    font-size:
-        1.2rem;
-
-    transition:
-        0.2s ease;
-}
-
-
-.customer-top-notification:hover {
-
-    color:
-        #527d59;
-}
-
-
-/* =========================================================
-   NOTIFICATION BADGE
-========================================================= */
-
-.customer-notification-badge {
-
-    position:
-        absolute;
-
-    top:
-        1px;
-
-    right:
-        0;
-
-    min-width:
-        17px;
-
-    height:
-        17px;
-
-    padding:
-        0 4px;
-
-    border-radius:
-        50%;
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    justify-content:
-        center;
-
-    background:
-        #527d59;
-
-    color:
-        #ffffff;
-
-    font-size:
-        0.58rem;
-
-    font-weight:
-        700;
-
-    border:
-        2px solid #f7f6f2;
-}
-
-
-/* =========================================================
-   CUSTOMER NOTIFICATION DROPDOWN
-========================================================= */
-
-.customer-notification-dropdown {
-
-    position:
-        absolute;
-
-    top:
-        100%;
-
-    right:
-        0;
-
-    margin-top:
-        10px;
-
-    width:
-        380px;
-
-    max-height:
-        500px;
-
-    background:
-        #ffffff;
-
-    border:
-        1px solid #e0e4e0;
-
-    border-radius:
-        12px;
-
-    box-shadow:
-        0 8px 24px rgba(0, 0, 0, 0.12);
-
-    z-index:
-        1000;
-
-    overflow:
-        hidden;
-}
-
-.customer-notification-dropdown.hidden {
-
-    display:
-        none;
-}
-
-.customer-notification-dropdown-header {
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    justify-content:
-        space-between;
-
-    padding:
-        16px 20px;
-
-    border-bottom:
-        1px solid #e8ebe7;
-
-    background:
-        #f7f6f2;
-}
-
-.customer-panel-title-group {
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    gap:
-        10px;
-}
-
-.customer-panel-title-icon {
-
-    width:
-        32px;
-
-    height:
-        32px;
-
-    border-radius:
-        8px;
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    justify-content:
-        center;
-
-    background:
-        #527d59;
-
-    color:
-        #ffffff;
-
-    font-size:
-        0.9rem;
-}
-
-.customer-dashboard-panel-title {
-
-    font-size:
-        0.95rem;
-
-    font-weight:
-        700;
-
-    color:
-        #214f2c;
-}
-
-.customer-mark-all-link {
-
-    font-size:
-        0.8rem;
-
-    font-weight:
-        600;
-
-    color:
-        #527d59;
-
-    cursor:
-        pointer;
-
-    text-decoration:
-        none;
-
-    transition:
-        0.2s ease;
-}
-
-.customer-mark-all-link:hover {
-
-    color:
-        #214f2c;
-
-    text-decoration:
-        underline;
-}
-
-.customer-notification-list {
-
-    max-height:
-        420px;
-
-    overflow-y:
-        auto;
-
-    overflow-x:
-        hidden;
-}
-
-.customer-notification-item {
-
-    display:
-        flex;
-
-    align-items:
-        flex-start;
-
-    gap:
-        12px;
-
-    padding:
-        16px 20px;
-
-    border-bottom:
-        1px solid #f0f2ef;
-
-    transition:
-        0.2s ease;
-
-    cursor:
-        default;
-}
-
-.customer-notification-item:hover {
-
-    background:
-        #f9faf8;
-}
-
-.customer-notification-item.unread {
-
-    background:
-        #f0f5e9;
-}
-
-.customer-notification-item.unread:hover {
-
-    background:
-        #e9f0df;
-}
-
-.customer-notification-icon {
-
-    width:
-        36px;
-
-    height:
-        36px;
-
-    min-width:
-        36px;
-
-    border-radius:
-        10px;
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    justify-content:
-        center;
-
-    font-size:
-        0.95rem;
-}
-
-.customer-notification-icon.success {
-
-    background:
-        #dcfce7;
-
-    color:
-        #166534;
-}
-
-.customer-notification-icon.alert {
-
-    background:
-        #fee2e2;
-
-    color:
-        #991b1b;
-}
-
-.customer-notification-icon.info {
-
-    background:
-        #dbeafe;
-
-    color:
-        #1e40af;
-}
-
-.customer-notification-icon.warning {
-
-    background:
-        #fef3c7;
-
-    color:
-        #92400e;
-}
-
-.customer-notification-content {
-
-    flex:
-        1;
-
-    min-width:
-        0;
-}
-
-.customer-notification-title {
-
-    font-size:
-        0.85rem;
-
-    font-weight:
-        700;
-
-    color:
-        #214f2c;
-
-    margin-bottom:
-        4px;
-
-    line-height:
-        1.3;
-}
-
-.customer-notification-item.unread .customer-notification-title {
-
-    color:
-        #1a4023;
-}
-
-.customer-notification-description {
-
-    font-size:
-        0.8rem;
-
-    color:
-        #5c665f;
-
-    line-height:
-        1.4;
-
-    margin-bottom:
-        6px;
-}
-
-.customer-notification-time {
-
-    font-size:
-        0.72rem;
-
-    color:
-        #8b968f;
-
-    font-weight:
-        500;
-}
-
-.customer-notification-empty {
-
-    display:
-        flex;
-
-    flex-direction:
-        column;
-
-    align-items:
-        center;
-
-    justify-content:
-        center;
-
-    padding:
-        40px 20px;
-
-    color:
-        #8b968f;
-}
-
-.customer-notification-empty i {
-
-    font-size:
-        2rem;
-
-    margin-bottom:
-        12px;
-
-    opacity:
-        0.6;
-}
-
-.customer-notification-empty p {
-
-    font-size:
-        0.85rem;
-
-    margin:
-        0;
-}
-
-.customer-mark-read-btn {
-
-    padding:
-        6px 12px;
-
-    font-size:
-        0.75rem;
-
-    font-weight:
-        600;
-
-    color:
-        #527d59;
-
-    background:
-        #f0f5e9;
-
-    border:
-        1px solid #dce4d5;
-
-    border-radius:
-        6px;
-
-    cursor:
-        pointer;
-
-    transition:
-        0.2s ease;
-
-    margin-left:
-        auto;
-}
-
-.customer-mark-read-btn:hover {
-
-    background:
-        #e9f0df;
-
-    border-color:
-        #cdd6c5;
-}
-
-
-/* =========================================================
-   HEADER DIVIDER
-========================================================= */
-
-.customer-topbar-divider {
-
-    width:
-        1px;
-
-    height:
-        42px;
-
-    background:
-        #deded8;
-}
-
-
-/* =========================================================
-   CUSTOMER PROFILE
-========================================================= */
-
-.customer-top-profile {
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    gap:
-        11px;
-
-    min-width:
-        190px;
-
-    text-decoration:
-        none;
-
-    color:
-        #3f4b45;
-}
-
-
-/* =========================================================
-   CUSTOMER AVATAR
-========================================================= */
-
-.customer-avatar {
-
-    width:
-        54px;
-
-    height:
-        54px;
-
-    min-width:
-        54px;
-
-    border-radius:
-        50%;
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    justify-content:
-        center;
-
-    background:
-        #e8ebe7;
-
-    border:
-        1px solid #d9ddd8;
-
-    color:
-        #527d59;
-
-    font-size:
-        1.25rem;
-
-    box-shadow:
-        0 2px 6px
-        rgba(
-            0,
-            0,
-            0,
-            0.04
-        );
-}
-
-
-/* =========================================================
-   CUSTOMER ACCOUNT DETAILS
-========================================================= */
-
-.customer-account-details {
-
-    display:
-        flex;
-
-    flex-direction:
-        column;
-
-    justify-content:
-        center;
-
-    min-width:
-        100px;
-}
-
-
-/* =========================================================
-   CUSTOMER NAME
-========================================================= */
-
-.customer-top-name {
-
-    display:
-        block;
-
-    margin:
-        0;
-
-    color:
-        #3f4b45;
-
-    font-size:
-        0.88rem;
-
-    font-weight:
-        700;
-
-    line-height:
-        1.2;
-}
-
-
-/* =========================================================
-   DATE AND LIVE TIME
-========================================================= */
-
-.customer-date-time {
-
-    display:
-        flex;
-
-    flex-direction:
-        column;
-
-    align-items:
-        flex-start;
-
-    gap:
-        2px;
-
-    margin-top:
-        5px;
-
-    white-space:
-        nowrap;
-}
-
-
-.customer-date {
-
-    font-size:
-        0.63rem;
-
-    color:
-        #8a9590;
-
-    line-height:
-        1.2;
-}
-
-
-.customer-time {
-
-    font-size:
-        0.63rem;
-
-    color:
-        #527d59;
-
-    font-weight:
-        600;
-
-    line-height:
-        1.2;
-
-    white-space:
-        nowrap;
-}
-
-
-/* =========================================================
-   DROPDOWN ICON
-========================================================= */
-
-.customer-dropdown-icon {
-
-    width:
-        28px;
-
-    display:
-        flex;
-
-    align-items:
-        center;
-
-    justify-content:
-        center;
-
-    color:
-        #65716b;
-
-    font-size:
-        0.7rem;
-}
-
-        /* =====================================================
-           NOTIFICATION DROPDOWN
-        ===================================================== */
-
-        #notification_dropdown {
-            position: absolute;
-
-            right: 0;
-            top: 45px;
-
-            width: 315px;
-
-            background: white;
-
-            border: 1px solid #deded8;
-
-            border-radius: 12px;
-
-            box-shadow:
-                0 12px 30px rgba(40, 55, 45, 0.14);
-
-            z-index: 200;
-
-            overflow: hidden;
-        }
-
-        .notification-header {
-            padding: 12px 15px;
-
-            background: #f7f6f2;
-
-            border-bottom: 1px solid #ecebe5;
-
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .notification-header-title {
-            color: #304a3b;
-            font-size: 13px;
-            font-weight: 700;
-        }
-
-        .notification-new-count {
-            font-size: 10px;
-            padding: 3px 8px;
-            border-radius: 20px;
-            font-weight: 700;
-        }
-
-        .notification-item {
-            padding: 12px 14px;
-
-            display: flex;
-
-            gap: 10px;
-
-            border-bottom: 1px solid #f0efeb;
-        }
-
-        .notification-item:hover {
-            background: #fafaf7;
-        }
-
-        .notification-icon {
-            width: 31px;
-            height: 31px;
-
-            border-radius: 50%;
-
-            flex-shrink: 0;
-
-            display: flex;
-            align-items: center;
-            justify-content: center;
-
-            font-size: 11px;
-        }
-
-        .notification-title-text {
-            color: #40564b;
-            font-size: 11px;
-            font-weight: 700;
-
-            margin-bottom: 3px;
-        }
-
-        .notification-description {
-            color: #7d8983;
-            font-size: 10px;
-            line-height: 1.35;
-        }
-
-        .notification-time {
-            color: #a3aaa6;
-            font-size: 9px;
-            margin-top: 4px;
-        }
-
-        /* =====================================================
-           BODY
-        ===================================================== */
-
-        .history-body {
-    padding: 26px 28px 30px;
-    background-color: #ffffff;
-
-    border-radius:
-        0 0 22px 22px;
-}
-        /* =====================================================
-           STAT CARDS
-        ===================================================== */
-
-        .stats-grid {
-            display: grid;
-
-            grid-template-columns:
-                repeat(4, minmax(0, 1fr));
-
-            gap: 15px;
-
-            margin-bottom: 17px;
-        }
-
-        .stat-card {
-            min-height: 118px;
-
-            border-radius: 12px;
-
-            padding: 17px 21px;
-
-            border: 1px solid rgba(215, 220, 211, 0.8);
-
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-
-            box-shadow:
-                0 2px 8px rgba(70, 80, 70, 0.04);
-        }
-
-        .stat-green {
-            background: linear-gradient(
-                135deg,
-                #f0f5e9,
-                #e9f0df
-            );
-        }
-
-        .stat-yellow {
-            background: linear-gradient(
-                135deg,
-                #faf3df,
-                #f7eed8
-            );
-        }
-
-        .stat-money {
-            background: linear-gradient(
-                135deg,
-                #eef5e8,
-                #e8f0df
-            );
-        }
-
-        .stat-blue {
-            background: linear-gradient(
-                135deg,
-                #edf4f6,
-                #e8f1f4
-            );
-        }
-
-        .stat-icon {
-            width: 35px;
-            height: 35px;
-
-            border-radius: 50%;
-
-            display: flex;
-            align-items: center;
-            justify-content: center;
-
-            margin-bottom: 9px;
-
-            font-size: 15px;
-        }
-
-        .stat-green .stat-icon,
-        .stat-money .stat-icon {
-            background: #d6e8c8;
-            color: #397049;
-        }
-
-        .stat-yellow .stat-icon {
-            background: #f3e4b9;
-            color: #8d702e;
-        }
-
-        .stat-blue .stat-icon {
-            background: #d9e9ee;
-            color: #356c78;
-        }
-
-        .stat-label {
-            font-size: 11px;
-
-            color: #5d7468;
-
-            font-weight: 700;
-
-            margin-bottom: 4px;
-        }
-
-        .stat-value {
-            font-size: 27px;
-
-            line-height: 1.05;
-
-            font-weight: 800;
-
-            color: #214f2c;
-        }
-
-        .stat-blue .stat-value {
-            font-size: 17px;
-            color: #315d68;
-        }
-/* =====================================================
-   SEARCH / FILTER TOOLBAR
-===================================================== */
-
-.history-toolbar {
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: space-between;
+    gap: 20px;
+
+    overflow: hidden;
+    border: 0;
+    border-radius: 0;
+
+    background-image: url("historyy.jpg");
+       background-position: center, center 52%;
+    background-size: cover;
+    background-repeat: no-repeat;
+
+    border-bottom: 1px solid #e4e8dc;
+}
+
+ 
+/*
+If your farm/egg banner uses a different filename, replace only
+the URL above with the correct image path in your project.
+*/
+
+.customer-page-title {
+     margin: 0 0 7px;
+    color: #17472d;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: clamp(27px, 3.1vw, 29px);
+    font-weight: 700;
+    line-height: 1.12;
+    letter-spacing: -0.5px;
+}
+
+.customer-page-title::after {
+    content: "View and track the status of your past reservations and egg purchases.";
+    display: block;
+    margin-top: 7px;
+    color: #5c6d5e;
+    font-size: 15px;
+    font-weight: 400;
+    letter-spacing: 0;
+}
+
+/* The notification/account controls now live in the navbar. */
+
+.customer-topbar-right {
+    display: none;
+}
+
+
+/* =========================================================
+   HISTORY BODY — INSIDE OUTER CARD
+========================================================= */
+
+.history-body {
     width: 100%;
-    margin: 0 0 10px 0;
+    padding: 18px 4.5% 24px;
+    background: #ffffff;
+    border-radius: 0;
+}
+
+
+/* =========================================================
+   STATISTICS GRID — SHOW FOUR SUMMARY CARDS
+========================================================= */
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+    width: 100%;
+    margin: 0 0 20px;
+}
+
+.stat-card {
+    min-width: 0;
+    min-height: 105px;
+    padding: 17px 18px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 7px;
+    background: #ffffff;
+    border: 1px solid #e1e8df;
+    border-radius: 10px;
+    box-shadow: 0 2px 7px rgba(41, 61, 43, 0.05);
+}
+
+.stat-icon {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: #e8f2e8;
+    color: #28613e;
+    font-size: 14px;
+}
+
+.stat-label {
+    color: #718075;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.stat-value {
+    color: #214d31;
+    font-size: 21px;
+    font-weight: 700;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+}
+
+/* Individual card accents */
+
+.stat-green .stat-icon {
+    background: #e3f2e5;
+    color: #28713c;
+}
+
+.stat-yellow .stat-icon {
+    background: #fff2d6;
+    color: #a87518;
+}
+
+.stat-money .stat-icon {
+    background: #e3edf8;
+    color: #356b9b;
+}
+
+.stat-blue .stat-icon {
+    background: #e8e9fa;
+    color: #5556a0;
+}
+
+/* Responsive layout */
+
+@media (max-width: 900px) {
+    .stats-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 420px) {
+    .stats-grid {
+        gap: 10px;
+    }
+
+    .stat-card {
+        min-height: 95px;
+        padding: 12px;
+    }
+
+    .stat-value {
+        font-size: 18px;
+    }
+}
+
+
+/* =========================================================
+   SEARCH AND FILTER TOOLBAR
+========================================================= */
+
+#historyFilterForm {
+    width: 100%;
+    margin: 0 0 12px;
+}
+
+.history-toolbar {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(180px, 2fr) repeat(4, minmax(95px, .9fr)) 70px;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
     padding: 0;
 }
 
-
-/* =====================================================
-   SEARCH BOX
-===================================================== */
-
 .search-box {
     position: relative;
-     flex: 0 0 50%;
-    min-width: 180px;
+    width: 100%;
+    min-width: 0;
 }
 
 .search-box i {
     position: absolute;
-    left: 11px;
     top: 50%;
+    left: 11px;
     transform: translateY(-50%);
-    color: #718279;
+    color: #819087;
     font-size: 10px;
     pointer-events: none;
 }
 
 .search-box input {
     width: 100%;
-    height: 35px;
-
-    padding: 0 10px 0 30px;
-
-    border: 1px solid #d9ded9;
-    border-radius: 8px;
-
-    background: #ffffff;
-    color: #52645a;
-
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: 12px;
-
+    height: 34px;
+    padding: 0 10px 0 29px;
+    border: 1px solid #e0e5df;
+    border-radius: 6px;
     outline: none;
+    background: #fff;
+    color: #45594b;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 10px;
 }
 
 .search-box input::placeholder {
-    color: #8a9790;
+    color: #939d95;
 }
 
-.search-box input:focus {
-    border-color: #8aa995;
-
-    box-shadow:
-        0 0 0 2px rgba(82, 125, 89, 0.08);
+.search-box input:focus,
+.filter-select:focus {
+    border-color: #7fa58a;
+    box-shadow: 0 0 0 2px rgba(61, 119, 77, .08);
 }
-
-
-/* =====================================================
-   FILTER SELECT
-===================================================== */
 
 .filter-select {
-    height: 35px;
-
-    width: 117px;
-
-    flex: 0 0 117px;
-
-    padding: 0 24px 0 10px;
-
-    border: 1px solid #d9ded9;
-    border-radius: 8px;
-
-    background-color: #ffffff;
-
-    color: #53665c;
-
-    font-family: Arial, Helvetica, sans-serif;
-
-    font-size: 10px;
-    font-weight: 600;
-
+    width: 100%;
+    min-width: 0;
+    height: 34px;
+    padding: 0 22px 0 9px;
+    border: 1px solid #e0e5df;
+    border-radius: 6px;
     outline: none;
-
+    background-color: #fff;
+    color: #586a5d;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 10px;
+    font-weight: 500;
     cursor: pointer;
 }
-
-.filter-select:focus {
-    border-color: #8aa995;
-
-    box-shadow:
-        0 0 0 2px rgba(82, 125, 89, 0.08);
-}
-/* =====================================================
-   CLEAR FILTER BUTTON
-===================================================== */
 
 .clear-filter-button {
-    height: 35px;
-
-    width: 68px;
-
-    flex: 0 0 68px;
-
-    border: 1px solid #cfd8d1;
-
-    border-radius: 8px;
-
-    background: #ffffff;
-
-    color: #52705f;
-
-    font-family: Arial, Helvetica, sans-serif;
-
-    font-size: 10px;
-
-    font-weight: 700;
-
-    cursor: pointer;
-
+    width: 70px;
+    height: 34px;
+    padding: 0 7px;
     display: inline-flex;
-
     align-items: center;
-
     justify-content: center;
-
     gap: 5px;
-
-    transition: 0.15s ease;
-}
-
-.clear-filter-button i {
+    border: 1px solid #dce3dc;
+    border-radius: 6px;
+    background: #fff;
+    color: #4e7057;
+    font-family: Arial, Helvetica, sans-serif;
     font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .15s ease;
 }
 
 .clear-filter-button:hover {
-    background: #edf4ee;
-
-    border-color: #9eb4a4;
-
-    color: #315f49;
+    background: #edf4ed;
 }
 
-/* =====================================================
+/* =========================================================
    TABLE CARD
-===================================================== */
+========================================================= */
 
 .table-card {
     width: 100%;
-
-    background: #ffffff;
-
-    border: 1px solid #dfe4df;
-
-    border-radius: 10px;
-
     overflow: hidden;
+    border: 1px solid #e4e9e2;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(41, 61, 43, .035);
+}
 
-    box-shadow:
-        0 1px 5px rgba(40, 60, 45, 0.035);
+.table-card::before {
+    content: "My Reservations";
+    display: block;
+    min-height: 33px;
+    padding: 10px 13px 7px;
+    color: #304b39;
+    font-size: 12px;
+    font-weight: 700;
+    background: #fff;
 }
 
 .table-scroll {
@@ -1790,592 +898,362 @@ function getPaginationUrl($page_num)
     overflow-x: auto;
 }
 
-
-/* =====================================================
+/* =========================================================
    TABLE
-===================================================== */
+========================================================= */
 
-table {
+
+.table-card table {
     width: 100%;
-
-    min-width: 760px;
-
-    border-collapse: collapse;
-
+    min-width: 1100px;
     table-layout: fixed;
+    border-collapse: collapse;
+    background: #fff;
 }
 
 
-/* =====================================================
-   TABLE HEADER
-===================================================== */
-
-thead {
-    background: #e8eee8;
+.table-card thead {
+    background: #f0f4ef;
 }
 
-thead th {
-    height: 34px;
-
-    padding: 7px 10px;
-
-    color: #42594d;
-
-    font-size: 13px;
-
-    font-weight: 800;
-
-    text-align: left;
-
-    white-space: nowrap;
-
-    border-bottom: 1px solid #d9e0da;
-}
-
-
-/* =====================================================
-   COLUMN WIDTHS
-===================================================== */
-
-thead th:nth-child(1) {
-    width: 22%;
-}
-
-thead th:nth-child(2) {
-    width: 13%;
-}
-
-thead th:nth-child(3) {
-    width: 13%;
-}
-
-thead th:nth-child(4) {
-    width: 14%;
-}
-
-thead th:nth-child(5) {
-    width: 14%;
-}
-
-thead th:nth-child(6) {
-    width: 10%;
-}
-
-thead th:nth-child(7) {
-    width: 9%;
-}
-
-thead th:nth-child(8) {
-    width: 11%;
-}
-
-
-/* =====================================================
-   TABLE BODY
-===================================================== */
-
-tbody tr {
-    background: #ffffff;
-
-    transition: background 0.15s ease;
-}
-
-tbody tr:hover {
-    background: #fafcf9;
-}
-
-tbody td {
-    height: 39px;
-
-    padding: 5px 10px;
-
-    color: #65746d;
-
-    font-size: 13px;
-
-    vertical-align: middle;
-
-    border-bottom: 1px solid #ecefea;
-}
-
-tbody tr:last-child td {
-    border-bottom: none;
-}
-
-
-/* =====================================================
-   RESERVATION CODE
-===================================================== */
-
-.reservation-code {
-    display: flex;
-
-    align-items: center;
-
-    gap: 5px;
-
-    color: #35684d;
-
-    font-size: 13px;
-
-    font-weight: 800;
-
-    white-space: nowrap;
-}
-
-.reservation-code:before {
-    content: "\f073";
-
-    font-family: "Font Awesome 6 Free";
-
-    font-weight: 900;
-
-    font-size: 11px;
-
-    color: #315e4a;
-}
-
-
-/* =====================================================
-   SIZE
-===================================================== */
-
-.size-value {
-    color: #5e7067;
-
-    font-size: 13px;
-
-    font-weight: 600;
-
-    white-space: nowrap;
-}
-
-
-/* =====================================================
-   TOTAL QUANTITY
-===================================================== */
-
-.trays-value {
-    color: #65736c;
-
-    font-size: 13px;
-
-    font-weight: 600;
-
-    white-space: nowrap;
-}
-
-
-/* =====================================================
-   METHOD
-===================================================== */
-
-.method-cell {
-    white-space: nowrap;
-}
-
-.method-display {
-    display: inline-flex;
-
-    align-items: center;
-
-    gap: 7px;
-
-    color: #53655c;
-
-    font-size: 13px;
-
-    font-weight: 600;
-
-    white-space: nowrap;
-}
-
-.method-display i {
-    width: 13px;
-
-    color: #1f5b43;
-
+.table-card thead th {
+    height: 31px;
+    padding: 7px 9px;
+    border-top: 1px solid #edf0eb;
+    border-bottom: 1px solid #e5eae3;
+    color: #68766c;
     font-size: 9px;
-
-    text-align: center;
-}
-
-
-/* =====================================================
-   DATE
-===================================================== */
-
-.date-main {
-    color: #596a61;
-
-    font-size: 13px;
-
-    font-weight: 600;
-
-    white-space: nowrap;
-}
-
-.date-time {
-    margin-top: 2px;
-
-    color: #819088;
-
-    font-size: 11px;
-
+    font-weight: 700;
+    text-align: left;
     white-space: nowrap;
 }
 
 
-/* =====================================================
-   TOTAL
-===================================================== */
+.table-card thead th:nth-child(1) { width: 16%; } /* Reservation Code */
+.table-card thead th:nth-child(2) { width: 7%; }  /* Size */
+.table-card thead th:nth-child(3) { width: 10%; } /* Total Qty */
+.table-card thead th:nth-child(4) { width: 10%; } /* Method */
+.table-card thead th:nth-child(5) { width: 13%; } /* Reservation Date */
+.table-card thead th:nth-child(6) { width: 14%; } /* Delivery/Pickup Date */
+.table-card thead th:nth-child(7) { width: 10%; } /* Total */
+.table-card thead th:nth-child(8) { width: 9%; }  /* Status */
+.table-card thead th:nth-child(9) { width: 11%; } /* Action */
 
-.amount-value {
-    color: #596b62;
 
-    font-size: 13px;
-
-    font-weight: 600;
-
-    white-space: nowrap;
+.table-card tbody tr {
+    background: #fff;
+    transition: background .15s ease;
 }
 
-
-/* =====================================================
-   STATUS
-===================================================== */
-
-.status-badge {
-    display: inline-flex;
-
-    align-items: center;
-    justify-content: center;
-
-    min-width: 51px;
-
-    height: 20px;
-
-    padding: 3px 9px;
-
-    border-radius: 20px;
-
-    font-size: 11px;
-
-    font-weight: 800;
-
-    white-space: nowrap;
-
-    border: none;
+.table-card tbody tr:hover {
+    background: #f8fbf7;
 }
 
-
-/* COMPLETED */
-
-.status-completed {
-    background: #cfead8;
-
-    color: #438052;
+.table-card tbody td {
+    height: 37px;
+    padding: 6px 9px;
+    border-bottom: 1px solid #edf0eb;
+    color: #657268;
+    font-size: 10px;
+    vertical-align: middle;
 }
 
-
-/* CANCELLED */
-
-.status-cancelled {
-    background: #f8dddd;
-
-    color: #b95750;
+.table-card tbody tr:last-child td {
+    border-bottom: 0;
 }
 
-
-/* =====================================================
-   ACTION
-===================================================== */
-
-.actions-cell {
-    text-align: center;
-
-    white-space: nowrap;
-}
-
-.actions-wrapper {
+.table-card .reservation-code {
     display: flex;
-
     align-items: center;
+    gap: 5px;
+    color: #28613e;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+}
 
+.table-card .reservation-code::before {
+    content: "\f073";
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    color: #477a54;
+    font-size: 9px;
+}
+
+.table-card .size-value,
+.table-card .trays-value,
+.table-card .amount-value {
+    color: #5c6d61;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.table-card .method-cell {
+    white-space: nowrap;
+}
+
+.table-card .method-display {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: #5c6c60;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.table-card .method-display i {
+    width: 12px;
+    color: #38704a;
+    font-size: 9px;
+    text-align: center;
+}
+
+.table-card .date-main {
+    color: #5c6b60;
+    font-size: 10px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.table-card .date-time {
+    margin-top: 3px;
+    color: #929c93;
+    font-size: 9px;
+    white-space: nowrap;
+}
+
+.table-card .status-badge {
+    min-width: 0;
+    min-height: 18px;
+    height: auto;
+    padding: 4px 8px;
+    display: inline-flex;
+    align-items: center;
     justify-content: center;
+    border: 0;
+    border-radius: 20px;
+    font-size: 9px;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+}
 
+.table-card .status-completed {
+    background: #e0f1df;
+    color: #337345;
+}
+
+.table-card .status-cancelled {
+    background: #f9e3e1;
+    color: #b6534c;
+}
+
+
+.table-card .actions-cell {
+    text-align: center;
+    white-space: nowrap;
+}
+
+.table-card .actions-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
     gap: 4px;
 }
 
-.action-button {
-    height: 27px;
+.table-card .actions-wrapper .action-button {
+    margin: 0 auto;
+}
 
-    border-radius: 7px;
 
+.table-card .action-button {
+    min-height: 24px;
+    height: 24px;
+    padding: 0 8px;
     display: inline-flex;
-
     align-items: center;
-
     justify-content: center;
-
-    cursor: pointer;
-
+    border: 1px solid #1f5c36;
+    border-radius: 5px;
+    background: #15532f;
+    color: #fff;
     font-family: Arial, Helvetica, sans-serif;
-
-    font-size: 11px;
-
+    font-size: 9px;
     font-weight: 700;
-
-    transition: 0.15s ease;
+    cursor: pointer;
+    transition: background .15s ease;
 }
 
-
-/* =====================================================
-   PRINT BUTTON
-===================================================== */
-
-.print-button {
-    width: 58px;
-
-    background: #ffffff;
-
-    color: #315f49;
-
-    border: 1px solid #2f684d;
+.table-card .print-button {
+    width: auto;
 }
 
-.print-button i {
+.table-card .action-button i {
     margin-right: 4px;
-
-    font-size: 10px;
+    font-size: 9px;
 }
 
-.print-button:hover {
-    background: #edf5ef;
+.table-card .action-button:hover {
+    background: #267343;
 }
 
+/* Empty-state row */
 
-/* =====================================================
-   TABLE FOOTER
-===================================================== */
+.table-card .empty-state {
+    height: 100px;
+    padding: 25px 15px;
+    text-align: center;
+    color: #87948a;
+    font-size: 11px;
+}
+
+.table-card .empty-state i {
+    margin-right: 6px;
+    color: #8da594;
+}
+
+/* =========================================================
+   TABLE FOOTER AND PAGINATION
+========================================================= */
 
 .table-footer {
-    min-height: 40px;
-
-    padding: 7px 9px;
-
+    min-height: 38px;
+    padding: 7px 12px;
     display: flex;
-
     align-items: center;
-
     justify-content: space-between;
-
-    background: #ffffff;
-
-    border-top: 1px solid #ecefea;
-
-    color: #829089;
-
-    font-size: 8px;
+    gap: 12px;
+    border-top: 1px solid #edf0eb;
+    background: #fff;
+    color: #8a958c;
+    font-size: 9px;
 }
 
 .footer-number {
-    color: #66776e;
-
+    color: #65756a;
     font-weight: 700;
 }
 
-
-/* =====================================================
-   PAGINATION
-===================================================== */
-
 .pagination {
     display: flex;
-
     align-items: center;
-
     gap: 4px;
 }
 
 .pagination a {
-    width: 23px;
-    height: 23px;
-
-    border-radius: 50%;
-
-    border: 1px solid #dfe3df;
-
-    background: #ffffff;
-
-    color: #63736a;
-
-    text-decoration: none;
-
+    width: 22px;
+    height: 22px;
     display: flex;
-
     align-items: center;
-
     justify-content: center;
-
-    font-size: 8px;
-
-    font-weight: 700;
+    border: 1px solid #e2e7e1;
+    border-radius: 5px;
+    background: #fff;
+    color: #647369;
+    text-decoration: none;
 }
 
-.pagination a:hover {
-    background: #f1f4f1;
+/* =========================================================
+   MODALS
+========================================================= */
+
+#cancelModal {
+    z-index: 500;
 }
 
-.pagination a.active {
-    background: #214f2c;
-
-    border-color: #214f2c;
-
-    color: #ffffff;
+.cancel-modal-box {
+    width: 100%;
+    max-width: 390px;
+    padding: 25px;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, .18);
 }
 
-.pagination a.disabled {
-    color: #c0c7c2;
-
-    background: #f8f9f7;
-
-    pointer-events: none;
+#receipt-print-window {
+    display: none;
 }
-        /* =====================================================
-           CANCEL MODAL
-        ===================================================== */
 
-        #cancelModal {
-            z-index: 500;
-        }
+/* =========================================================
+   RESPONSIVE
+========================================================= */
 
-        .cancel-modal-box {
-            width: 100%;
-            max-width: 390px;
+@media (max-width: 1100px) {
+      .history-shell {
+        width: calc(100% - 28px);
+    }
 
-            background: #ffffff;
+    .customer-dashboard-topbar {
+        min-height: 105px;
+        padding: 20px 18px;
+        background-position: center, right center;
+    }
 
-            border-radius: 14px;
+    .customer-page-title {
+        font-size: 20px;
+    }
 
-            padding: 25px;
+    .customer-page-title::after {
+        max-width: 260px;
+        font-size: 10px;
+        line-height: 1.5;
+    }
 
-            box-shadow:
-                0 20px 50px rgba(0, 0, 0, 0.18);
-        }
+    .history-body {
+        padding: 14px 12px 20px;
+    }
 
-        /* =====================================================
-           PRINT WINDOW
-        ===================================================== */
+    .history-toolbar {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 7px;
+    }
 
-        #receipt-print-window {
-            display: none;
-        }
+    .search-box {
+        grid-column: 1 / -1;
+    }
 
-        /* =====================================================
-           RESPONSIVE
-        ===================================================== */
+    .clear-filter-button {
+        width: 100%;
+    }
 
-        @media (max-width: 1100px) {
+    .table-card {
+        border-radius: 7px;
+    }
 
-            .stats-grid {
-                grid-template-columns:
-                    repeat(2, minmax(0, 1fr));
-            }
+    .table-footer {
+        flex-wrap: wrap;
+    }
 
-            .history-toolbar {
-                flex-wrap: wrap;
-            }
+}
 
-            .search-box {
-                max-width: none;
-                flex: 1 1 280px;
-            }
+@media (max-width: 420px) {
 
-        }
+    .customer-dashboard-topbar {
+        min-height: 100px;
+    }
 
-        @media (max-width: 850px) {
+    .customer-page-title {
+        font-size: 18px;
+    }
 
-            .main-content {
-                margin-left: 0;
-                padding: 12px;
-            }
+    .history-toolbar {
+        grid-template-columns: 1fr 1fr;
+    }
 
-            .history-header {
-                padding: 0 18px;
-            }
+    .search-box {
+        grid-column: 1 / -1;
+    }
 
-            .history-title {
-                font-size: 22px;
-            }
+}
 
-            .history-title-icon {
-                width: 38px;
-                height: 38px;
-                font-size: 18px;
-            }
+/* =========================================================
+   PRINT
+========================================================= */
 
-            .user-info,
-            .user-chevron {
-                display: none;
-            }
-
-            .history-body {
-                padding: 18px;
-            }
-
-        }
-
-        @media (max-width: 600px) {
-
-            .stats-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .history-title {
-                font-size: 19px;
-            }
-
-            .user-avatar {
-                width: 39px;
-                height: 39px;
-                font-size: 15px;
-            }
-
-            .header-right {
-                gap: 6px;
-            }
-
-            .history-toolbar {
-                align-items: stretch;
-            }
-
-            .list-button {
-                width: 45px;
-            }
-
-            .search-box {
-                flex-basis: calc(100% - 57px);
-            }
-
-            .filter-select {
-                flex: 1;
-                width: auto;
-            }
-
-            .table-footer {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-        }
-
-        /* =====================================================
-           PRINT
-        ===================================================== */
-
-     @media print {
-
+@media print {
     @page {
         size: 80mm auto;
         margin: 0;
@@ -2383,10 +1261,10 @@ tbody tr:last-child td {
 
     html,
     body {
+        width: 80mm !important;
         margin: 0 !important;
         padding: 0 !important;
-        width: 80mm !important;
-        background: #ffffff !important;
+        background: #fff !important;
     }
 
     body * {
@@ -2399,20 +1277,17 @@ tbody tr:last-child td {
     }
 
     #receipt-print-window {
+        display: block !important;
         position: absolute;
-        left: 0;
         top: 0;
-display:none;
+        left: 0;
         width: 80mm !important;
         height: auto !important;
         min-height: 0 !important;
-
-        padding: 5mm !important;
         margin: 0 !important;
-
-        background: #ffffff !important;
-        color: #000000 !important;
-
+        padding: 5mm !important;
+        background: #fff !important;
+        color: #000 !important;
         box-sizing: border-box;
     }
 
@@ -2420,15 +1295,17 @@ display:none;
         width: 100% !important;
         max-width: none !important;
         min-height: 0 !important;
-
         margin: 0 !important;
         padding: 0 !important;
-
         border: none !important;
         box-shadow: none !important;
     }
 
-    .no-print {
+    .no-print,
+    .customer-navbar,
+    .customer-footer,
+    .customer-dashboard-topbar,
+    .history-body {
         display: none !important;
     }
 }
@@ -2439,122 +1316,28 @@ display:none;
 
 <body>
 
-<?php include('customer_panel.php'); ?>
-
+<?php require 'customer_header.php'; ?>
 <div class="main-content">
 
     <div class="history-shell">
-
+<div class="history-outer-card">
         <div class="history-card">
 
        <!-- =====================================================
      CUSTOMER DASHBOARD TOPBAR
 ===================================================== -->
 
+
+<!-- =========================================================
+     HISTORY PAGE BANNER
+========================================================= -->
+
 <div class="customer-dashboard-topbar">
-
-    <div class="customer-page-title">
-        Reservation History
-    </div>
-
-    <div class="customer-topbar-right">
-
-        <!-- NOTIFICATION -->
-
-        <div style="position: relative;">
-            <button
-                type="button"
-                class="customer-top-notification"
-                title="Notifications"
-                onclick="event.stopPropagation(); toggleCustomerNotificationDropdown()"
-            >
-                <i class="fa-regular fa-bell"></i>
-                <?php if ($unread_count > 0): ?>
-                    <span class="customer-notification-badge"><?php echo $unread_count > 99 ? '99+' : $unread_count; ?></span>
-                <?php endif; ?>
-            </button>
-
-            <!-- NOTIFICATION DROPDOWN -->
-            <div
-                class="customer-notification-dropdown hidden"
-                id="customerNotificationDropdown"
-            >
-                <div class="customer-notification-dropdown-header">
-                    <div class="customer-panel-title-group">
-                        <div class="customer-panel-title-icon">
-                            <i class="fa-solid fa-bell"></i>
-                        </div>
-                        <div class="customer-dashboard-panel-title">
-                            Notifications
-                        </div>
-                    </div>
-                    <a class="customer-mark-all-link" onclick="markAllCustomerAsRead(event)">
-                        Mark All as Read
-                    </a>
-                </div>
-
-                <div class="customer-notification-list" id="customerNotificationList">
-                    <!-- Notifications will be loaded here via JavaScript -->
-                </div>
-            </div>
-        </div>
-
-        <!-- DIVIDER -->
-
-        <div class="customer-topbar-divider"></div>
-
-        <!-- CUSTOMER PROFILE -->
-
-        <a
-            href="customer_profile.php"
-            class="customer-top-profile"
-        >
-
-            <!-- AVATAR -->
-
-            <div class="customer-avatar">
-                <i class="fa-solid fa-user"></i>
-            </div>
-
-            <!-- CUSTOMER DETAILS -->
-
-            <div class="customer-account-details">
-
-                <span class="customer-top-name">
-                    Customer
-                </span>
-
-                <div class="customer-date-time">
-
-                    <span
-                        class="customer-date"
-                        id="customer-live-date"
-                    >
-                        <?php echo date('F j, Y'); ?>
-                    </span>
-
-                    <span
-                        class="customer-time"
-                        id="customer-live-time"
-                    >
-                        <?php echo date('h:i:s A'); ?>
-                    </span>
-
-                </div>
-
-            </div>
-
-            <!-- DROPDOWN -->
-
-            <div class="customer-dropdown-icon">
-                <i class="fa-solid fa-chevron-down"></i>
-            </div>
-
-        </a>
-
-    </div>
-
+    <h1 class="customer-page-title">
+        My Reservations &amp; History
+    </h1>
 </div>
+
 
 
             <!-- =================================================
@@ -2751,6 +1534,9 @@ display:none;
 
         </select>
 
+
+
+
 <!-- ALL STATUS -->
 
 <select
@@ -2758,9 +1544,19 @@ display:none;
     class="filter-select"
     onchange="document.getElementById('historyFilterForm').submit();"
 >
-
     <option value="">
         All Status
+    </option>
+
+    <option
+        value="Confirmed"
+        <?php
+        echo $filter_status === 'Confirmed'
+            ? 'selected'
+            : '';
+        ?>
+    >
+        Confirmed
     </option>
 
     <option
@@ -2784,8 +1580,11 @@ display:none;
     >
         Cancelled
     </option>
-
 </select>
+
+
+   
+
 
 
         <!-- DATE RANGE -->
@@ -2794,6 +1593,7 @@ display:none;
             name="date_range"
             class="filter-select"
             onchange="document.getElementById('historyFilterForm').submit();"
+            
         >
 
             <option value="">
@@ -2878,8 +1678,9 @@ display:none;
         </th>
 
         <th>
-            Date
+           Reservation Date
         </th>
+         <th>Delivery/Pickup Date</th>
 
         <th>
             Total
@@ -2941,13 +1742,15 @@ display:none;
 
 
                  // =================================================
-// STATUS
-// HISTORY ONLY: COMPLETED / CANCELLED
-// =================================================
+
+/* =========================================================
+   STATUS DISPLAY
+   Preserve the actual status from the database.
+========================================================= */
 
 $status = isset($row['status'])
     ? trim($row['status'])
-    : 'Completed';
+    : '';
 
 $status_lower = strtolower($status);
 
@@ -2960,55 +1763,90 @@ if (
 
     $status_class = 'status-cancelled';
 
-} else {
+} elseif ($status_lower === 'completed') {
 
     $status = 'Completed';
 
     $status_class = 'status-completed';
+
+} elseif ($status_lower === 'confirmed') {
+
+    $status = 'Confirmed';
+
+    $status_class = 'status-completed';
+
+} else {
+
+    $status = ucwords($status_lower);
+
+    $status_class = 'status-completed';
 }
 
-                    // =================================================
-                    // DATE / TIME
-                    // =================================================
 
-                    $date_timestamp =
-                        strtotime(
-                            $row['created_at']
-                        );
+               
+/* =================================================
+   RESERVATION DATE
+   Date when the customer submitted the reservation
+================================================= */
 
-                    if (
-                        $date_timestamp === false
-                    ) {
+$reservation_timestamp = false;
 
-                        $date_timestamp =
-                            strtotime(
-                                $row['reservation_date']
-                            );
-                    }
+if (
+    isset($row['created_at']) &&
+    trim((string)$row['created_at']) !== ''
+) {
+    $reservation_timestamp = strtotime(
+        $row['created_at']
+    );
+}
 
-                    if (
-                        $date_timestamp === false
-                    ) {
+if ($reservation_timestamp !== false) {
 
-                        $date_display =
-                            $row['reservation_date'];
+    $reservation_date_display = date(
+        'M j, Y',
+        $reservation_timestamp
+    );
 
-                        $time_display = '';
+    $reservation_time_display = date(
+        'h:i A',
+        $reservation_timestamp
+    );
 
-                    } else {
+} else {
 
-                        $date_display =
-                            date(
-                                'M j, Y',
-                                $date_timestamp
-                            );
+    $reservation_date_display = 'Unavailable';
+    $reservation_time_display = '';
+}
 
-                        $time_display =
-                            date(
-                                'h:i A',
-                                $date_timestamp
-                            );
-                    }
+
+/* =================================================
+   DELIVERY / PICKUP DATE
+   Scheduled date stored in reservation_date
+================================================= */
+
+$scheduled_timestamp = false;
+
+if (
+    isset($row['reservation_date']) &&
+    trim((string)$row['reservation_date']) !== ''
+) {
+    $scheduled_timestamp = strtotime(
+        $row['reservation_date']
+    );
+}
+
+if ($scheduled_timestamp !== false) {
+
+    $scheduled_date_display = date(
+        'M j, Y',
+        $scheduled_timestamp
+    );
+
+} else {
+
+    $scheduled_date_display = 'Not scheduled';
+}
+
 
 
                     // =================================================
@@ -3154,37 +1992,48 @@ if (
                         </td>
 
 
-                        <!-- DATE -->
+                     
+<!-- RESERVATION DATE -->
 
-                        <td>
+<td>
+    <div class="date-main">
+        <?php
+        echo htmlspecialchars(
+            $reservation_date_display,
+            ENT_QUOTES,
+            'UTF-8'
+        );
+        ?>
+    </div>
 
-                            <div class="date-main">
+    <?php if ($reservation_time_display !== ''): ?>
+        <div class="date-time">
+            <?php
+            echo htmlspecialchars(
+                $reservation_time_display,
+                ENT_QUOTES,
+                'UTF-8'
+            );
+            ?>
+        </div>
+    <?php endif; ?>
+</td>
 
-                                <?php
-                                echo htmlspecialchars(
-                                    $date_display
-                                );
-                                ?>
 
-                            </div>
+<!-- DELIVERY / PICKUP DATE -->
 
-                            <?php if (
-                                $time_display !== ''
-                            ): ?>
+<td>
+    <div class="date-main">
+        <?php
+        echo htmlspecialchars(
+            $scheduled_date_display,
+            ENT_QUOTES,
+            'UTF-8'
+        );
+        ?>
+    </div>
+</td>
 
-                                <div class="date-time">
-
-                                    <?php
-                                    echo htmlspecialchars(
-                                        $time_display
-                                    );
-                                    ?>
-
-                                </div>
-
-                            <?php endif; ?>
-
-                        </td>
 
 
                         <!-- TOTAL -->
@@ -3258,10 +2107,7 @@ if (
 
                 <tr>
 
-                    <td
-                        colspan="8"
-                        class="empty-state"
-                    >
+                   <td colspan="9" class="empty-state">
 
                         <i class="fa-regular fa-folder-open"></i>
 
@@ -3410,7 +2256,7 @@ if (
     </div>
 
 </div>
-
+</div>
 
 <!-- =========================================================
      PRINT WINDOW
@@ -3419,59 +2265,12 @@ if (
 <div id="receipt-print-window"></div>
 
 
+
 <!-- =========================================================
-     LOGOUT MODAL
+     CUSTOMER LOGOUT CONFIRMATION MODAL
 ========================================================= -->
 
-<div
-    id="logout_modal"
-    class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[600] p-4"
->
 
-    <div
-        class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6"
-    >
-
-        <div class="flex items-center gap-3 mb-4">
-
-            <div
-                class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center text-red-600"
-            >
-                <i class="fa-solid fa-right-from-bracket"></i>
-            </div>
-
-            <h3 class="text-lg font-bold text-gray-800">
-                Confirm Logout
-            </h3>
-
-        </div>
-
-        <p class="text-sm text-gray-500 mb-5">
-            Are you sure you want to end your session?
-        </p>
-
-        <div class="flex justify-end gap-3">
-
-            <button
-                type="button"
-                onclick="closeLogoutModal()"
-                class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold"
-            >
-                Stay Logged In
-            </button>
-
-            <a
-                href="logout.php"
-                class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold"
-            >
-                Yes, Logout
-            </a>
-
-        </div>
-
-    </div>
-
-</div>
 
 
 <!-- =========================================================
@@ -3542,983 +2341,14 @@ if (
 </div>
 
 
-<script>
 
-function updateCustomerDateTime() {
 
-    var now = new Date();
-
-    var options = {
-        month: 'long',
-        day: 'numeric',
-        year: 'numeric'
-    };
-
-    var dateText = now.toLocaleDateString(
-        'en-US',
-        options
-    );
-
-    var timeText = now.toLocaleTimeString(
-        'en-US',
-        {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: true
-        }
-    );
-
-    var dateElement = document.getElementById(
-        'customer-live-date'
-    );
-
-    var timeElement = document.getElementById(
-        'customer-live-time'
-    );
-
-    if (dateElement) {
-        dateElement.textContent = dateText;
-    }
-
-    if (timeElement) {
-        timeElement.textContent = timeText;
-    }
-}
-
-updateCustomerDateTime();
-
-setInterval(
-    updateCustomerDateTime,
-    1000
-);
-
-
-/* =========================================================
-   CLEAR FILTERS
-   LIST ICON DOES NOT OPEN ANY OLD FILTER PANEL
-========================================================= */
-
-function clearHistoryFilters() {
-
-    window.location.href = 'customer_history.php';
-}
-
-
-/* =========================================================
-   NOTIFICATIONS
-========================================================= */
-
-function toggleNotifications(event) {
-
-    if (event) {
-        event.stopPropagation();
-    }
-
-    var dropdown =
-        document.getElementById(
-            'notification_dropdown'
-        );
-
-    if (!dropdown) {
-        return;
-    }
-
-    dropdown.classList.toggle('hidden');
-
-    if (!dropdown.classList.contains('hidden')) {
-
-        var badge =
-            document.getElementById(
-                'bell_badge'
-            );
-
-        if (badge) {
-            badge.style.display = 'none';
-        }
-
-        var unreadCount =
-            document.getElementById(
-                'unread_count'
-            );
-
-        if (unreadCount) {
-
-            unreadCount.innerText =
-                '0 New';
-
-            unreadCount.className =
-                'notification-new-count bg-gray-100 text-gray-400';
-        }
-    }
-}
-
-
-/* =========================================================
-   CLOSE NOTIFICATIONS WHEN CLICKING OUTSIDE
-========================================================= */
-
-document.addEventListener(
-    'click',
-    function(event) {
-
-        var area =
-            document.querySelector(
-                '.notification-area'
-            );
-
-        var dropdown =
-            document.getElementById(
-                'notification_dropdown'
-            );
-
-        if (
-            area &&
-            dropdown &&
-            !area.contains(event.target)
-        ) {
-
-            dropdown.classList.add('hidden');
-        }
-
-    }
-);
-
-
-/* =========================================================
-   CANCEL MODAL
-========================================================= */
-
-function openCancelModal(idString) {
-
-    document.getElementById(
-        'cancelId'
-    ).value = idString;
-
-    var modal =
-        document.getElementById(
-            'cancelModal'
-        );
-
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
-}
-
-
-function closeCancelModal() {
-
-    var modal =
-        document.getElementById(
-            'cancelModal'
-        );
-
-    modal.classList.add('hidden');
-    modal.classList.remove('flex');
-}
-
-
-/* =========================================================
-   CLOSE CANCEL MODAL OUTSIDE
-========================================================= */
-
-document.addEventListener(
-    'click',
-    function(event) {
-
-        var modal =
-            document.getElementById(
-                'cancelModal'
-            );
-
-        if (
-            event.target === modal
-        ) {
-
-            closeCancelModal();
-        }
-
-    }
-);
-
-
-/* =========================================================
-   LOGOUT
-========================================================= */
-
-function openLogoutModal() {
-
-    var modal =
-        document.getElementById(
-            'logout_modal'
-        );
-
-    if (modal) {
-        modal.classList.remove('hidden');
-    }
-}
-
-
-function closeLogoutModal() {
-
-    var modal =
-        document.getElementById(
-            'logout_modal'
-        );
-
-    if (modal) {
-        modal.classList.add('hidden');
-    }
-}
-
-
-/* =========================================================
-   PRINT RECEIPT
-========================================================= */
-function printReceipt(data) {
-
-    var printWindow = document.getElementById('receipt-print-window');
-
-
-
-    var unitPrices = {
-        "Extra Small": 140,
-        "Small": 150,
-        "Medium": 175,
-        "Large": 195,
-        "Extra Large": 235,
-        "Jumbo": 255,
-        "Super Jumbo": 270,
-        "Double Yolk": 320
-    };
-
-    var sizeCodes = {
-        "Extra Small": "XS",
-        "Small": "S",
-        "Medium": "M",
-        "Large": "L",
-        "Extra Large": "XL",
-        "Jumbo": "J",
-        "Super Jumbo": "SJ",
-        "Double Yolk": "DY"
-    };
-
-    var totalAmount = 0;
-    var itemsHTML = "";
-
-    if (data.items && data.items.length > 0) {
-
-        data.items.forEach(function(item) {
-
-            var eggType = item.egg_type || "";
-            var quantity = parseInt(item.quantity, 10) || 0;
-
-            var unitPrice = unitPrices[eggType] || 0;
-
-            var lineTotal = unitPrice * quantity;
-
-            totalAmount += lineTotal;
-
-            var shortCode = sizeCodes[eggType] || eggType;
-
-            itemsHTML +=
-                '<div class="receipt-item">' +
-
-                    '<div class="item-main">' +
-                        '<span class="item-size">' +
-                            escapeHTML(shortCode) +
-                        '</span>' +
-
-                        '<span class="item-qty">' +
-                            escapeHTML(String(quantity)) +
-                        '</span>' +
-
-                        '<span class="item-price">' +
-                            '₱' + lineTotal.toFixed(2) +
-                        '</span>' +
-                    '</div>' +
-
-                    '<div class="item-description">' +
-                        escapeHTML(eggType) +
-                        ' @ ₱' + unitPrice.toFixed(2) +
-                    '</div>' +
-
-                '</div>';
-        });
-    }
-
-    /*
-     * If total_price already exists in the database,
-     * use it when available.
-     */
-    var displayedTotal = parseFloat(data.total_price);
-
-    if (isNaN(displayedTotal)) {
-        displayedTotal = totalAmount;
-    }
-
-    var deliveryMethod = data.delivery_method || "";
-
-    var deliveryText = "";
-
-    if (deliveryMethod.toLowerCase() === "delivery") {
-
-        deliveryText = "Delivery";
-
-    } else if (deliveryMethod.toLowerCase() === "pickup") {
-
-        deliveryText = "Pickup";
-
-    } else {
-
-        deliveryText = deliveryMethod;
-    }
-
-    var addressHTML = "";
-
-    if (
-        deliveryMethod.toLowerCase() === "delivery" &&
-        data.delivery_address
-    ) {
-
-        addressHTML =
-            '<div class="info-row">' +
-                '<span class="info-label">Address</span>' +
-                '<span class="info-value">' +
-                    escapeHTML(data.delivery_address) +
-                '</span>' +
-            '</div>';
-
-    } else {
-
-        addressHTML =
-            '<div class="info-row">' +
-                '<span class="info-label">Location</span>' +
-                '<span class="info-value">Farm Pickup</span>' +
-            '</div>';
-    }
-
-    printWindow.innerHTML =
-        '<div class="thermal-receipt">' +
-
-            /* =========================
-               HEADER
-            ========================== */
-
-            '<div class="receipt-header">' +
-
-                '<img ' +
-                    'src="vdvclogo.png" ' +
-                    'class="receipt-logo" ' +
-                    'alt="VDVC Egg Farm Logo"' +
-                '>' +
-
-                '<div class="farm-name">' +
-                    'VDVC EGG FARM' +
-                '</div>' +
-
-                '<div class="receipt-title">' +
-                    'RESERVATION RECEIPT' +
-                '</div>' +
-
-                '<div class="receipt-code">' +
-                    escapeHTML(data.reservation_code || "") +
-                '</div>' +
-
-            '</div>' +
-
-            '<div class="separator"></div>' +
-
-            /* =========================
-               CUSTOMER INFORMATION
-            ========================== */
-
-            '<div class="section-title">' +
-                'CUSTOMER INFORMATION' +
-            '</div>' +
-
-            '<div class="info-row">' +
-                '<span class="info-label">Customer</span>' +
-                '<span class="info-value">' +
-                    escapeHTML(data.customer_name || "") +
-                '</span>' +
-            '</div>' +
-
-            '<div class="info-row">' +
-                '<span class="info-label">Contact</span>' +
-                '<span class="info-value">' +
-                    escapeHTML(data.contact_number || "") +
-                '</span>' +
-            '</div>' +
-
-            '<div class="info-row">' +
-                '<span class="info-label">Method</span>' +
-                '<span class="info-value">' +
-                    escapeHTML(deliveryText) +
-                '</span>' +
-            '</div>' +
-
-            addressHTML +
-
-            '<div class="separator"></div>' +
-
-            /* =========================
-               RESERVATION DETAILS
-            ========================== */
-
-            '<div class="section-title">' +
-                'RESERVATION DETAILS' +
-            '</div>' +
-
-            '<div class="info-row">' +
-                '<span class="info-label">Date</span>' +
-                '<span class="info-value">' +
-                    escapeHTML(data.reservation_date || "Pending") +
-                '</span>' +
-            '</div>' +
-
-            '<div class="info-row">' +
-                '<span class="info-label">Status</span>' +
-                '<span class="info-value">' +
-                    escapeHTML(data.status || "") +
-                '</span>' +
-            '</div>' +
-
-            '<div class="separator"></div>' +
-
-            /* =========================
-               ORDER SUMMARY
-            ========================== */
-
-            '<div class="section-title">' +
-                'ORDER SUMMARY' +
-            '</div>' +
-
-            '<div class="items-header">' +
-                '<span>SIZE</span>' +
-                '<span>QTY</span>' +
-                '<span>AMOUNT</span>' +
-            '</div>' +
-
-            itemsHTML +
-
-            '<div class="separator"></div>' +
-
-            /* =========================
-               TOTAL
-            ========================== */
-
-            '<div class="total-row">' +
-                '<span>TOTAL</span>' +
-                '<span>₱' + displayedTotal.toFixed(2) + '</span>' +
-            '</div>' +
-
-            '<div class="separator"></div>' +
-
-            /* =========================
-               FOOTER
-            ========================== */
-
-            '<div class="receipt-footer">' +
-
-                '<div class="thank-you">' +
-                    'Thank you for your reservation!' +
-                '</div>' +
-
-                '<div>' +
-                    'VDVC Egg Farm' +
-                '</div>' +
-
-                '<div class="footer-small">' +
-                    'Please keep this receipt for your reference.' +
-                '</div>' +
-
-            '</div>' +
-
-        '</div>';
-
-    /*
- * Temporary styles for thermal receipt
- */
-
-var oldStyle = document.getElementById('thermal-receipt-style');
-
-if (oldStyle) {
-    oldStyle.parentNode.removeChild(oldStyle);
-}
-
-var style = document.createElement('style');
-
-style.id = 'thermal-receipt-style';
-
-style.innerHTML =
-
-    /*
-     * NORMAL PAGE
-     * Receipt must stay hidden.
-     */
-    '#receipt-print-window {' +
-        'display: none;' +
-    '}' +
-
-    /*
-     * RECEIPT DESIGN
-     */
-    '#receipt-print-window .thermal-receipt {' +
-        'width: 70mm;' +
-        'max-width: 70mm;' +
-        'margin: 0 auto;' +
-        'padding: 3mm 0;' +
-        'box-sizing: border-box;' +
-        'font-family: Arial, Helvetica, sans-serif;' +
-        'font-size: 10px;' +
-        'line-height: 1.35;' +
-        'color: #000000;' +
-        'background: #ffffff;' +
-    '}' +
-
-    '#receipt-print-window .receipt-header {' +
-        'text-align: center;' +
-        'margin-bottom: 3mm;' +
-    '}' +
-
-    '#receipt-print-window .receipt-logo {' +
-        'display: block;' +
-        'width: 42mm;' +
-        'max-width: 100%;' +
-        'height: auto;' +
-        'margin: 0 auto 2mm auto;' +
-        'object-fit: contain;' +
-    '}' +
-
-    '#receipt-print-window .farm-name {' +
-        'font-size: 16px;' +
-        'font-weight: 700;' +
-        'letter-spacing: 0.5px;' +
-        'margin-top: 1mm;' +
-    '}' +
-
-    '#receipt-print-window .receipt-title {' +
-        'font-size: 11px;' +
-        'font-weight: 700;' +
-        'margin-top: 1mm;' +
-    '}' +
-
-    '#receipt-print-window .receipt-code {' +
-        'font-size: 10px;' +
-        'font-weight: 700;' +
-        'margin-top: 1.5mm;' +
-    '}' +
-
-    '#receipt-print-window .separator {' +
-        'border-top: 1px dashed #000000;' +
-        'margin: 3mm 0;' +
-        'height: 0;' +
-    '}' +
-
-    '#receipt-print-window .section-title {' +
-        'font-size: 10px;' +
-        'font-weight: 700;' +
-        'text-align: left;' +
-        'margin-bottom: 1.5mm;' +
-    '}' +
-
-    '#receipt-print-window .info-row {' +
-        'display: flex;' +
-        'align-items: flex-start;' +
-        'justify-content: space-between;' +
-        'gap: 3mm;' +
-        'margin-bottom: 1.2mm;' +
-    '}' +
-
-    '#receipt-print-window .info-label {' +
-        'font-weight: 700;' +
-        'flex: 0 0 22mm;' +
-    '}' +
-
-    '#receipt-print-window .info-value {' +
-        'text-align: right;' +
-        'flex: 1;' +
-        'word-break: break-word;' +
-    '}' +
-
-    '#receipt-print-window .items-header {' +
-        'display: grid;' +
-        'grid-template-columns: 1fr 12mm 23mm;' +
-        'gap: 1mm;' +
-        'font-weight: 700;' +
-        'font-size: 9px;' +
-        'padding-bottom: 1mm;' +
-        'border-bottom: 1px solid #000000;' +
-    '}' +
-
-    '#receipt-print-window .items-header span:nth-child(2),' +
-    '#receipt-print-window .items-header span:nth-child(3) {' +
-        'text-align: right;' +
-    '}' +
-
-    '#receipt-print-window .receipt-item {' +
-        'padding: 1.8mm 0;' +
-        'border-bottom: 1px dotted #777777;' +
-    '}' +
-
-    '#receipt-print-window .item-main {' +
-        'display: grid;' +
-        'grid-template-columns: 1fr 12mm 23mm;' +
-        'gap: 1mm;' +
-        'align-items: center;' +
-    '}' +
-
-    '#receipt-print-window .item-size {' +
-        'font-weight: 700;' +
-    '}' +
-
-    '#receipt-print-window .item-qty,' +
-    '#receipt-print-window .item-price {' +
-        'text-align: right;' +
-    '}' +
-
-    '#receipt-print-window .item-description {' +
-        'font-size: 8.5px;' +
-        'margin-top: 0.5mm;' +
-        'color: #333333;' +
-    '}' +
-
-    '#receipt-print-window .total-row {' +
-        'display: flex;' +
-        'justify-content: space-between;' +
-        'align-items: center;' +
-        'font-size: 13px;' +
-        'font-weight: 700;' +
-        'margin-top: 2mm;' +
-    '}' +
-
-    '#receipt-print-window .receipt-footer {' +
-        'text-align: center;' +
-        'font-size: 9px;' +
-        'margin-top: 3mm;' +
-    '}' +
-
-    '#receipt-print-window .thank-you {' +
-        'font-weight: 700;' +
-        'font-size: 10px;' +
-        'margin-bottom: 1mm;' +
-    '}' +
-
-    '#receipt-print-window .footer-small {' +
-        'font-size: 8px;' +
-        'margin-top: 1.5mm;' +
-    '}' +
-
-    /*
-     * PRINT ONLY
-     */
-    '@media print {' +
-
-        '@page {' +
-            'size: 80mm auto;' +
-            'margin: 0;' +
-        '}' +
-
-        'html, body {' +
-            'width: 80mm !important;' +
-            'height: auto !important;' +
-            'min-height: 0 !important;' +
-            'margin: 0 !important;' +
-            'padding: 0 !important;' +
-            'background: #ffffff !important;' +
-        '}' +
-
-        'body {' +
-            'overflow: visible !important;' +
-        '}' +
-
-        'body * {' +
-            'visibility: hidden !important;' +
-        '}' +
-
-        '#receipt-print-window {' +
-            'display: block !important;' +
-            'visibility: visible !important;' +
-            'position: absolute !important;' +
-            'left: 0 !important;' +
-            'top: 0 !important;' +
-            'width: 80mm !important;' +
-            'height: auto !important;' +
-            'min-height: 0 !important;' +
-            'margin: 0 !important;' +
-            'padding: 0 !important;' +
-            'background: #ffffff !important;' +
-            'overflow: visible !important;' +
-        '}' +
-
-        '#receipt-print-window .thermal-receipt,' +
-        '#receipt-print-window .thermal-receipt * {' +
-            'visibility: visible !important;' +
-        '}' +
-
-        '#receipt-print-window .thermal-receipt {' +
-            'display: block !important;' +
-            'width: 70mm !important;' +
-            'max-width: 70mm !important;' +
-            'height: auto !important;' +
-            'min-height: 0 !important;' +
-            'margin: 0 auto !important;' +
-            'padding: 3mm 0 !important;' +
-            'box-sizing: border-box !important;' +
-            'background: #ffffff !important;' +
-            'border: none !important;' +
-            'box-shadow: none !important;' +
-            'overflow: visible !important;' +
-        '}' +
-
-        '.no-print {' +
-            'display: none !important;' +
-        '}' +
-
-    '}';
-
-document.head.appendChild(style);
-
-/* =========================================================
-   CUSTOMER NOTIFICATION DROPDOWN
-========================================================= */
-
-var customerNotificationDropdown = null;
-var isCustomerDropdownOpen = false;
-
-function toggleCustomerNotificationDropdown()
-{
-    if (!customerNotificationDropdown) {
-        customerNotificationDropdown = document.getElementById('customerNotificationDropdown');
-    }
-
-    if (customerNotificationDropdown) {
-        isCustomerDropdownOpen = !isCustomerDropdownOpen;
-
-        if (isCustomerDropdownOpen) {
-            customerNotificationDropdown.classList.remove('hidden');
-            loadCustomerNotifications();
-        } else {
-            customerNotificationDropdown.classList.add('hidden');
-        }
-    }
-}
-
-function closeCustomerNotificationDropdown()
-{
-    if (customerNotificationDropdown && isCustomerDropdownOpen) {
-        customerNotificationDropdown.classList.add('hidden');
-        isCustomerDropdownOpen = false;
-    }
-}
-
-// Close dropdown when clicking outside
-document.addEventListener('click', function(event) {
-    if (customerNotificationDropdown && isCustomerDropdownOpen) {
-        var notificationButton = document.querySelector('.customer-top-notification');
-        var notificationContainer = customerNotificationDropdown.parentElement;
-        if (!notificationContainer.contains(event.target)) {
-            closeCustomerNotificationDropdown();
-        }
-    }
-});
-
-function loadCustomerNotifications()
-{
-    var notificationList = document.getElementById('customerNotificationList');
-    if (!notificationList) return;
-
-    // Show loading state
-    notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-solid fa-spinner fa-spin"></i><p>Loading notifications...</p></div>';
-
-    // Fetch notifications from the dedicated notifications page
-    fetch('customer_notifications.php')
-        .then(function(response) {
-            return response.text();
-        })
-        .then(function(html) {
-            // Parse the HTML to extract notification data
-            var parser = new DOMParser();
-            var doc = parser.parseFromString(html, 'text/html');
-
-            // Extract notification items from the dedicated page
-            var notificationItems = doc.querySelectorAll('.notification-item');
-
-            if (notificationItems.length > 0) {
-                var notificationsHtml = '';
-                notificationItems.forEach(function(item) {
-                    var isUnread = item.classList.contains('unread');
-                    var iconElement = item.querySelector('.notification-icon');
-                    var iconClass = 'info';
-                    var iconHtml = '<div class="customer-notification-icon info"><i class="fa-solid fa-bell"></i></div>';
-
-                    if (iconElement) {
-                        if (iconElement.classList.contains('success')) {
-                            iconClass = 'success';
-                            iconHtml = '<div class="customer-notification-icon success"><i class="fa-solid fa-check"></i></div>';
-                        } else if (iconElement.classList.contains('alert')) {
-                            iconClass = 'alert';
-                            iconHtml = '<div class="customer-notification-icon alert"><i class="fa-solid fa-exclamation"></i></div>';
-                        } else if (iconElement.classList.contains('warning')) {
-                            iconClass = 'warning';
-                            iconHtml = '<div class="customer-notification-icon warning"><i class="fa-solid fa-circle-exclamation"></i></div>';
-                        } else {
-                            iconHtml = iconElement.outerHTML;
-                        }
-                    }
-
-                    var titleElement = item.querySelector('.notification-title');
-                    var title = titleElement ? titleElement.textContent : 'Notification';
-
-                    var descElement = item.querySelector('.notification-desc');
-                    var description = descElement ? descElement.textContent : '';
-
-                    var timeElement = item.querySelector('.notification-time');
-                    var time = timeElement ? timeElement.textContent : '';
-
-                    var notificationId = item.getAttribute('onclick') ? item.getAttribute('onclick').match(/\d+/) : null;
-
-                    notificationsHtml += '<div class="customer-notification-item ' + (isUnread ? 'unread' : 'read') + '">';
-                    notificationsHtml += iconHtml;
-                    notificationsHtml += '<div class="customer-notification-content">';
-                    notificationsHtml += '<div class="customer-notification-title">' + title + '</div>';
-                    notificationsHtml += '<div class="customer-notification-description">' + description + '</div>';
-                    notificationsHtml += '<div class="customer-notification-time">' + time + '</div>';
-                    notificationsHtml += '</div>';
-                    if (notificationId && isUnread) {
-                        notificationsHtml += '<button class="customer-mark-read-btn" onclick="markCustomerAsRead(' + notificationId + ', this)">Mark as Read</button>';
-                    }
-                    notificationsHtml += '</div>';
-                });
-                notificationList.innerHTML = notificationsHtml;
-            } else {
-                notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-regular fa-bell-slash"></i><p>No notifications</p></div>';
-            }
-        })
-        .catch(function(error) {
-            notificationList.innerHTML = '<div class="customer-notification-empty"><i class="fa-solid fa-exclamation-circle"></i><p>Failed to load notifications</p></div>';
-        });
-}
-
-function markCustomerAsRead(notificationId, buttonElement)
-{
-    var formData = new FormData();
-    formData.append('notification_id', notificationId);
-    formData.append('action', 'mark_read');
-
-    fetch('customer_notifications.php', {
-        method: 'POST',
-        body: formData
-    })
-    .then(function(response) {
-        return response.json();
-    })
-    .then(function(data) {
-        if (data.success) {
-            var notificationItem = buttonElement.closest('.customer-notification-item');
-            if (notificationItem) {
-                notificationItem.classList.remove('unread');
-                notificationItem.classList.add('read');
-                buttonElement.style.display = 'none';
-            }
-
-            // Update badge count
-            var badge = document.querySelector('.customer-notification-badge');
-            if (badge) {
-                var currentCount = parseInt(badge.textContent);
-                if (currentCount > 1) {
-                    badge.textContent = currentCount - 1;
-                } else {
-                    badge.style.display = 'none';
-                }
-            }
-        }
-    })
-    .catch(function(error) {
-        console.error('Failed to mark notification as read:', error);
-    });
-}
-
-function markAllCustomerAsRead(event)
-{
-    event.preventDefault();
-    event.stopPropagation();
-
-    var formData = new FormData();
-    formData.append('action', 'mark_all_read');
-
-    fetch('customer_notifications.php', {
-        method: 'POST',
-        body: formData
-    })
-    .then(function(response) {
-        return response.json();
-    })
-    .then(function(data) {
-        if (data.success) {
-            // Reload page to update all notification states
-            window.location.reload();
-        }
-    })
-    .catch(function(error) {
-        console.error('Failed to mark all notifications as read:', error);
-    });
-}
-
-    /*
-     * Wait for logo to load before printing.
-     */
-  var logo = printWindow.querySelector('.receipt-logo');
-
-function startPrinting() {
-
-    setTimeout(function() {
-        window.print();
-    }, 300);
-}
-
-if (logo) {
-
-    if (logo.complete) {
-
-        startPrinting();
-
-    } else {
-
-        logo.onload = function() {
-            startPrinting();
-        };
-
-        logo.onerror = function() {
-            startPrinting();
-        };
-    }
-
-} else {
-
-    startPrinting();
-}
-}
-
-/* =========================================================
-   ESCAPE HTML FOR PRINT
-========================================================= */
-
-function escapeHTML(value) {
-
-    if (value === null || value === undefined) {
-        return '';
-    }
-
-    return String(value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
 
 </script>
+
+<?php require 'customer_modal.php'; ?>
+
+<?php require 'customer_footer.php'; ?>
 
 </body>
 </html>

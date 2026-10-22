@@ -1,7 +1,7 @@
 <div id="page-reports" class="page">
     <div class="page-shell">
         <div class="page-subtitle">Reports Management</div>
-        <div style="font-size:13px;font-weight:700;color:var(--sidebar);margin-bottom:12px;">Enterprise Reports Center</div>
+        <div style="font-size:13px;font-weight:700;color:var(--sidebar);margin-bottom:12px;">Reports Center</div>
         <div class="reports-cards">
             <div class="report-card"><div class="report-card-icon"><svg aria-hidden="true" focusable="false" width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></div><div><div class="report-card-title">Inventory Reports</div><div class="report-card-desc">Analyse inventory sections and current stock health.</div><ul class="report-card-bullets"><li>Track current stock levels across egg sizes</li><li>Monitor low stock alerts and reorder thresholds</li></ul></div></div>
             <div class="report-card"><div class="report-card-icon"><svg aria-hidden="true" focusable="false" width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div><div><div class="report-card-title">Reservation Reports</div><div class="report-card-desc">Booking details and reservation summaries.</div><ul class="report-card-bullets"><li>View confirmed and pending reservations by date</li><li>Analyze booking patterns and customer preferences</li></ul></div></div>

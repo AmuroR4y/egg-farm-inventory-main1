@@ -437,56 +437,212 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
      elseif ($action === 'cancel') {
 
-    // Get customer user_id before updating
-    $customer_id = getCustomerUserId($conn, $reservation_code);
+    // Start transaction for atomic cancellation
+    $conn->autocommit(false);
 
-    $stmt = $conn->prepare(
-        "UPDATE reservations
-         SET status = 'Cancelled'
-         WHERE reservation_code = ?
-         AND status NOT IN ('Cancelled', 'Completed')"
-    );
-
-    if (!$stmt) {
-        die("Cancel query prepare failed: " . $conn->error);
-    }
-
-    $stmt->bind_param("s", $reservation_code);
-    $stmt->execute();
-    $stmt->close();
-
-    // Notify customer
-    if ($customer_id) {
-        add_notification(
-            $conn,
-            $customer_id,
-            "Reservation Cancelled",
-            "Your reservation {$reservation_code} has been cancelled by the farm manager.",
-            "alert"
+    try {
+        // Get current reservation status BEFORE updating
+        $status_check = $conn->prepare(
+            "SELECT status FROM reservations
+             WHERE reservation_code = ?
+             LIMIT 1"
         );
-    }
+        $status_check->bind_param("s", $reservation_code);
+        $status_check->execute();
+        $status_result = $status_check->get_result();
+        $current_status_row = $status_result->fetch_assoc();
+        $status_check->close();
 
-    // Notify all owners
-    $reservation_details = getReservationDetails($conn, $reservation_code);
-    if ($reservation_details) {
-        $owners = getOwnerUsers($conn);
-        foreach ($owners as $owner_id) {
+        if (!$current_status_row) {
+            throw new Exception("Reservation not found.");
+        }
+
+        $current_status = $current_status_row['status'];
+
+        // Only restore stock if reservation was Confirmed (not Pending, not Completed/Delivered)
+        if ($current_status === 'Confirmed') {
+            // Get all reservation items for stock restoration
+            $items_stmt = $conn->prepare(
+                "SELECT egg_type, quantity
+                 FROM reservations
+                 WHERE reservation_code = ?"
+            );
+            $items_stmt->bind_param("s", $reservation_code);
+            $items_stmt->execute();
+            $items_result = $items_stmt->get_result();
+
+            $reservation_items = array();
+            while ($item_row = $items_result->fetch_assoc()) {
+                $reservation_items[] = $item_row;
+            }
+            $items_stmt->close();
+
+            // Restore stock for each item
+            $current_date = date('Y-m-d H:i:s');
+            $today_str = date('Ymd');
+            $batch_prefix = "EG" . $today_str . "-";
+
+            // Get next batch number for today
+            $seq_stmt = $conn->prepare(
+                "SELECT batch_id FROM egg_inventory
+                 WHERE batch_id LIKE ?
+                 ORDER BY id DESC
+                 LIMIT 1"
+            );
+            $seq_prefix = $batch_prefix . "%";
+            $seq_stmt->bind_param("s", $seq_prefix);
+            $seq_stmt->execute();
+            $seq_result = $seq_stmt->get_result();
+            $seq_row = $seq_result->fetch_assoc();
+            $seq_stmt->close();
+
+            if ($seq_row) {
+                $last_num = (int)substr($seq_row['batch_id'], -3);
+                $next_num = str_pad($last_num + 1, 3, '0', STR_PAD_LEFT);
+            } else {
+                $next_num = "001";
+            }
+
+            // Egg size mapping (same as confirmation)
+            $egg_size_map = array(
+                'Extra Small' => 'XS',
+                'Small' => 'Small',
+                'Medium' => 'Medium',
+                'Large' => 'Large',
+                'Extra Large' => 'XL',
+                'Jumbo' => 'Jumbo',
+                'Super Jumbo' => 'Super Jumbo',
+                'Double Yolk' => 'Double Yolk'
+            );
+
+            foreach ($reservation_items as $item) {
+                $egg_type = trim($item['egg_type']);
+                $quantity = intval($item['quantity']);
+
+                if ($quantity <= 0) {
+                    continue;
+                }
+
+                // Map egg type to inventory code
+                if (!isset($egg_size_map[$egg_type])) {
+                    throw new Exception("Invalid egg type: '" . $egg_type . "'");
+                }
+
+                $egg_size = $egg_size_map[$egg_type];
+
+                // Lock and get latest current stock
+                $stock_stmt = $conn->prepare(
+                    "SELECT current_stock FROM egg_inventory
+                     WHERE egg_size = ?
+                     ORDER BY id DESC
+                     LIMIT 1
+                     FOR UPDATE"
+                );
+                $stock_stmt->bind_param("s", $egg_size);
+                $stock_stmt->execute();
+                $stock_result = $stock_stmt->get_result();
+                $stock_row = $stock_result->fetch_assoc();
+                $stock_stmt->close();
+
+                $current_stock = $stock_row ? intval($stock_row['current_stock']) : 0;
+
+                // Calculate restored stock
+                $new_stock = $current_stock + $quantity;
+
+                // Generate batch ID
+                $batch_id = $batch_prefix . $next_num;
+                $next_num = str_pad(intval($next_num) + 1, 3, '0', STR_PAD_LEFT);
+
+                // Insert Stock In record for cancellation
+                $insert_stmt = $conn->prepare(
+                    "INSERT INTO egg_inventory
+                     (batch_id, harvest_date, harvest_time, egg_size, quantity, current_stock, movement_type, reason, date_logged)
+                     VALUES (?, ?, ?, ?, ?, ?, 'Stock In', 'Cancellation', ?)"
+                );
+
+                $harvest_date = date('Y-m-d');
+                $harvest_time = date('H:i:s');
+
+                $insert_stmt->bind_param(
+                    "sssisiss",
+                    $batch_id,
+                    $harvest_date,
+                    $harvest_time,
+                    $egg_size,
+                    $quantity,
+                    $new_stock,
+                    $current_date
+                );
+
+                if (!$insert_stmt->execute()) {
+                    throw new Exception("Stock restoration insert failed: " . $insert_stmt->error);
+                }
+
+                $insert_stmt->close();
+            }
+        }
+
+        // Update reservation status to Cancelled
+        // Only allow cancellation if not already Cancelled or Completed
+        $update_stmt = $conn->prepare(
+            "UPDATE reservations
+             SET status = 'Cancelled'
+             WHERE reservation_code = ?
+             AND status NOT IN ('Cancelled', 'Completed', 'Delivered')"
+        );
+
+        if (!$update_stmt) {
+            throw new Exception("Cancel query prepare failed: " . $conn->error);
+        }
+
+        $update_stmt->bind_param("s", $reservation_code);
+        $update_stmt->execute();
+        $update_stmt->close();
+
+        // Commit transaction
+        $conn->commit();
+
+        // Get customer user_id for notification
+        $customer_id = getCustomerUserId($conn, $reservation_code);
+
+        // Notify customer
+        if ($customer_id) {
             add_notification(
                 $conn,
-                $owner_id,
+                $customer_id,
                 "Reservation Cancelled",
-                "Reservation {$reservation_code} for {$reservation_details['customer_name']} ({$reservation_details['quantity']} {$reservation_details['egg_type']}) has been cancelled.",
+                "Your reservation {$reservation_code} has been cancelled by the farm manager.",
                 "alert"
             );
         }
-    }
 
-    header(
-        "Location: manager_reservation.php?view=" .
-        urlencode($reservation_code) .
-        "&updated=cancelled"
-    );
-    exit();
+        // Notify all owners
+        $reservation_details = getReservationDetails($conn, $reservation_code);
+        if ($reservation_details) {
+            $owners = getOwnerUsers($conn);
+            foreach ($owners as $owner_id) {
+                add_notification(
+                    $conn,
+                    $owner_id,
+                    "Reservation Cancelled",
+                    "Reservation {$reservation_code} for {$reservation_details['customer_name']} ({$reservation_details['quantity']} {$reservation_details['egg_type']}) has been cancelled.",
+                    "alert"
+                );
+            }
+        }
+
+        header(
+            "Location: manager_reservation.php?view=" .
+            urlencode($reservation_code) .
+            "&updated=cancelled"
+        );
+        exit();
+
+    } catch (Exception $e) {
+        // Rollback on any error
+        $conn->rollback();
+        die("Cancellation failed: " . $e->getMessage());
+    }
 }
 
        elseif ($action === 'update_status') {
