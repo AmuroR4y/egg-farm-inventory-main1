@@ -516,12 +516,53 @@ $paginated_reservations = array_slice(
     color: #69736d;
     font-size: 13px;
     font-weight: 700;
+    border: 2px solid transparent;
+    transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .reservation-progress-label {
     font-size: 13px;
     font-weight: 600;
     color: #69736d;
+    transition: color 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.reservation-progress-step.completed .reservation-progress-number {
+    background-color: #214f2c;
+    border-color: #214f2c;
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(33, 79, 44, 0.25);
+}
+
+.reservation-progress-step.completed .reservation-progress-label {
+    color: #214f2c;
+    font-weight: 700;
+}
+
+.reservation-progress-step.active .reservation-progress-number {
+    border-color: #214f2c;
+    background: #214f2c;
+    color: #ffffff;
+}
+
+.timeline-progress {
+    background-color: #214f2c !important;
+    height: 4px;
+    border-radius: 9999px;
+    transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    max-width: calc(100% - 2rem);
+    pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .timeline-progress,
+    .reservation-progress-number,
+    .reservation-progress-label,
+    #timeline_dot_draft,
+    #timeline_dot_processing,
+    #timeline_dot_submitted {
+        transition: none !important;
+    }
 }
 
 .step-card {
@@ -991,20 +1032,20 @@ $paginated_reservations = array_slice(
 
                             <div>
                                 <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Reservation Timeline</h3>
-                                <div class="relative flex items-center justify-between px-4">
+                                <div class="relative flex items-center justify-between px-4" id="timeline_container">
                                     <div class="absolute left-4 right-4 h-1 bg-gray-200 top-1/2 -translate-y-1/2 z-0"></div>
-                                    <div id="timeline_progress_bar" class="timeline-progress absolute left-4 h-1 top-1/2 -translate-y-1/2 z-0 transition-all duration-500 <?= $is_submitted ? 'w-full' : 'w-0'; ?>"></div>
+                                    <div id="timeline_progress_bar" class="timeline-progress absolute left-4 h-1 top-1/2 -translate-y-1/2 z-0" data-submitted="<?= $is_submitted ? '1' : '0'; ?>" style="width: 0;"></div>
                                     <div class="z-10 flex flex-col items-center">
-                                      <div class="w-5 h-5 rounded-full border-4 border-white shadow" style="background: #214f2c;"></div>
-                                       <span class="text-xs font-semibold mt-1" style="color: #214f2c;">Draft</span>
+                                        <div id="timeline_dot_draft" class="w-5 h-5 rounded-full border-4 border-white shadow transition-colors duration-500" style="background-color: #214f2c;"></div>
+                                        <span id="timeline_label_draft" class="text-xs font-semibold mt-1" style="color: #214f2c;">Draft</span>
                                     </div>
                                     <div class="z-10 flex flex-col items-center">
-                                        <div class="w-5 h-5 rounded-full border-4 border-white shadow bg-gray-300 <?= $is_submitted ? 'style="background: #214f2c;"' : 'bg-gray-300'; ?>"></div>
-                                        <span class="text-xs mt-1 <?= $is_submitted ? 'style="color: #214f2c;" font-semibold' : 'text-gray-400 font-medium'; ?>">Processing</span>
+                                        <div id="timeline_dot_processing" class="w-5 h-5 rounded-full border-4 border-white shadow transition-colors duration-500 bg-gray-300"></div>
+                                        <span id="timeline_label_processing" class="text-xs mt-1 text-gray-400 font-medium transition-colors duration-500">Processing</span>
                                     </div>
                                     <div class="z-10 flex flex-col items-center">
-                                        <div class="w-5 h-5 rounded-full border-4 border-white shadow bg-gray-300 <?= $is_submitted ? 'style="background: #214f2c;"' : 'bg-gray-300'; ?>"></div>
-                                        <span class="text-xs mt-1 <?= $is_submitted ? 'style="color: #214f2c;" font-semibold' : 'text-gray-400 font-medium'; ?>">Submitted</span>
+                                        <div id="timeline_dot_submitted" class="w-5 h-5 rounded-full border-4 border-white shadow transition-colors duration-500 bg-gray-300"></div>
+                                        <span id="timeline_label_submitted" class="text-xs mt-1 text-gray-400 font-medium transition-colors duration-500">Submitted</span>
                                     </div>
                                 </div>
                             </div>
@@ -1563,11 +1604,17 @@ function setReservationStepCompleted(stepNumber, isComplete) {
 
 
 function updateReservationProgress() {
-    var name = document.getElementById('cust_name_input').value.trim();
-    var contact = document.getElementById('contact_input').value.trim();
-    var address = document.getElementById('delivery_address_input').value.trim();
-    var method = document.getElementById('delivery_method_input').value.trim().toLowerCase();
-    var pickupDate = document.getElementById('reservation_date_input').value;
+    var nameEl = document.getElementById('cust_name_input');
+    var contactEl = document.getElementById('contact_input');
+    var addressEl = document.getElementById('delivery_address_input');
+    var methodEl = document.getElementById('delivery_method_input');
+    var pickupDateEl = document.getElementById('reservation_date_input');
+
+    var name = nameEl ? nameEl.value.trim() : '';
+    var contact = contactEl ? contactEl.value.trim() : '';
+    var address = addressEl ? addressEl.value.trim() : '';
+    var method = methodEl ? methodEl.value.trim().toLowerCase() : '';
+    var pickupDate = pickupDateEl ? pickupDateEl.value : '';
 
     var validName = name.length > 0;
     var validContact = /^09[0-9]{9}$/.test(contact);
@@ -1582,12 +1629,94 @@ function updateReservationProgress() {
         validMethod &&
         validPickupDate;
 
-    var step2Complete = bundleItems.length > 0;
+    var step2Complete = (typeof bundleItems !== 'undefined') && bundleItems.length > 0;
     var step3Complete = step1Complete && step2Complete;
 
     setReservationStepCompleted(1, step1Complete);
     setReservationStepCompleted(2, step2Complete);
     setReservationStepCompleted(3, step3Complete);
+
+    // Update timeline progress bar and nodes
+    var progressBar = document.getElementById('timeline_progress_bar');
+    if (!progressBar) return;
+
+    var isSubmitted = progressBar.getAttribute('data-submitted') === '1';
+    var dotProcessing = document.getElementById('timeline_dot_processing');
+    var labelProcessing = document.getElementById('timeline_label_processing');
+    var dotSubmitted = document.getElementById('timeline_dot_submitted');
+    var labelSubmitted = document.getElementById('timeline_label_submitted');
+
+    if (isSubmitted) {
+        // Full submitted state
+        progressBar.style.width = 'calc(100% - 2rem)';
+        if (dotProcessing) {
+            dotProcessing.style.backgroundColor = '#214f2c';
+            dotProcessing.classList.remove('bg-gray-300');
+        }
+        if (labelProcessing) {
+            labelProcessing.style.color = '#214f2c';
+            labelProcessing.classList.remove('text-gray-400');
+            labelProcessing.classList.add('font-semibold');
+        }
+        if (dotSubmitted) {
+            dotSubmitted.style.backgroundColor = '#214f2c';
+            dotSubmitted.classList.remove('bg-gray-300');
+        }
+        if (labelSubmitted) {
+            labelSubmitted.style.color = '#214f2c';
+            labelSubmitted.classList.remove('text-gray-400');
+            labelSubmitted.classList.add('font-semibold');
+        }
+    } else {
+        // Interactive Drafting / Processing state
+        if (step3Complete) {
+            // Step 1 and Step 2 complete: reaches Processing
+            progressBar.style.width = 'calc((100% - 2rem) * 0.5)';
+            if (dotProcessing) {
+                dotProcessing.style.backgroundColor = '#214f2c';
+                dotProcessing.classList.remove('bg-gray-300');
+            }
+            if (labelProcessing) {
+                labelProcessing.style.color = '#214f2c';
+                labelProcessing.classList.remove('text-gray-400');
+                labelProcessing.classList.add('font-semibold');
+            }
+        } else if (step1Complete || step2Complete) {
+            // Partial progress towards processing
+            progressBar.style.width = 'calc((100% - 2rem) * 0.25)';
+            if (dotProcessing) {
+                dotProcessing.style.backgroundColor = '';
+                dotProcessing.classList.add('bg-gray-300');
+            }
+            if (labelProcessing) {
+                labelProcessing.style.color = '';
+                labelProcessing.classList.add('text-gray-400');
+                labelProcessing.classList.remove('font-semibold');
+            }
+        } else {
+            // Pure draft
+            progressBar.style.width = '0%';
+            if (dotProcessing) {
+                dotProcessing.style.backgroundColor = '';
+                dotProcessing.classList.add('bg-gray-300');
+            }
+            if (labelProcessing) {
+                labelProcessing.style.color = '';
+                labelProcessing.classList.add('text-gray-400');
+                labelProcessing.classList.remove('font-semibold');
+            }
+        }
+
+        if (dotSubmitted) {
+            dotSubmitted.style.backgroundColor = '';
+            dotSubmitted.classList.add('bg-gray-300');
+        }
+        if (labelSubmitted) {
+            labelSubmitted.style.color = '';
+            labelSubmitted.classList.add('text-gray-400');
+            labelSubmitted.classList.remove('font-semibold');
+        }
+    }
 }
 
 
@@ -2287,14 +2416,29 @@ document.getElementById('contact_input').addEventListener(
     updateReservationProgress
 );
 
-document.getElementById('reservation_date_input').addEventListener(
-    'change',
-    updateLiveSummary
-);
+var dateInput = document.getElementById('reservation_date_input');
+if (dateInput) {
+    dateInput.addEventListener('change', function() {
+        updateLiveSummary();
+        updateReservationProgress();
+    });
+}
 
 /* Set the initial progress state when the page loads */
 updateLiveSummary();
-updateReservationProgress();
+
+// Smooth entry animation on page load
+window.addEventListener('load', function() {
+    var progressBar = document.getElementById('timeline_progress_bar');
+    if (progressBar && progressBar.getAttribute('data-submitted') === '1') {
+        progressBar.style.width = '0%';
+        setTimeout(function() {
+            updateReservationProgress();
+        }, 150);
+    } else {
+        updateReservationProgress();
+    }
+});
 
 
     </script>
